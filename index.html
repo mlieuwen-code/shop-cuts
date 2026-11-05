@@ -193,7 +193,7 @@ svg.laysvg{width:100%;max-height:440px;display:block}
     <div class="apphead"><button type="button" class="round" id="mgrBack" aria-label="Back to the job list"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2A2622" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button>
       <div class="ttl"><div class="eyebrow">Manager</div><h2>Fab times</h2></div></div>
     <p class="mgrnote">Time between ticks, with breaks over 25 minutes left out (overnight, weekends, lunch). It starts at the first tick, so the first cut's own time isn't counted.</p>
-    <div class="mgrwrap"><table class="mgr"><thead><tr><th>Job</th><th>Cut by</th><th>Cutting time</th><th>Assembled by</th><th>Dates</th></tr></thead><tbody id="mgrBody"></tbody></table></div>
+    <div class="mgrwrap"><table class="mgr"><thead><tr><th>Job</th><th>Cut by</th><th>Cutting time</th><th>Assembled by</th><th>Assembly time</th><th>Dates</th></tr></thead><tbody id="mgrBody"></tbody></table></div>
   </section>
 
   <section id="job" hidden>
@@ -911,6 +911,22 @@ function topRailsDone(){
   var ks = Object.keys(it.L.chk).filter(function(k){ return /top rail/i.test(it.L.chk[k].head); }).map(function(k){ return it.sh.name + '|c' + k; });
   return ks.length > 0 && ks.every(function(k){ return cur.done[k]; });
 }
+// which kind of work a tick is: rail tags, blocking and bracketing are assembly; everything else is cutting
+function tickKind(key){
+  var sn = key.split('|')[0], rest = key.slice(sn.length + 1), it = cur.items.filter(function(x){ return x.sh.name === sn; })[0];
+  if (!it || rest.charAt(0) !== 'c') return 'cut';
+  var k = rest.slice(1), ck = it.L.chk[k];
+  if (sn === 'CUT SHEET') return ck && /rail tag/i.test(ck.head) ? 'asm' : 'cut';
+  if (sn === 'POST SHEET'){ var sc = sheetSections(it).filter(function(s){ return s.keys.indexOf(key) >= 0; })[0]; return sc && /^(block|bracket)/i.test(sc.label) ? 'asm' : 'cut'; }
+  return 'cut';
+}
+function stamp(kind){ var a = kind === 'asm' ? (cur.tla = cur.tla || []) : (cur.tl = cur.tl || []); a.push(Date.now()); }
+// Cut Sheet keys by column: Top rail + Channel boxes (cutting) and Rail tag boxes (assembly)
+function cutKeys(kind){
+  var it = cutItem(); if (!it) return [];
+  return Object.keys(it.L.chk).filter(function(k){ var h = it.L.chk[k].head; return kind === 'asm' ? /rail tag/i.test(h) : /top rail|channel/i.test(h); }).map(function(k){ return it.sh.name + '|c' + k; });
+}
+function allDone(keys){ return keys.length > 0 && keys.every(function(k){ return cur.done[k]; }); }
 function postsCutDone(){
   var it = cur && cur.items.filter(function(x){ return x.sh.name === 'POST SHEET'; })[0], sc = it && sheetSections(it).filter(function(s){ return s.label === 'Posts cut'; })[0];
   return !!(sc && sc.keys.every(function(k){ return cur.done[k]; }));
@@ -1059,7 +1075,7 @@ function progTl(p){ return p ? (p.tlp != null ? unpackTl(p.tlp) : (p.tl || [])) 
 var syncTimer = null;
 function saveProg(){
   if (!cur) return;
-  var p = { t: Date.now(), name: cur.f.name, done: cur.done, tlp: packTl(cur.tl), fin: cur.fin || null, asm: cur.asm || null }; lsSet(progKey(cur.f.id), p);
+  var p = { t: Date.now(), name: cur.f.name, done: cur.done, tlp: packTl(cur.tl), tlap: packTl(cur.tla), fin: cur.fin || null, asm: cur.asm || null }; lsSet(progKey(cur.f.id), p);
   var tot = 0, dn = 0; cur.items.forEach(function(it){ var ks = itemKeys(it); tot += ks.length; ks.forEach(function(k){ if (cur.done[it.sh.name + '|' + k]) dn++; }); });
   lsSet(SUM + cur.f.id, { done: dn, total: tot, fin: cur.fin || null, asm: cur.asm || null });
   clearTimeout(syncTimer); var id = cur.f.id;
@@ -1121,7 +1137,7 @@ el('sheet').addEventListener('click', function(e){
   if (pa){
     var sr = +pa.getAttribute('data-sec'), ps = sheetSections(cur.items[cur.tab]).filter(function(sc){ return sc.row === sr; })[0]; if (!ps) return;
     var all = ps.keys.every(function(k){ return cur.done[k]; }), was = postsCutDone();
-    var go = function(){ var y = window.scrollY; if (all) ps.keys.forEach(function(k){ delete cur.done[k]; }); else { ps.keys.forEach(function(k){ cur.done[k] = 1; }); (cur.tl = cur.tl || []).push(Date.now()); } saveProg(); renderCur(); window.scrollTo(0, y); blockCheck(was); };
+    var go = function(){ var y = window.scrollY; if (all) ps.keys.forEach(function(k){ delete cur.done[k]; }); else { ps.keys.forEach(function(k){ cur.done[k] = 1; }); stamp(/^(block|bracket)/i.test(ps.label) ? 'asm' : 'cut'); } saveProg(); renderCur(); window.scrollTo(0, y); blockCheck(was); };
     if (all) confirmBox('Untick everything under “' + ps.label.replace(/ (cut|done)$/, '') + '”?', go); else go();
     return;
   }
@@ -1131,7 +1147,7 @@ el('sheet').addEventListener('click', function(e){
   var td = e.target.closest('td.chk'), tr = e.target.closest('tr[data-row]'), key = td ? td.getAttribute('data-key') : tr ? tr.getAttribute('data-row') : null;
   if (!key) return;
   var was = postsCutDone(), topWas = topRailsDone();
-  if (cur.done[key]) delete cur.done[key]; else { cur.done[key] = 1; (cur.tl = cur.tl || []).push(Date.now()); }
+  if (cur.done[key]) delete cur.done[key]; else { cur.done[key] = 1; stamp(tickKind(key)); }
   if (!topWas && topRailsDone() && (cur.sort === 'long' || cur.sort === 'short')){
     // every top rail is cut: he moves on to channels, so the list does too
     cur.sort = cur.sort === 'long' ? 'clong' : 'cshort'; lsSet('shop-sort:' + cur.f.id, cur.sort);
@@ -1155,7 +1171,7 @@ function openJob(f){
         items.forEach(function(it){ it.L = layout(book, it); });
         var p = loadProg(f.id), tab0 = lsGet('shop-tab:' + f.id);
         var cutsTab = items.map(function(it){ return it.sh.name; }).indexOf('CUT SHEET');
-        cur = { f: f, book: book, items: items, done: p.done || {}, tl: progTl(p), fin: p.fin || null, asm: p.asm || null, sort: lsGet('shop-sort:' + f.id) || '', tab: tab0 != null && tab0 < items.length ? tab0 : (cutsTab >= 0 ? cutsTab : 0), units: {}, open: {} };
+        cur = { f: f, book: book, items: items, done: p.done || {}, tl: progTl(p), tla: unpackTl(p.tlap), fin: p.fin || null, asm: p.asm || null, sort: lsGet('shop-sort:' + f.id) || '', tab: tab0 != null && tab0 < items.length ? tab0 : (cutsTab >= 0 ? cutsTab : 0), units: {}, open: {} };
         var inSh = book.sheets.filter(function(s){ return s.name === 'INPUT'; })[0];
         if (inSh) return parseSheet(book, inSh).then(function(sd){ cur.units = readUnits(sd); cur.block = readBlock(sd); return items; });
         return items;
@@ -1168,7 +1184,7 @@ function openJob(f){
         // pick up ticks made on another device
         api('progget', { id: f.id }).then(function(r){
           var sp = r.prog ? JSON.parse(r.prog) : null;
-          if (sp && sp.t > (loadProg(f.id).t || 0) && cur && cur.f.id === f.id){ cur.done = sp.done || {}; cur.tl = progTl(sp); cur.fin = sp.fin || null; cur.asm = sp.asm || null; lsSet(progKey(f.id), sp); renderCur(); saveProg(); }
+          if (sp && sp.t > (loadProg(f.id).t || 0) && cur && cur.f.id === f.id){ cur.done = sp.done || {}; cur.tl = progTl(sp); cur.tla = unpackTl(sp.tlap); cur.fin = sp.fin || null; cur.asm = sp.asm || null; lsSet(progKey(f.id), sp); renderCur(); saveProg(); }
         }).catch(function(){});
       });
     }).catch(function(e){ msg('Couldn’t read that cut sheet: ' + (e && e.message ? e.message : e)); });
@@ -1191,17 +1207,18 @@ var SHOP_CREW = ['Dave', 'Jim'];
 var FIELD_CREW = [];   // field employees who sometimes help in the shop; names typed on the tablet are remembered too
 function otherNames(){ var a = FIELD_CREW.concat(lsGet('shop-others') || []), seen = {}; return a.filter(function(n){ var k = n.toLowerCase(); if (seen[k] || SHOP_CREW.some(function(s){ return s.toLowerCase() === k; })) return false; seen[k] = 1; return true; }).sort(); }
 function cutItem(){ return cur && cur.items.filter(function(it){ return it.sh.name === 'CUT SHEET'; })[0]; }
-// two sign-offs on the Cut Sheet: Cutting complete (once every box is ticked), then Assembly complete (once cutting is signed off)
+// two sign-offs on the Cut Sheet: Cutting complete once every Top rail and Channel box is ticked,
+// Assembly complete once every Rail tag box is ticked
 var STAGES = [
-  { k: 'fin', title: 'Cutting complete', ask: 'Every cut is ticked. Who finished cutting?' },
-  { k: 'asm', title: 'Assembly complete', ask: 'Who finished assembly?' }
+  { k: 'fin', kind: 'cut', title: 'Cutting complete', ask: 'Every top rail and channel is ticked. Who finished cutting?', un: 'Some top rail or channel boxes were unticked after cutting was signed off.' },
+  { k: 'asm', kind: 'asm', title: 'Assembly complete', ask: 'Every rail tag is ticked. Who finished assembly?', un: 'Some rail tags were unticked after assembly was signed off.' }
 ];
 function stageCard(st, all){
   var rec = cur[st.k], k = st.k;
   if (rec){
     var at = new Date(rec.at);
     return '<div class="fin complete"><div class="fh"><span class="fbox on">✓</span><div><b>' + st.title + '</b><span>' + esc(rec.by) + ' · ' + esc(at.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })) + ', ' + esc(at.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })) + '</span></div></div>' +
-      (k === 'fin' && !all ? '<p class="fnote">Some boxes were unticked after cutting was signed off.</p>' : '') +
+      (!all ? '<p class="fnote">' + st.un + '</p>' : '') +
       '<div class="frow"><button type="button" class="btn" data-fin="undo" data-st="' + k + '">Undo ' + st.title.toLowerCase() + '</button></div></div>';
   }
   return '<div class="fin"><div class="fh"><span class="fbox"></span><div><b>' + st.title + '</b><span>' + st.ask + '</span></div></div>' +
@@ -1214,9 +1231,8 @@ function stageCard(st, all){
 function renderFin(){
   var box = el('fin'), ci = cutItem(), it = cur.items[cur.tab];
   if (!ci || it !== ci){ box.hidden = true; return; }
-  var c = counts(ci), all = c.n > 0 && c.d === c.n, h = '';
-  if (all || cur.fin) h += stageCard(STAGES[0], all);
-  if (cur.fin || cur.asm) h += stageCard(STAGES[1], all);
+  var h = '';
+  STAGES.forEach(function(st){ var all = allDone(cutKeys(st.kind)); if (all || cur[st.k]) h += stageCard(st, all); });
   box.hidden = !h; box.innerHTML = h;
   STAGES.forEach(function(st){
     var sel = el('sel_' + st.k), nw = el('new_' + st.k); if (!sel) return;
@@ -1237,7 +1253,7 @@ el('fin').addEventListener('click', function(e){
   if (a === 'name') signOff(k, b.getAttribute('data-n'));
   else if (a === 'other'){ var o = el('other_' + k); o.hidden = !o.hidden; }
   else if (a === 'otherok'){ var sel = el('sel_' + k); if (sel.value === '__new'){ var v = el('new_' + k).value.trim(); if (!v) return el('new_' + k).focus(); signOff(k, v); } else signOff(k, sel.value); }
-  else if (a === 'undo') confirmBox('Undo ' + st.title.toLowerCase() + ' for ' + cur.f.name.replace(/\.xls[xm]$/i, '') + '?', function(){ cur[k] = null; if (k === 'fin') cur.asm = null; saveProg(); renderCur(); });
+  else if (a === 'undo') confirmBox('Undo ' + st.title.toLowerCase() + ' for ' + cur.f.name.replace(/\.xls[xm]$/i, '') + '?', function(){ cur[k] = null; saveProg(); renderCur(); });
 });
 function confirmBox(text, then){
   var m = el('modal'); el('modalText').textContent = text; el('modalInput').hidden = true; m.hidden = false;
@@ -1248,8 +1264,8 @@ function confirmBox(text, then){
 // ---------- fab time: worked out from when boxes were ticked; only shown in the manager view ----------
 var MGR_PIN = '2580';   // manager PIN for the fab-times view (change it here)
 var GAP = 25 * 60000;   // a gap longer than this between ticks is a break, overnight or weekend, and isn't counted
-function fabTime(p){
-  var tl = progTl(p), ts = tl.slice(); if (p.fin) ts.push(p.fin.at);
+function fabTime(p, kind){
+  var asm = kind === 'asm', tl = asm ? unpackTl(p.tlap) : progTl(p), ts = tl.slice(), so = asm ? p.asm : p.fin; if (so) ts.push(so.at);
   ts.sort(function(a, b){ return a - b; });
   var act = 0, i; for (i = 1; i < ts.length; i++){ var g = ts[i] - ts[i - 1]; if (g <= GAP) act += g; }
   return { active: act, first: ts[0] || 0, last: ts[ts.length - 1] || 0, ticks: tl.length };
@@ -1260,14 +1276,16 @@ function renderMgr(){
   // jobs in Ready to Fab, plus any job this tablet has ticked that has since left the folder
   var list = jobs.map(function(f){ return { id: f.id, name: f.name }; }), ids = {};
   list.forEach(function(j){ ids[j.id] = 1; });
-  try { for (var i = 0; i < localStorage.length; i++){ var k = localStorage.key(i); if (k.indexOf(PROG) !== 0) continue; var id = k.slice(PROG.length), pp = lsGet(k); if (!ids[id] && pp && pp.name && (pp.tlp || (pp.tl || []).length || pp.fin)){ ids[id] = 1; list.push({ id: id, name: pp.name }); } } } catch (e) {}
+  try { for (var i = 0; i < localStorage.length; i++){ var k = localStorage.key(i); if (k.indexOf(PROG) !== 0) continue; var id = k.slice(PROG.length), pp = lsGet(k); if (!ids[id] && pp && pp.name && (pp.tlp || pp.tlap || (pp.tl || []).length || pp.fin || pp.asm)){ ids[id] = 1; list.push({ id: id, name: pp.name }); } } } catch (e) {}
   var rows = list.map(function(f){
-    var p = loadProg(f.id), ft = fabTime(p), nm = esc(f.name.replace(/\.xls[xm]$/i, ''));
-    if (!ft.ticks && !p.fin) return { k: 0, h: '<tr><td>' + nm + '</td><td class="mut">Not started</td><td></td><td></td><td></td></tr>' };
-    return { k: p.asm ? 3 : p.fin ? 2 : 1, t: ft.last, h: '<tr><td>' + nm + '</td><td>' + (p.fin ? '✓ ' + esc(p.fin.by) : '<span class="mut">In progress</span>') + '</td><td class="num"><b>' + hm(ft.active) + '</b></td><td>' + (p.asm ? '✓ ' + esc(p.asm.by) + ' <span class="mut">' + day(p.asm.at) + '</span>' : (p.fin ? '<span class="mut">Not yet</span>' : '')) + '</td><td class="mut">' +
-      day(ft.first) + (day(ft.first) !== day(ft.last) ? ' – ' + day(ft.last) : '') + '</td></tr>' };
+    var p = loadProg(f.id), ft = fabTime(p, 'cut'), fa = fabTime(p, 'asm'), nm = esc(f.name.replace(/\.xls[xm]$/i, ''));
+    var first = Math.min(ft.first || Infinity, fa.first || Infinity), last = Math.max(ft.last, fa.last);
+    if (!ft.ticks && !fa.ticks && !p.fin && !p.asm) return { k: 0, h: '<tr><td>' + nm + '</td><td class="mut">Not started</td><td></td><td></td><td></td><td></td></tr>' };
+    return { k: p.asm ? 3 : p.fin ? 2 : 1, t: last, h: '<tr><td>' + nm + '</td><td>' + (p.fin ? '✓ ' + esc(p.fin.by) : (ft.ticks ? '<span class="mut">In progress</span>' : '')) + '</td><td class="num"><b>' + (ft.ticks || p.fin ? hm(ft.active) : '') + '</b></td>' +
+      '<td>' + (p.asm ? '✓ ' + esc(p.asm.by) : (fa.ticks ? '<span class="mut">In progress</span>' : '')) + '</td><td class="num"><b>' + (fa.ticks || p.asm ? hm(fa.active) : '') + '</b></td><td class="mut">' +
+      (first < Infinity ? day(first) + (day(first) !== day(last) ? ' – ' + day(last) : '') : '') + '</td></tr>' };
   }).sort(function(a, b){ return b.k - a.k || (b.t || 0) - (a.t || 0); });
-  el('mgrBody').innerHTML = rows.length ? rows.map(function(r){ return r.h; }).join('') : '<tr><td colspan="4" class="mut">No jobs in the list.</td></tr>';
+  el('mgrBody').innerHTML = rows.length ? rows.map(function(r){ return r.h; }).join('') : '<tr><td colspan="6" class="mut">No jobs in the list.</td></tr>';
 }
 function openMgr(){
   // ticks made on other tablets come in through the backend first
