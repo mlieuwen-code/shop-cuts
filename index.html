@@ -122,6 +122,10 @@ table.mgr td{padding:14px;border-top:1px solid var(--line);font-weight:700}
 table.mgr td.num{font-size:22px;white-space:nowrap}
 table.mgr .mut{color:var(--muted);font-weight:600}
 table.sheet td.floatrail{color:#9C0006!important;font-weight:900}
+/* numbered section headings (1 · Post cutting, 2 · Blocking, 3 · Bracketing): all the same */
+table.sheet tr.sechead td{background:var(--tint2)!important;color:var(--deep)!important;font-size:20px!important;font-weight:900!important;text-align:left!important;padding:12px 14px!important;border-top:3px solid var(--accent)}
+table.sheet tr.sechead td.postsall{text-align:right!important;padding:6px 8px!important}
+table.sheet tr.subhdr td{background:#E7DFCF!important;font-size:16px;box-shadow:0 2px 0 #D5CBB8}
 table.sheet td.postsall{text-align:right;padding:6px 8px}
 .pcut{display:inline-flex;align-items:center;gap:12px;min-height:56px;padding:0 18px 0 10px;border-radius:14px;border:2px solid var(--line);background:var(--card);font-size:18px;font-weight:900;color:var(--ink)}
 .pcut .box{width:38px;height:38px;border-radius:10px;border:3px solid var(--dash);background:var(--field);display:inline-flex;align-items:center;justify-content:center;color:transparent;font-size:22px}
@@ -837,6 +841,8 @@ function layout(book, item){
       var ci = cols.indexOf(c), left = cols[ci - 1], head = left ? txt(r, left) : '';
       for (var k = ri + 1; k < rows.length; k++){
         var rr = rows[k]; if (!cols.some(function(cc){ return txt(rr, cc) !== ''; })) break;
+        // stop at the next section: another ✓ heading row or a numbered heading (2 · Blocking…)
+        if (cols.some(function(cc){ return txt(rr, cc) === '✓'; }) || /^\d+\s*[·.\-]\s*[A-Za-z]/.test(txt(rr, cols[0]))) break;
         // the ✓ ticks the cell to its left (Top rail, Channels, Qty…); skip total lines
         if (/^total/i.test(txt(rr, cols[0]))) continue;
         if (left && txt(rr, left) !== ''){ chk[rr + ':' + c] = { left: left, head: head }; any = true; }
@@ -877,22 +883,25 @@ function layoutRow(unit, ncols){
   if (on){ var svg = ''; try { svg = LAY.svg(u); } catch (e) { svg = '<div class="legend">Couldn’t draw this unit.</div>'; } h += '<tr class="layrow"><td colspan="' + ncols + '"><div class="layout">' + svg + '</div></td></tr>'; }
   return h;
 }
-// Post Sheet: the "1 · POST CUTTING" heading row and the ✓ boxes in that section only.
-// The section stops at the first blank row, any other numbered heading, or anything about blocking or bracketing.
-function postSection(item){
-  if (!item || item.sh.name !== 'POST SHEET') return null;
-  var L = item.L, hr = null, end = Infinity;
+// numbered sections on a sheet (1 · Post cutting, 2 · Blocking, 3 · Bracketing): each heading gets one box that ticks that section only.
+// A section stops at the first blank row or the next numbered heading; Post cutting also stops at anything about blocking or bracketing.
+var SEC_RE = /^\d+\s*[·.\-]\s*[A-Za-z]/;
+function sheetSections(item){
+  if (!item) return [];
+  var L = item.L, out = [], curS = null;
   var rowTxt = function(r){ return L.cols.map(function(c){ return L.txt(r, c); }).join(' ').trim(); };
   L.rows.forEach(function(r){
-    var t = rowTxt(r);
-    if (hr == null){ if (/(^|\s)1\s*[·.\-]\s*post cutting/i.test(t)) hr = r; return; }
-    if (end !== Infinity || r <= hr) return;
+    var t0 = L.txt(r, L.cols[0]), t = rowTxt(r);
+    if (SEC_RE.test(t0)){ var name = t0.replace(/^\d+\s*[·.\-]\s*/, '').trim(); curS = { row: r, name: name, post: /post cutting/i.test(name), end: Infinity }; out.push(curS); return; }
+    if (!curS || curS.end !== Infinity) return;
     var hdr = L.cols.some(function(c){ return L.txt(r, c) === '✓'; });
-    if (!t || /block|bracket/i.test(t) || (!hdr && /^\d+\s*[·.\-]\s*\S/.test(t))) end = r;
+    if (!t || (curS.post && !hdr && /block|bracket/i.test(t))) curS.end = r;
   });
-  if (hr == null) return null;
-  var keys = Object.keys(L.chk).filter(function(k){ var r = +k.split(':')[0]; return r > hr && r < end; }).map(function(k){ return item.sh.name + '|c' + k; });
-  return keys.length ? { row: hr, keys: keys } : null;
+  return out.map(function(sc){
+    var keys = Object.keys(L.chk).filter(function(k){ var r = +k.split(':')[0]; return r > sc.row && r < sc.end; }).map(function(k){ return item.sh.name + '|c' + k; });
+    var nm = sc.name.toLowerCase(), label = sc.post ? 'Posts cut' : (nm.charAt(0).toUpperCase() + nm.slice(1) + ' done');
+    return { row: sc.row, keys: keys, label: label };
+  }).filter(function(sc){ return sc.keys.length; });
 }
 function renderSheet(book, item, done){
   var L = item.L, sd = item.sd, sh = item.sh, pre = sh.name + '|';
@@ -906,7 +915,7 @@ function renderSheet(book, item, done){
   });
   var h = '<table class="sheet">';
   var isCut = sh.name === 'CUT SHEET' && cur && Object.keys(cur.units || {}).length, lastUnit = null;
-  var ps = postSection(item), psAll = ps && ps.keys.every(function(k){ return done[k]; });
+  var secs = {}; sheetSections(item).forEach(function(sc){ secs[sc.row] = sc; });
   // floating rails (Non-Sub = Yes on INPUT): rail tag in bold red, same as the Excel cut sheet
   var floatTag = {}; if (sh.name === 'CUT SHEET' && cur) Object.keys(cur.units || {}).forEach(function(u){ cur.units[u].secs.forEach(function(s){ if (/^yes$/i.test(String(s.ns).trim())) floatTag[String(s.tag).trim()] = 1; }); });
   L.rows.forEach(function(r){
@@ -919,12 +928,12 @@ function renderSheet(book, item, done){
     var need = (main.length ? main : rc).map(function(c){ return pre + 'c' + r + ':' + c; });
     var rowDone = (need.length && need.every(function(k){ return done[k]; })) || (L.rowTap[r] && done[pre + 'r' + r]);
     var tick = {}; rc.forEach(function(c){ if (done[pre + 'c' + r + ':' + c]) tick[L.chk[r + ':' + c].left] = 1; });
-    var trc = [rowDone ? 'rowdone' : '', L.rowTap[r] ? 'tap' : '', need.length || L.rowTap[r] ? 'data' : '', r === L.hdr ? 'hdr' : '', L.hdr != null && r < L.hdr ? 'info' : ''].filter(Boolean).join(' ');
+    var trc = [rowDone ? 'rowdone' : '', L.rowTap[r] ? 'tap' : '', need.length || L.rowTap[r] ? 'data' : '', r === L.hdr ? 'hdr' : (L.cols.some(function(c){ return L.txt(r, c) === '✓'; }) ? 'subhdr' : ''), /^\d+\s*[·.\-]\s*[A-Za-z]/.test(L.txt(r, L.cols[0])) ? 'sechead' : (L.hdr != null && r < L.hdr ? 'info' : '')].filter(Boolean).join(' ');
     var big = !!(need.length || L.rowTap[r]);
     h += '<tr' + (trc ? ' class="' + trc + '"' : '') + (L.rowTap[r] ? ' data-row="' + pre + 'r' + r + '"' : '') + '>';
     L.cols.forEach(function(c){
       var k = r + ':' + c; if (skip[k]) return;
-      if (ps && r === ps.row && c === L.cols[L.cols.length - 1]){ h += '<td class="postsall"><button type="button" class="pcut' + (psAll ? ' on' : '') + '" data-act="postsall" aria-pressed="' + !!psAll + '"><span class="box">✓</span>Posts cut</button></td>'; return; }
+      if (secs[r] && c === L.cols[L.cols.length - 1]){ var sc = secs[r], sa = sc.keys.every(function(kk){ return done[kk]; }); h += '<td class="postsall"' + attr + '><button type="button" class="pcut' + (sa ? ' on' : '') + '" data-act="secall" data-sec="' + r + '" aria-pressed="' + sa + '"><span class="box">✓</span>' + esc(sc.label) + '</button></td>'; return; }
       var cell = sd.cells[k], t = show(book, cell), sp = span[k], xf = cell && book.st.xfs[cell.s], f = xf && book.st.fonts[xf.font];
       var attr = sp ? (sp.rs > 1 ? ' rowspan="' + sp.rs + '"' : '') + (sp.cs > 1 ? ' colspan="' + sp.cs + '"' : '') : '';
       if (L.chk[k]){ var key = pre + 'c' + k; h += '<td class="chk' + (done[key] ? ' on' : '') + '" data-key="' + esc(key) + '"' + attr + '><span class="box" role="checkbox" aria-checked="' + !!done[key] + '" aria-label="Done">✓</span></td>'; return; }
@@ -1011,12 +1020,12 @@ window.addEventListener('resize', function(){ if (cur) fitSheet(); });
 el('tabs').addEventListener('click', function(e){ var b = e.target.closest('[data-tab]'); if (!b) return; cur.tab = +b.getAttribute('data-tab'); lsSet('shop-tab:' + cur.f.id, cur.tab); renderCur(); window.scrollTo(0, 0); });
 el('sheet').addEventListener('click', function(e){
   if (!cur) return;
-  var pa = e.target.closest('[data-act="postsall"]');
+  var pa = e.target.closest('[data-act="secall"]');
   if (pa){
-    var ps = postSection(cur.items[cur.tab]); if (!ps) return;
+    var sr = +pa.getAttribute('data-sec'), ps = sheetSections(cur.items[cur.tab]).filter(function(sc){ return sc.row === sr; })[0]; if (!ps) return;
     var all = ps.keys.every(function(k){ return cur.done[k]; });
     var go = function(){ var y = window.scrollY; if (all) ps.keys.forEach(function(k){ delete cur.done[k]; }); else { ps.keys.forEach(function(k){ cur.done[k] = 1; }); (cur.tl = cur.tl || []).push(Date.now()); } saveProg(); renderCur(); window.scrollTo(0, y); };
-    if (all) confirmBox('Untick all the post cutting boxes?', go); else go();
+    if (all) confirmBox('Untick everything under “' + ps.label.replace(/ (cut|done)$/, '') + '”?', go); else go();
     return;
   }
   var lb = e.target.closest('.laybtn');
