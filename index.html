@@ -131,6 +131,14 @@ table.sheet td.postsall{text-align:right;padding:6px 8px}
 .pcut .box{width:38px;height:38px;border-radius:10px;border:3px solid var(--dash);background:var(--field);display:inline-flex;align-items:center;justify-content:center;color:transparent;font-size:22px}
 .pcut.on{background:var(--done);border-color:var(--doneink);color:var(--doneink)}
 .pcut.on .box{background:var(--doneink);border-color:var(--doneink);color:var(--onaccent)}
+.sortbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0 0 12px}
+.sortbar .slab{font-weight:900;color:var(--muted);margin-right:4px}
+.sbtn{min-height:52px;padding:0 18px;border-radius:14px;border:2px solid var(--line);background:var(--card);font-size:17px;font-weight:800}
+.sbtn.on{background:var(--accent);border-color:var(--accent);color:var(--onaccent)}
+table.sheet tr.laysec td{border-top:6px solid var(--accent)}
+.modal.alert .box2{border:4px solid var(--amberink);max-width:560px}
+.modal.alert #modalText{font-size:21px;line-height:1.45}
+.modal.alert #modalText b.big{display:block;font-size:28px;color:var(--amberink);margin-bottom:8px}
 .legend{display:flex;flex-wrap:wrap;gap:8px 18px;margin:12px 4px 0;color:var(--muted);font-size:15px;font-weight:700}
 .offline{display:inline-flex;align-items:center;gap:6px;font-size:14px;font-weight:800;color:var(--muted)}
 .modal{position:fixed;inset:0;z-index:40;background:rgba(42,38,34,.45);display:flex;align-items:center;justify-content:center;padding:16px}
@@ -186,6 +194,7 @@ svg.laysvg{width:100%;max-height:440px;display:block}
     </div>
     <div class="tabs" id="tabs" role="tablist"></div>
     </div>
+    <div class="sortbar" id="sortbar" hidden></div>
     <div class="sheetwrap"><div id="sheet"></div></div>
     <div id="fin" class="fins" hidden></div>
     <div class="legend" id="legend"></div>
@@ -876,6 +885,31 @@ function readUnits(sd){
   }
   return out;
 }
+// block height from INPUT: B13 is the block height (38 5/16 standard), D13 an override, D14 the list when units differ
+var STD_BLOCK = 38.3125;
+function fmt16(v){ var n = Math.round(v * 16), w = Math.floor(n / 16), f = n % 16, g = 16; while (f && f % 2 === 0){ f /= 2; g /= 2; } return w + (f ? ' ' + f + '/' + g : ''); }
+function readBlock(sd){
+  var b13 = cellVal(sd, 13, 2), d13 = cellVal(sd, 13, 4), d14 = cellVal(sd, 14, 4);
+  var num = function(v){ return typeof v === 'number' ? v : (v != null && String(v).trim() !== '' && !isNaN(+v) ? +v : null); };
+  var list = d14 != null ? String(d14).trim() : '';
+  if (list && !/^38\s+5\/16$/.test(list)) return { custom: true, text: list };
+  var o = num(d13); if (o != null && Math.abs(o - STD_BLOCK) > 0.001) return { custom: true, text: fmt16(o) + '"' };
+  var b = num(b13); if (b != null && Math.abs(b - STD_BLOCK) > 0.001) return { custom: true, text: fmt16(b) + '"' };
+  return { custom: false };
+}
+function postsCutDone(){
+  var it = cur && cur.items.filter(function(x){ return x.sh.name === 'POST SHEET'; })[0], sc = it && sheetSections(it).filter(function(s){ return s.label === 'Posts cut'; })[0];
+  return !!(sc && sc.keys.every(function(k){ return cur.done[k]; }));
+}
+function blockCheck(was){
+  if (!was && postsCutDone() && cur.block && cur.block.custom)
+    alertBox('<b class="big">Custom block height</b>This job’s blocks are <b>' + esc(cur.block.text) + '</b>, not the standard 38 5/16". Cut the blocks to the custom height.');
+}
+function alertBox(html){
+  var m = el('modal'), no = el('modalNo'), yes = el('modalYes'), t = el('modalText');
+  t.innerHTML = html; el('modalInput').hidden = true; no.hidden = true; var yt = yes.textContent; yes.textContent = 'Got it'; m.classList.add('alert'); m.hidden = false;
+  yes.onclick = function(){ m.hidden = true; no.hidden = false; yes.textContent = yt; m.classList.remove('alert'); };
+}
 function layoutRow(unit, ncols){
   var u = cur && cur.units[unit]; if (!u) return '';
   var on = !!cur.open[unit];
@@ -918,8 +952,21 @@ function renderSheet(book, item, done){
   var secs = {}; sheetSections(item).forEach(function(sc){ secs[sc.row] = sc; });
   // floating rails (Non-Sub = Yes on INPUT): rail tag in bold red, same as the Excel cut sheet
   var floatTag = {}; if (sh.name === 'CUT SHEET' && cur) Object.keys(cur.units || {}).forEach(function(u){ cur.units[u].secs.forEach(function(s){ if (/^yes$/i.test(String(s.ns).trim())) floatTag[String(s.tag).trim()] = 1; }); });
-  L.rows.forEach(function(r){
-    if (isCut && L.hdr != null && r > L.hdr){
+  // sorted by top rail: rail rows reordered, every unit layout moved to the bottom in unit order
+  var order = L.rows, sorted = false, unitsInOrder = [];
+  if (isCut && L.hdr != null){
+    L.rows.forEach(function(r){ var tg = L.txt(r, L.cols[0]); if (r > L.hdr && /^\S+\.\d+$/.test(tg)){ var un = unitOf(tg); if (unitsInOrder.indexOf(un) < 0) unitsInOrder.push(un); } });
+    var topC = L.cols.filter(function(c){ return /top rail/i.test(L.txt(L.hdr, c)); })[0];
+    if (cur.sort && topC != null){
+      var isRail = function(r){ return r > L.hdr && /^\S+\.\d+$/.test(L.txt(r, L.cols[0])); };
+      var len = function(r){ var x = sd.cells[r + ':' + topC], v = x ? x.v : null; if (typeof v === 'number') return v; var m = /(\d+(?:\.\d+)?)(?:\s+(\d+)\s*\/\s*(\d+))?/.exec(String(v == null ? '' : v)); return m ? +m[1] + (m[2] ? m[2] / m[3] : 0) : -1; };
+      var rails = L.rows.filter(isRail).sort(function(a, b){ return cur.sort === 'short' ? len(a) - len(b) || a - b : len(b) - len(a) || a - b; });
+      order = L.rows.filter(function(r){ return r <= L.hdr; }).concat(rails, L.rows.filter(function(r){ return r > L.hdr && !isRail(r); }));
+      sorted = true;
+    }
+  }
+  order.forEach(function(r){
+    if (isCut && !sorted && L.hdr != null && r > L.hdr){
       var tg = L.txt(r, L.cols[0]), un = /^\S+\.\d+$/.test(tg) ? unitOf(tg) : null;
       if (un && un !== lastUnit){ h += layoutRow(un, L.cols.length); lastUnit = un; }
     }
@@ -933,7 +980,7 @@ function renderSheet(book, item, done){
     h += '<tr' + (trc ? ' class="' + trc + '"' : '') + (L.rowTap[r] ? ' data-row="' + pre + 'r' + r + '"' : '') + '>';
     L.cols.forEach(function(c){
       var k = r + ':' + c; if (skip[k]) return;
-      if (secs[r] && c === L.cols[L.cols.length - 1]){ var sc = secs[r], sa = sc.keys.every(function(kk){ return done[kk]; }); h += '<td class="postsall"' + attr + '><button type="button" class="pcut' + (sa ? ' on' : '') + '" data-act="secall" data-sec="' + r + '" aria-pressed="' + sa + '"><span class="box">✓</span>' + esc(sc.label) + '</button></td>'; return; }
+      if (secs[r] && c === L.cols[L.cols.length - 1]){ var sc = secs[r], sa = sc.keys.every(function(kk){ return done[kk]; }); var sp0 = span[k], at0 = sp0 ? (sp0.rs > 1 ? ' rowspan="' + sp0.rs + '"' : '') + (sp0.cs > 1 ? ' colspan="' + sp0.cs + '"' : '') : ''; h += '<td class="postsall"' + at0 + '><button type="button" class="pcut' + (sa ? ' on' : '') + '" data-act="secall" data-sec="' + r + '" aria-pressed="' + sa + '"><span class="box">✓</span>' + esc(sc.label) + '</button></td>'; return; }
       var cell = sd.cells[k], t = show(book, cell), sp = span[k], xf = cell && book.st.xfs[cell.s], f = xf && book.st.fonts[xf.font];
       var attr = sp ? (sp.rs > 1 ? ' rowspan="' + sp.rs + '"' : '') + (sp.cs > 1 ? ' colspan="' + sp.cs + '"' : '') : '';
       if (L.chk[k]){ var key = pre + 'c' + k; h += '<td class="chk' + (done[key] ? ' on' : '') + '" data-key="' + esc(key) + '"' + attr + '><span class="box" role="checkbox" aria-checked="' + !!done[key] + '" aria-label="Done">✓</span></td>'; return; }
@@ -949,6 +996,10 @@ function renderSheet(book, item, done){
     });
     h += '</tr>';
   });
+  if (sorted && unitsInOrder.length){
+    h += '<tr class="sechead laysec"><td colspan="' + L.cols.length + '">Unit layouts</td></tr>';
+    unitsInOrder.forEach(function(un){ h += layoutRow(un, L.cols.length); });
+  }
   return h + '</table>';
 }
 
@@ -986,6 +1037,9 @@ function renderCur(){
   fitSheet();
   var c = counts(it);
   renderFin();
+  var sb = el('sortbar'), onCut = it.sh.name === 'CUT SHEET';
+  sb.hidden = !onCut;
+  if (onCut) sb.innerHTML = '<span class="slab">Sort</span>' + [['', 'Sheet order'], ['long', 'Longest top rail first'], ['short', 'Shortest first']].map(function(o){ return '<button type="button" class="sbtn' + ((cur.sort || '') === o[0] ? ' on' : '') + '" data-sort="' + o[0] + '" aria-pressed="' + ((cur.sort || '') === o[0]) + '">' + o[1] + '</button>'; }).join('');
   el('legend').innerHTML = it.view ? '<span>Totals for the job. Nothing to tick here.</span>' : (c.n ? '<span>Tap a box (or a row) when it’s cut. Tap again to undo.</span>' : '');
   renderTabs();
 }
@@ -1017,14 +1071,18 @@ window.addEventListener('resize', function(){ if (cur) fitSheet(); });
   if (window.ResizeObserver) new ResizeObserver(setH).observe(top);
   setH();
 })();
+el('sortbar').addEventListener('click', function(e){
+  var b = e.target.closest('[data-sort]'); if (!b || !cur) return;
+  cur.sort = b.getAttribute('data-sort'); lsSet('shop-sort:' + cur.f.id, cur.sort); renderCur();
+});
 el('tabs').addEventListener('click', function(e){ var b = e.target.closest('[data-tab]'); if (!b) return; cur.tab = +b.getAttribute('data-tab'); lsSet('shop-tab:' + cur.f.id, cur.tab); renderCur(); window.scrollTo(0, 0); });
 el('sheet').addEventListener('click', function(e){
   if (!cur) return;
   var pa = e.target.closest('[data-act="secall"]');
   if (pa){
     var sr = +pa.getAttribute('data-sec'), ps = sheetSections(cur.items[cur.tab]).filter(function(sc){ return sc.row === sr; })[0]; if (!ps) return;
-    var all = ps.keys.every(function(k){ return cur.done[k]; });
-    var go = function(){ var y = window.scrollY; if (all) ps.keys.forEach(function(k){ delete cur.done[k]; }); else { ps.keys.forEach(function(k){ cur.done[k] = 1; }); (cur.tl = cur.tl || []).push(Date.now()); } saveProg(); renderCur(); window.scrollTo(0, y); };
+    var all = ps.keys.every(function(k){ return cur.done[k]; }), was = postsCutDone();
+    var go = function(){ var y = window.scrollY; if (all) ps.keys.forEach(function(k){ delete cur.done[k]; }); else { ps.keys.forEach(function(k){ cur.done[k] = 1; }); (cur.tl = cur.tl || []).push(Date.now()); } saveProg(); renderCur(); window.scrollTo(0, y); blockCheck(was); };
     if (all) confirmBox('Untick everything under “' + ps.label.replace(/ (cut|done)$/, '') + '”?', go); else go();
     return;
   }
@@ -1032,8 +1090,9 @@ el('sheet').addEventListener('click', function(e){
   if (lb){ var un = lb.getAttribute('data-unit'); cur.open[un] = !cur.open[un]; var y0 = window.scrollY; renderCur(); window.scrollTo(0, y0); return; }
   var td = e.target.closest('td.chk'), tr = e.target.closest('tr[data-row]'), key = td ? td.getAttribute('data-key') : tr ? tr.getAttribute('data-row') : null;
   if (!key) return;
+  var was = postsCutDone();
   if (cur.done[key]) delete cur.done[key]; else { cur.done[key] = 1; (cur.tl = cur.tl || []).push(Date.now()); }
-  saveProg(); var y = window.scrollY; renderCur(); window.scrollTo(0, y);
+  saveProg(); var y = window.scrollY; renderCur(); window.scrollTo(0, y); blockCheck(was);
 });
 function openJob(f){
   msg('');
@@ -1049,9 +1108,9 @@ function openJob(f){
         items.forEach(function(it){ it.L = layout(book, it); });
         var p = loadProg(f.id), tab0 = lsGet('shop-tab:' + f.id);
         var cutsTab = items.map(function(it){ return it.sh.name; }).indexOf('CUT SHEET');
-        cur = { f: f, book: book, items: items, done: p.done || {}, tl: progTl(p), fin: p.fin || null, asm: p.asm || null, tab: tab0 != null && tab0 < items.length ? tab0 : (cutsTab >= 0 ? cutsTab : 0), units: {}, open: {} };
+        cur = { f: f, book: book, items: items, done: p.done || {}, tl: progTl(p), fin: p.fin || null, asm: p.asm || null, sort: lsGet('shop-sort:' + f.id) || '', tab: tab0 != null && tab0 < items.length ? tab0 : (cutsTab >= 0 ? cutsTab : 0), units: {}, open: {} };
         var inSh = book.sheets.filter(function(s){ return s.name === 'INPUT'; })[0];
-        if (inSh) return parseSheet(book, inSh).then(function(sd){ cur.units = readUnits(sd); return items; });
+        if (inSh) return parseSheet(book, inSh).then(function(sd){ cur.units = readUnits(sd); cur.block = readBlock(sd); return items; });
         return items;
       }).then(function(items){
         el('jobName').textContent = f.name.replace(/\.xlsx$/i, '');
