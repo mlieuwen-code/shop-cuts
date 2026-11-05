@@ -154,6 +154,8 @@ table.sheet td.hival.hicustom{background:#9C0006!important;color:#fff!important;
 .donehead .chev{font-size:22px;width:22px;color:var(--doneink)}
 .donehead span{color:var(--muted);font-weight:700;font-size:17px}
 .donering{width:64px;height:64px;flex-shrink:0;border-radius:50%;background:var(--doneink);color:var(--onaccent);display:flex;align-items:center;justify-content:center;font-size:30px;font-weight:900}
+#logo{touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+#logo svg{pointer-events:none}
 .legend{display:flex;flex-wrap:wrap;gap:8px 18px;margin:12px 4px 0;color:var(--muted);font-size:15px;font-weight:700}
 .offline{display:inline-flex;align-items:center;gap:6px;font-size:14px;font-weight:800;color:var(--muted)}
 .modal{position:fixed;inset:0;z-index:40;background:rgba(42,38,34,.45);display:flex;align-items:center;justify-content:center;padding:16px}
@@ -1451,18 +1453,31 @@ function openMgr(){
   pullAll(renderMgr);
   renderMgr(); el('list').hidden = true; el('mgr').hidden = false; window.scrollTo(0, 0);
 }
-// hidden way in: press and hold the Shop Cuts logo for 2 seconds, then the manager PIN
+// hidden way in: press and hold the Shop Cuts logo for 2 seconds, or tap it 5 times quickly, then the manager PIN.
+// Touch screens: the browser's own long-press (select / menu) cancels pointer events, so the hold uses touch events and ignores cancels.
 (function(){
-  var t = null, lg = el('logo');
-  var start = function(e){ t = setTimeout(function(){
+  var t = null, lg = el('logo'), taps = [];
+  function askMgr(){
+    clearTimeout(t); t = null; taps = [];
     var m = el('modal'), inp = el('modalInput');
     el('modalText').textContent = 'Manager PIN'; inp.hidden = false; inp.value = ''; m.hidden = false; setTimeout(function(){ inp.focus(); }, 150);
     el('modalNo').onclick = function(){ m.hidden = true; inp.hidden = true; };
     el('modalYes').onclick = function(){ var ok = inp.value.trim() === MGR_PIN; m.hidden = true; inp.hidden = true; if (ok) openMgr(); else msg('Wrong PIN.'); };
     inp.onkeydown = function(e){ if (e.key === 'Enter') el('modalYes').click(); };
-  }, 2000); };
-  var stop = function(){ clearTimeout(t); };
-  lg.addEventListener('pointerdown', start); ['pointerup', 'pointerleave', 'pointercancel'].forEach(function(ev){ lg.addEventListener(ev, stop); });
+  }
+  function down(){ clearTimeout(t); t = setTimeout(askMgr, 2000); }
+  function up(){
+    if (t){ clearTimeout(t); t = null;
+      var now = Date.now(); taps = taps.filter(function(x){ return now - x < 3000; }); taps.push(now);
+      if (taps.length >= 5) askMgr();
+    }
+  }
+  var touched = false;
+  lg.addEventListener('touchstart', function(e){ touched = true; e.preventDefault(); down(); }, { passive: false });
+  lg.addEventListener('touchend', function(e){ e.preventDefault(); up(); }, { passive: false });
+  lg.addEventListener('mousedown', function(){ if (!touched) down(); });
+  lg.addEventListener('mouseup', function(){ if (!touched) up(); });
+  lg.addEventListener('mouseleave', function(){ if (!touched){ clearTimeout(t); t = null; } });
   lg.addEventListener('contextmenu', function(e){ e.preventDefault(); });
 })();
 el('mgrBack').onclick = function(){ el('mgr').hidden = true; el('list').hidden = false; renderList(false); window.scrollTo(0, 0); };
