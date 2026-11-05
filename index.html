@@ -1036,8 +1036,10 @@ function renderSheet(book, item, done){
     h += '</tr>';
   });
   if (sorted && unitsInOrder.length){
-    h += '<tr class="sechead laysec"><td colspan="' + L.cols.length + '">Unit layouts</td></tr>';
-    unitsInOrder.forEach(function(un){ h += layoutRow(un, L.cols.length); });
+    // collapsed under one tick box while sorted
+    var on = !!cur.showLays;
+    h += '<tr class="unitbar laysec"><td colspan="' + L.cols.length + '"><button type="button" class="laybtn" data-act="laysall" aria-expanded="' + on + '"><span class="lb' + (on ? ' on' : '') + '">' + (on ? '✓' : '') + '</span>Show unit layouts (' + unitsInOrder.length + ')</button></td></tr>';
+    if (on) unitsInOrder.forEach(function(un){ h += layoutRow(un, L.cols.length); });
   }
   return h + '</table>';
 }
@@ -1120,6 +1122,7 @@ el('sheet').addEventListener('click', function(e){
     if (all) confirmBox('Untick everything under “' + ps.label.replace(/ (cut|done)$/, '') + '”?', go); else go();
     return;
   }
+  if (e.target.closest('[data-act="laysall"]')){ cur.showLays = !cur.showLays; var y2 = window.scrollY; renderCur(); window.scrollTo(0, y2); return; }
   var lb = e.target.closest('.laybtn');
   if (lb){ var un = lb.getAttribute('data-unit'); cur.open[un] = !cur.open[un]; var y0 = window.scrollY; renderCur(); window.scrollTo(0, y0); return; }
   var td = e.target.closest('td.chk'), tr = e.target.closest('tr[data-row]'), key = td ? td.getAttribute('data-key') : tr ? tr.getAttribute('data-row') : null;
