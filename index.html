@@ -175,7 +175,7 @@ svg.laysvg{width:100%;max-height:440px;display:block}
     <div class="apphead"><button type="button" class="round" id="mgrBack" aria-label="Back to the job list"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2A2622" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button>
       <div class="ttl"><div class="eyebrow">Manager</div><h2>Fab times</h2></div></div>
     <p class="mgrnote">Time between ticks, with breaks over 25 minutes left out (overnight, weekends, lunch). It starts at the first tick, so the first cut's own time isn't counted.</p>
-    <div class="mgrwrap"><table class="mgr"><thead><tr><th>Job</th><th>Finished by</th><th>Fab time</th><th>Dates</th></tr></thead><tbody id="mgrBody"></tbody></table></div>
+    <div class="mgrwrap"><table class="mgr"><thead><tr><th>Job</th><th>Cut by</th><th>Cutting time</th><th>Assembled by</th><th>Dates</th></tr></thead><tbody id="mgrBody"></tbody></table></div>
   </section>
 
   <section id="job" hidden>
@@ -187,7 +187,7 @@ svg.laysvg{width:100%;max-height:440px;display:block}
     <div class="tabs" id="tabs" role="tablist"></div>
     </div>
     <div class="sheetwrap"><div id="sheet"></div></div>
-    <div id="fin" class="fin" hidden></div>
+    <div id="fin" class="fins" hidden></div>
     <div class="legend" id="legend"></div>
   </section>
 </div>
@@ -651,7 +651,7 @@ function renderList(cached){
       var s = lsGet(SUM + f.id), p = s && s.total ? s.done / s.total : 0, on = have.indexOf(f.id) >= 0;
       var info = lsGet('shop-info:' + f.id), tag = info && info.u === f.updated ? info.label : '';
       return '<button type="button" class="job' + (p >= 1 || (s && s.fin) ? ' done' : '') + '" data-k="' + k + '">' + ring(p) + '<span class="t"><b>' + esc(f.name.replace(/\.xls[xm]$/i, '')) + '</b>' +
-        '<span class="s">' + (s && s.fin ? '<span class="fin-tag">✓ Complete · ' + esc(s.fin.by) + ' · ' + esc(new Date(s.fin.at).toLocaleDateString([], { month: 'short', day: 'numeric' })) + '</span>' : s && s.total ? s.done + ' of ' + s.total + ' ticked' : 'Not started') + ' · saved ' + esc(new Date(f.updated).toLocaleDateString([], { month: 'short', day: 'numeric' })) +
+        '<span class="s">' + (s && (s.asm || s.fin) ? '<span class="fin-tag">✓ ' + (s.asm ? 'Assembled' : 'Cut') + ' · ' + esc((s.asm || s.fin).by) + ' · ' + esc(new Date((s.asm || s.fin).at).toLocaleDateString([], { month: 'short', day: 'numeric' })) + '</span>' : s && s.total ? s.done + ' of ' + s.total + ' ticked' : 'Not started') + ' · saved ' + esc(new Date(f.updated).toLocaleDateString([], { month: 'short', day: 'numeric' })) +
         (on ? ' · <span class="offline">✓ on tablet</span>' : '') + '</span></span>' + (tag ? '<span class="cnt' + (/^\d/.test(tag) ? '' : ' warn') + '">' + (/^(\d+) (.+)$/.test(tag) ? '<b>' + tag.replace(/ .*/, '') + '</b>' + esc(tag.replace(/^\d+ /, '')) : esc(tag)) + '</span>' : '') + '</button>';
     }).join('');
   });
@@ -964,9 +964,9 @@ function progTl(p){ return p ? (p.tlp != null ? unpackTl(p.tlp) : (p.tl || [])) 
 var syncTimer = null;
 function saveProg(){
   if (!cur) return;
-  var p = { t: Date.now(), name: cur.f.name, done: cur.done, tlp: packTl(cur.tl), fin: cur.fin || null }; lsSet(progKey(cur.f.id), p);
+  var p = { t: Date.now(), name: cur.f.name, done: cur.done, tlp: packTl(cur.tl), fin: cur.fin || null, asm: cur.asm || null }; lsSet(progKey(cur.f.id), p);
   var tot = 0, dn = 0; cur.items.forEach(function(it){ var ks = itemKeys(it); tot += ks.length; ks.forEach(function(k){ if (cur.done[it.sh.name + '|' + k]) dn++; }); });
-  lsSet(SUM + cur.f.id, { done: dn, total: tot, fin: cur.fin || null });
+  lsSet(SUM + cur.f.id, { done: dn, total: tot, fin: cur.fin || null, asm: cur.asm || null });
   clearTimeout(syncTimer); var id = cur.f.id;
   syncTimer = setTimeout(function(){ api('progset', { id: id, prog: JSON.stringify(p) }).catch(function(){}); }, 1500);
 }
@@ -1049,7 +1049,7 @@ function openJob(f){
         items.forEach(function(it){ it.L = layout(book, it); });
         var p = loadProg(f.id), tab0 = lsGet('shop-tab:' + f.id);
         var cutsTab = items.map(function(it){ return it.sh.name; }).indexOf('CUT SHEET');
-        cur = { f: f, book: book, items: items, done: p.done || {}, tl: progTl(p), fin: p.fin || null, tab: tab0 != null && tab0 < items.length ? tab0 : (cutsTab >= 0 ? cutsTab : 0), units: {}, open: {} };
+        cur = { f: f, book: book, items: items, done: p.done || {}, tl: progTl(p), fin: p.fin || null, asm: p.asm || null, tab: tab0 != null && tab0 < items.length ? tab0 : (cutsTab >= 0 ? cutsTab : 0), units: {}, open: {} };
         var inSh = book.sheets.filter(function(s){ return s.name === 'INPUT'; })[0];
         if (inSh) return parseSheet(book, inSh).then(function(sd){ cur.units = readUnits(sd); return items; });
         return items;
@@ -1062,7 +1062,7 @@ function openJob(f){
         // pick up ticks made on another device
         api('progget', { id: f.id }).then(function(r){
           var sp = r.prog ? JSON.parse(r.prog) : null;
-          if (sp && sp.t > (loadProg(f.id).t || 0) && cur && cur.f.id === f.id){ cur.done = sp.done || {}; cur.tl = progTl(sp); cur.fin = sp.fin || null; lsSet(progKey(f.id), sp); renderCur(); saveProg(); }
+          if (sp && sp.t > (loadProg(f.id).t || 0) && cur && cur.f.id === f.id){ cur.done = sp.done || {}; cur.tl = progTl(sp); cur.fin = sp.fin || null; cur.asm = sp.asm || null; lsSet(progKey(f.id), sp); renderCur(); saveProg(); }
         }).catch(function(){});
       });
     }).catch(function(e){ msg('Couldn’t read that cut sheet: ' + (e && e.message ? e.message : e)); });
@@ -1085,45 +1085,53 @@ var SHOP_CREW = ['Dave', 'Jim'];
 var FIELD_CREW = [];   // field employees who sometimes help in the shop; names typed on the tablet are remembered too
 function otherNames(){ var a = FIELD_CREW.concat(lsGet('shop-others') || []), seen = {}; return a.filter(function(n){ var k = n.toLowerCase(); if (seen[k] || SHOP_CREW.some(function(s){ return s.toLowerCase() === k; })) return false; seen[k] = 1; return true; }).sort(); }
 function cutItem(){ return cur && cur.items.filter(function(it){ return it.sh.name === 'CUT SHEET'; })[0]; }
+// two sign-offs on the Cut Sheet: Cutting complete (once every box is ticked), then Assembly complete (once cutting is signed off)
+var STAGES = [
+  { k: 'fin', title: 'Cutting complete', ask: 'Every cut is ticked. Who finished cutting?' },
+  { k: 'asm', title: 'Assembly complete', ask: 'Who finished assembly?' }
+];
+function stageCard(st, all){
+  var rec = cur[st.k], k = st.k;
+  if (rec){
+    var at = new Date(rec.at);
+    return '<div class="fin complete"><div class="fh"><span class="fbox on">✓</span><div><b>' + st.title + '</b><span>' + esc(rec.by) + ' · ' + esc(at.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })) + ', ' + esc(at.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })) + '</span></div></div>' +
+      (k === 'fin' && !all ? '<p class="fnote">Some boxes were unticked after cutting was signed off.</p>' : '') +
+      '<div class="frow"><button type="button" class="btn" data-fin="undo" data-st="' + k + '">Undo ' + st.title.toLowerCase() + '</button></div></div>';
+  }
+  return '<div class="fin"><div class="fh"><span class="fbox"></span><div><b>' + st.title + '</b><span>' + st.ask + '</span></div></div>' +
+    '<div class="frow">' + SHOP_CREW.map(function(n){ return '<button type="button" class="btn pri big" data-fin="name" data-st="' + k + '" data-n="' + esc(n) + '">' + esc(n) + '</button>'; }).join('') +
+    '<button type="button" class="btn big" data-fin="other" data-st="' + k + '">Other…</button></div>' +
+    '<div class="frow fother" id="other_' + k + '" hidden><select id="sel_' + k + '" aria-label="Who finished ' + st.title.toLowerCase() + '">' +
+    otherNames().map(function(n){ return '<option>' + esc(n) + '</option>'; }).join('') + '<option value="__new">Someone else (type a name)</option></select>' +
+    '<input id="new_' + k + '" type="text" placeholder="Name" autocomplete="off" aria-label="Name" hidden><button type="button" class="btn pri big" data-fin="otherok" data-st="' + k + '">Done</button></div></div>';
+}
 function renderFin(){
   var box = el('fin'), ci = cutItem(), it = cur.items[cur.tab];
   if (!ci || it !== ci){ box.hidden = true; return; }
-  var c = counts(ci), all = c.n > 0 && c.d === c.n;
-  if (!all && !cur.fin){ box.hidden = true; return; }
-  box.hidden = false;
-  if (cur.fin){
-    var at = new Date(cur.fin.at);
-    box.className = 'fin complete';
-    box.innerHTML = '<div class="fh"><span class="fbox on">✓</span><div><b>Job complete</b><span>' + esc(cur.fin.by) + ' · ' + esc(at.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })) + ', ' + esc(at.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })) + '</span></div></div>' +
-      (all ? '' : '<p class="fnote">Some boxes were unticked after this was marked complete.</p>') +
-      '<div class="frow"><button type="button" class="btn" data-fin="undo">Undo job complete</button></div>';
-    return;
-  }
-  box.className = 'fin';
-  box.innerHTML = '<div class="fh"><span class="fbox"></span><div><b>Job complete</b><span>Every cut is ticked. Who finished it?</span></div></div>' +
-    '<div class="frow">' + SHOP_CREW.map(function(n){ return '<button type="button" class="btn pri big" data-fin="name" data-n="' + esc(n) + '">' + esc(n) + '</button>'; }).join('') +
-    '<button type="button" class="btn big" data-fin="other">Other…</button></div>' +
-    '<div class="frow fother" id="finOther" hidden><select id="finSel" aria-label="Who finished it">' +
-    otherNames().map(function(n){ return '<option>' + esc(n) + '</option>'; }).join('') + '<option value="__new">Someone else (type a name)</option></select>' +
-    '<input id="finNew" type="text" placeholder="Name" autocomplete="off" aria-label="Name" hidden><button type="button" class="btn pri big" data-fin="otherok">Done</button></div>';
-  var sel = el('finSel'), nw = el('finNew');
-  var sync = function(){ nw.hidden = sel.value !== '__new'; if (!nw.hidden) setTimeout(function(){ nw.focus(); }, 50); };
-  sel.onchange = sync; sync();
+  var c = counts(ci), all = c.n > 0 && c.d === c.n, h = '';
+  if (all || cur.fin) h += stageCard(STAGES[0], all);
+  if (cur.fin || cur.asm) h += stageCard(STAGES[1], all);
+  box.hidden = !h; box.innerHTML = h;
+  STAGES.forEach(function(st){
+    var sel = el('sel_' + st.k), nw = el('new_' + st.k); if (!sel) return;
+    var sync = function(){ nw.hidden = sel.value !== '__new'; if (!nw.hidden) setTimeout(function(){ nw.focus(); }, 50); };
+    sel.onchange = sync; sync();
+  });
 }
-function finishJob(name){
+function signOff(k, name){
   name = String(name || '').trim(); if (!name) return;
   if (!SHOP_CREW.concat(FIELD_CREW).some(function(n){ return n.toLowerCase() === name.toLowerCase(); })){
     var o = lsGet('shop-others') || []; if (!o.some(function(n){ return n.toLowerCase() === name.toLowerCase(); })){ o.push(name); lsSet('shop-others', o); }
   }
-  cur.fin = { by: name, at: Date.now() }; saveProg(); renderCur();
+  cur[k] = { by: name, at: Date.now() }; saveProg(); var y = window.scrollY; renderCur(); window.scrollTo(0, y);
 }
 el('fin').addEventListener('click', function(e){
   var b = e.target.closest('[data-fin]'); if (!b || !cur) return;
-  var a = b.getAttribute('data-fin');
-  if (a === 'name') finishJob(b.getAttribute('data-n'));
-  else if (a === 'other'){ var o = el('finOther'); o.hidden = !o.hidden; }
-  else if (a === 'otherok'){ var sel = el('finSel'); if (sel.value === '__new'){ var v = el('finNew').value.trim(); if (!v) return el('finNew').focus(); finishJob(v); } else finishJob(sel.value); }
-  else if (a === 'undo') confirmBox('Undo job complete for ' + cur.f.name.replace(/\.xls[xm]$/i, '') + '?', function(){ cur.fin = null; saveProg(); renderCur(); });
+  var a = b.getAttribute('data-fin'), k = b.getAttribute('data-st'), st = STAGES.filter(function(s){ return s.k === k; })[0]; if (!st) return;
+  if (a === 'name') signOff(k, b.getAttribute('data-n'));
+  else if (a === 'other'){ var o = el('other_' + k); o.hidden = !o.hidden; }
+  else if (a === 'otherok'){ var sel = el('sel_' + k); if (sel.value === '__new'){ var v = el('new_' + k).value.trim(); if (!v) return el('new_' + k).focus(); signOff(k, v); } else signOff(k, sel.value); }
+  else if (a === 'undo') confirmBox('Undo ' + st.title.toLowerCase() + ' for ' + cur.f.name.replace(/\.xls[xm]$/i, '') + '?', function(){ cur[k] = null; if (k === 'fin') cur.asm = null; saveProg(); renderCur(); });
 });
 function confirmBox(text, then){
   var m = el('modal'); el('modalText').textContent = text; el('modalInput').hidden = true; m.hidden = false;
@@ -1149,8 +1157,8 @@ function renderMgr(){
   try { for (var i = 0; i < localStorage.length; i++){ var k = localStorage.key(i); if (k.indexOf(PROG) !== 0) continue; var id = k.slice(PROG.length), pp = lsGet(k); if (!ids[id] && pp && pp.name && (pp.tlp || (pp.tl || []).length || pp.fin)){ ids[id] = 1; list.push({ id: id, name: pp.name }); } } } catch (e) {}
   var rows = list.map(function(f){
     var p = loadProg(f.id), ft = fabTime(p), nm = esc(f.name.replace(/\.xls[xm]$/i, ''));
-    if (!ft.ticks && !p.fin) return { k: 0, h: '<tr><td>' + nm + '</td><td class="mut">Not started</td><td></td><td></td></tr>' };
-    return { k: p.fin ? 2 : 1, t: ft.last, h: '<tr><td>' + nm + '</td><td>' + (p.fin ? '✓ ' + esc(p.fin.by) : '<span class="mut">In progress</span>') + '</td><td class="num"><b>' + hm(ft.active) + '</b></td><td class="mut">' +
+    if (!ft.ticks && !p.fin) return { k: 0, h: '<tr><td>' + nm + '</td><td class="mut">Not started</td><td></td><td></td><td></td></tr>' };
+    return { k: p.asm ? 3 : p.fin ? 2 : 1, t: ft.last, h: '<tr><td>' + nm + '</td><td>' + (p.fin ? '✓ ' + esc(p.fin.by) : '<span class="mut">In progress</span>') + '</td><td class="num"><b>' + hm(ft.active) + '</b></td><td>' + (p.asm ? '✓ ' + esc(p.asm.by) + ' <span class="mut">' + day(p.asm.at) + '</span>' : (p.fin ? '<span class="mut">Not yet</span>' : '')) + '</td><td class="mut">' +
       day(ft.first) + (day(ft.first) !== day(ft.last) ? ' – ' + day(ft.last) : '') + '</td></tr>' };
   }).sort(function(a, b){ return b.k - a.k || (b.t || 0) - (a.t || 0); });
   el('mgrBody').innerHTML = rows.length ? rows.map(function(r){ return r.h; }).join('') : '<tr><td colspan="4" class="mut">No jobs in the list.</td></tr>';
