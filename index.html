@@ -146,6 +146,9 @@ table.sheet td.hilab,table.sheet td.hival{background:#FFD43B!important;color:#1A
 table.sheet td.hilab{font-size:19px!important;text-transform:uppercase;letter-spacing:.03em}
 table.sheet td.hival{font-size:26px!important}
 table.sheet td.hival.hicustom{background:#9C0006!important;color:#fff!important;border-color:#6E0004!important}
+.donehead{font-size:22px;margin:22px 4px 2px;font-weight:900}
+.donehead span{color:var(--muted);font-weight:700;font-size:17px}
+.donering{width:64px;height:64px;flex-shrink:0;border-radius:50%;background:var(--doneink);color:var(--onaccent);display:flex;align-items:center;justify-content:center;font-size:30px;font-weight:900}
 .legend{display:flex;flex-wrap:wrap;gap:8px 18px;margin:12px 4px 0;color:var(--muted);font-size:15px;font-weight:700}
 .offline{display:inline-flex;align-items:center;gap:6px;font-size:14px;font-weight:800;color:var(--muted)}
 .modal{position:fixed;inset:0;z-index:40;background:rgba(42,38,34,.45);display:flex;align-items:center;justify-content:center;padding:16px}
@@ -654,24 +657,42 @@ function api(action, extra){
 }
 
 // ---------- job list ----------
-var jobs = [];
+var jobs = [], doneJobs = null, DONE_DAYS = 50;
+// newer backend actions first; if Apps Script hasn't been redeployed yet, fall back to the old ones
+function apiNew(a2, a1, extra){ return api(a2, extra).catch(function(e){ if (e && /unknown request|not available/i.test(e.message || '')) return api(a1, extra); throw e; }); }
 function ring(p){
   var r = 26, c = 2 * Math.PI * r, d = Math.max(0, Math.min(1, p)) * c;
   return '<svg class="ring" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="' + r + '" fill="none" stroke="#EAE3D8" stroke-width="8"/>' +
     '<circle cx="32" cy="32" r="' + r + '" fill="none" stroke="' + (p >= 1 ? '#2E6B2A' : 'var(--accent)') + '" stroke-width="8" stroke-linecap="round" stroke-dasharray="' + d + ' ' + c + '" transform="rotate(-90 32 32)"/>' +
     '<text x="32" y="37" text-anchor="middle">' + Math.round(p * 100) + '%</text></svg>';
 }
+// completed in the last 50 days: from the backend's Completed folder, plus any this tablet signed off (in case the backend is older or offline)
+function completedList(){
+  var cut = Date.now() - DONE_DAYS * 864e5, out = [], ids = {};
+  jobs.forEach(function(f){ ids[f.id] = 1; });
+  (doneJobs || []).forEach(function(d){ if (d.doneAt >= cut && !ids[d.id]){ ids[d.id] = 1; out.push(d); } });
+  try { for (var i = 0; i < localStorage.length; i++){ var k = localStorage.key(i); if (k.indexOf(PROG) !== 0) continue; var id = k.slice(PROG.length);
+    if (ids[id]) continue; var pp = lsGet(k); if (pp && pp.name && pp.asm && pp.asm.at >= cut){ ids[id] = 1; out.push({ id: id, name: pp.name, updated: 0, doneAt: pp.asm.at, by: pp.asm.by }); } } } catch (e) {}
+  return out.sort(function(a, b){ return b.doneAt - a.doneAt; });
+}
+var shownDone = [];
 function renderList(cached){
   var box = el('jobs');
-  if (!jobs.length){ box.innerHTML = '<div class="empty">No jobs in Ready to Fab yet. When a job is ready, it’s saved there from the office and shows up here.</div>'; return; }
   fileKeys().then(function(have){
+    shownDone = completedList();
+    var done = shownDone.length ? '<h2 class="donehead">Completed <span>· last ' + DONE_DAYS + ' days</span></h2>' + shownDone.map(function(f, k){
+      var on = have.indexOf(f.id) >= 0;
+      return '<button type="button" class="job done fin-job" data-d="' + k + '"><span class="ring donering" aria-hidden="true">✓</span><span class="t"><b>' + esc(f.name.replace(/\.xls[xm]$/i, '')) + '</b>' +
+        '<span class="s"><span class="fin-tag">✓ Assembled · ' + esc(f.by || '') + ' · ' + esc(new Date(f.doneAt).toLocaleDateString([], { month: 'short', day: 'numeric' })) + '</span>' + (on ? ' · <span class="offline">✓ on tablet</span>' : '') + '</span></span></button>';
+    }).join('') : '';
+    if (!jobs.length){ box.innerHTML = '<div class="empty">No jobs in Ready to Fab yet. When a job is ready, it’s saved there from the office and shows up here.</div>' + done; return; }
     box.innerHTML = jobs.map(function(f, k){
       var s = lsGet(SUM + f.id), p = s && s.total ? s.done / s.total : 0, on = have.indexOf(f.id) >= 0;
       var info = lsGet('shop-info:' + f.id), tag = info && info.u === f.updated ? info.label : '';
       return '<button type="button" class="job' + (p >= 1 || (s && s.fin) ? ' done' : '') + '" data-k="' + k + '">' + ring(p) + '<span class="t"><b>' + esc(f.name.replace(/\.xls[xm]$/i, '')) + '</b>' +
         '<span class="s">' + (s && (s.asm || s.fin) ? '<span class="fin-tag">✓ ' + (s.asm ? 'Assembled' : 'Cut') + ' · ' + esc((s.asm || s.fin).by) + ' · ' + esc(new Date((s.asm || s.fin).at).toLocaleDateString([], { month: 'short', day: 'numeric' })) + '</span>' : s && s.total ? s.done + ' of ' + s.total + ' ticked' : 'Not started') + ' · saved ' + esc(new Date(f.updated).toLocaleDateString([], { month: 'short', day: 'numeric' })) +
         (on ? ' · <span class="offline">✓ on tablet</span>' : '') + '</span></span>' + (tag ? '<span class="cnt' + (/^\d/.test(tag) ? '' : ' warn') + '">' + (/^(\d+) (.+)$/.test(tag) ? '<b>' + tag.replace(/ .*/, '') + '</b>' + esc(tag.replace(/^\d+ /, '')) : esc(tag)) + '</span>' : '') + '</button>';
-    }).join('');
+    }).join('') + done;
   });
   el('listNote').hidden = !cached;
   if (cached) el('listNote').textContent = 'No signal, so this is the list from last time. Jobs marked “on tablet” still open.';
@@ -701,24 +722,26 @@ function prefetch(){
     var info = lsGet('shop-info:' + f.id);
     fileGet(f.id).then(function(local){
       if (local && local.updated >= f.updated && info && info.u === f.updated) return next();
-      var got = local && local.updated >= f.updated ? Promise.resolve(local.b64) : api('fabopen', { id: f.id }).then(function(r){ filePut({ id: f.id, name: f.name, updated: f.updated, b64: r.b64 }); return r.b64; });
+      var got = local && local.updated >= f.updated ? Promise.resolve(local.b64) : apiNew('fabopen2', 'fabopen', { id: f.id }).then(function(r){ filePut({ id: f.id, name: f.name, updated: f.updated, b64: r.b64 }); return r.b64; });
       return got.then(function(b64){ return parseBook(b64); }).then(function(book){ return rememberInfo(f, book); }).then(function(){ if (!cur) renderList(false); next(); }, function(){ next(); });
     });
   })();
 }
+var listFresh = false;   // once the backend has answered, the copy saved on the tablet never overwrites it
 function loadList(){
-  kvGet('list').then(function(l){ if (l && !jobs.length){ jobs = l; renderList(true); } });
-  api('fablist', {}).then(function(r){
-    jobs = r.files || []; kvSet('list', jobs); renderList(false); msg(''); prefetch(); pullAll();
-    // forget files that have left Ready to Fab
-    fileKeys().then(function(ks){ ks.forEach(function(id){ if (!jobs.some(function(f){ return f.id === id; })) fileDel(id); }); });
+  kvGet('list').then(function(l){ kvGet('donelist').then(function(d){ if (listFresh) return; if (d && !doneJobs) doneJobs = d; if (l && !jobs.length){ jobs = l; renderList(true); } }); });
+  apiNew('fablist2', 'fablist', {}).then(function(r){
+    listFresh = true; jobs = r.files || []; doneJobs = r.done || null; kvSet('list', jobs); if (doneJobs) kvSet('donelist', doneJobs);
+    renderList(false); msg(''); prefetch(); pullAll(); flushPending();
+    // forget files that are neither in Ready to Fab nor completed in the last 50 days
+    fileKeys().then(function(ks){ var keep = {}; jobs.concat(completedList()).forEach(function(f){ keep[f.id] = 1; }); ks.forEach(function(id){ if (!keep[id]) fileDel(id); }); });
   }, function(e){
     if (e.code === 'pin') return askPin(e.message === 'wrong PIN' ? 'That PIN didn’t work. Try again.' : 'Enter the crew PIN once on this tablet.', loadList);
     if (!jobs.length) el('jobs').innerHTML = '<div class="empty">Couldn’t reach Drive (' + esc(e.message || 'no signal') + '). Jobs opened before are still on this tablet once the list has loaded once.</div>';
     else renderList(true);
   });
 }
-el('jobs').addEventListener('click', function(e){ var b = e.target.closest('[data-k]'); if (b) openJob(jobs[+b.getAttribute('data-k')]); });
+el('jobs').addEventListener('click', function(e){ var b = e.target.closest('[data-k]'); if (b) return openJob(jobs[+b.getAttribute('data-k')]); var d = e.target.closest('[data-d]'); if (d) openJob(shownDone[+d.getAttribute('data-d')]); });
 el('reload').onclick = loadList;
 
 // ---------- reading the workbook (values Excel already calculated) ----------
@@ -1262,7 +1285,7 @@ function openJob(f){
   fileGet(f.id).then(function(local){
     if (local && local.updated >= f.updated) return show(local.b64);
     msg('Opening ' + f.name.replace(/\.xlsx$/i, '') + '…', true);
-    return api('fabopen', { id: f.id }).then(function(r){
+    return apiNew('fabopen2', 'fabopen', { id: f.id }).then(function(r){
       filePut({ id: f.id, name: f.name, updated: f.updated, b64: r.b64 });
       return show(r.b64, local ? 'A newer version came in from the office.' : '');
     }, function(e){
@@ -1316,6 +1339,7 @@ function signOff(k, name){
     var o = lsGet('shop-others') || []; if (!o.some(function(n){ return n.toLowerCase() === name.toLowerCase(); })){ o.push(name); lsSet('shop-others', o); }
   }
   cur[k] = { by: name, at: Date.now() }; saveProg(); var y = window.scrollY; renderCur(); window.scrollTo(0, y);
+  if (k === 'asm') sendComplete();
 }
 el('fin').addEventListener('click', function(e){
   var b = e.target.closest('[data-fin]'); if (!b || !cur) return;
@@ -1323,8 +1347,58 @@ el('fin').addEventListener('click', function(e){
   if (a === 'name') signOff(k, b.getAttribute('data-n'));
   else if (a === 'other'){ var o = el('other_' + k); o.hidden = !o.hidden; }
   else if (a === 'otherok'){ var sel = el('sel_' + k); if (sel.value === '__new'){ var v = el('new_' + k).value.trim(); if (!v) return el('new_' + k).focus(); signOff(k, v); } else signOff(k, sel.value); }
-  else if (a === 'undo') confirmBox('Undo ' + st.title.toLowerCase() + ' for ' + cur.f.name.replace(/\.xls[xm]$/i, '') + '?', function(){ cur[k] = null; cur[k + 'X'] = Date.now(); saveProg(); renderCur(); });
+  else if (a === 'undo') confirmBox('Undo ' + st.title.toLowerCase() + ' for ' + cur.f.name.replace(/\.xls[xm]$/i, '') + '?', function(){ cur[k] = null; cur[k + 'X'] = Date.now(); saveProg(); renderCur(); if (k === 'asm') unComplete(cur.f.id); });
 });
+// ---------- completed jobs: PDF hard copy to Drive, file moved to Completed ----------
+// queued on the tablet when there's no signal (or Apps Script isn't updated yet) and sent next time the list loads
+function pending(){ return lsGet('shop-pending') || []; }
+function sendComplete(){
+  if (!cur || !cur.asm) return;
+  var job = { id: cur.f.id, name: cur.f.name, by: cur.asm.by, at: cur.asm.at, html: printHtml() };
+  lsSet('shop-pending', pending().filter(function(p){ return p.id !== job.id; }).concat([job]));
+  flushPending(true);
+}
+function unComplete(id){
+  lsSet('shop-pending', pending().filter(function(p){ return p.id !== id; }));
+  api('uncomplete', { id: id }).catch(function(){});
+}
+var flushing = false;
+function flushPending(say){
+  var list = pending(); if (!list.length || flushing) return; flushing = true;
+  var job = list[0];
+  api('complete', { id: job.id, by: job.by, at: job.at, html: job.html }).then(function(r){
+    lsSet('shop-pending', pending().filter(function(p){ return p.id !== job.id; }));
+    if (say && !r.preview) msg('Job complete. The PDF is saved in “Shop Cuts Completed” on Drive, and the job moved to Completed.', true);
+    flushing = false; if (pending().length) flushPending(false); else if (!el('list').hidden) loadList();
+  }, function(e){
+    flushing = false;
+    if (say) msg('Job complete. The Drive copy will be saved next time there’s signal' + (e && /unknown request/i.test(e.message || '') ? ' (the office needs to update the Apps Script)' : '') + '.', true);
+  });
+}
+// the hard copy: every tab as the shop saw it, with ticks and who signed off; layouts and fab times are left out
+function printHtml(){
+  var c = function(x){ return esc(x); }, when = function(r){ return r ? c(r.by) + ', ' + c(new Date(r.at).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })) : '—'; };
+  var h = '<html><head><meta charset="utf-8"></head><body style="font-family:Arial,sans-serif;font-size:10pt;color:#222">' +
+    '<h1 style="font-size:18pt;margin:0 0 4pt">' + c(cur.f.name.replace(/\.xls[xm]$/i, '')) + '</h1>' +
+    '<p style="margin:0 0 2pt"><b>Cutting complete:</b> ' + when(cur.fin) + '</p><p style="margin:0 0 10pt"><b>Assembly complete:</b> ' + when(cur.asm) + '</p>';
+  cur.items.forEach(function(it){
+    var L = it.L, pre = it.sh.name + '|';
+    h += '<h2 style="font-size:13pt;margin:14pt 0 4pt">' + c(it.label) + '</h2><table style="border-collapse:collapse;width:100%;font-size:9pt">';
+    L.rows.forEach(function(r){
+      var rc = L.cols.filter(function(cc){ return L.chk[r + ':' + cc]; }), allOn = rc.length && rc.every(function(cc){ return cur.done[pre + 'c' + r + ':' + cc]; });
+      h += '<tr' + (allOn ? ' style="background:#DCEFD8"' : '') + '>';
+      L.cols.forEach(function(cc){
+        var k = r + ':' + cc, t;
+        if (L.chk[k]) t = cur.done[pre + 'c' + k] ? '<b style="color:#2E6B2A">&#10003;</b>' : '<span style="color:#999">&#9633;</span>';
+        else t = c(L.txt(r, cc));
+        h += '<td style="border:1px solid #ccc;padding:2pt 4pt;' + (r === L.hdr ? 'background:#E7DFCF;font-weight:bold;' : '') + '">' + t + '</td>';
+      });
+      h += '</tr>';
+    });
+    h += '</table>';
+  });
+  return h + '<p style="color:#888;font-size:8pt;margin-top:12pt">Saved by Shop Cuts ' + c(new Date().toLocaleString()) + '</p></body></html>';
+}
 function confirmBox(text, then){
   var m = el('modal'); el('modalText').textContent = text; el('modalInput').hidden = true; m.hidden = false;
   el('modalNo').onclick = function(){ m.hidden = true; };
@@ -1377,7 +1451,7 @@ function openMgr(){
   lg.addEventListener('contextmenu', function(e){ e.preventDefault(); });
 })();
 el('mgrBack').onclick = function(){ el('mgr').hidden = true; el('list').hidden = false; renderList(false); window.scrollTo(0, 0); };
-el('back').onclick = function(){ cur = null; try { localStorage.removeItem('shop-open'); } catch (e) {} el('job').hidden = true; el('list').hidden = false; msg(''); renderList(false); window.scrollTo(0, 0); };
+el('back').onclick = function(){ cur = null; try { localStorage.removeItem('shop-open'); } catch (e) {} el('job').hidden = true; el('list').hidden = false; msg(''); renderList(false); window.scrollTo(0, 0); loadList(); };
 
 // ---------- start ----------
 (function(){
