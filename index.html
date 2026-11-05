@@ -146,7 +146,12 @@ table.sheet td.hilab,table.sheet td.hival{background:#FFD43B!important;color:#1A
 table.sheet td.hilab{font-size:19px!important;text-transform:uppercase;letter-spacing:.03em}
 table.sheet td.hival{font-size:26px!important}
 table.sheet td.hival.hicustom{background:#9C0006!important;color:#fff!important;border-color:#6E0004!important}
-.donehead{font-size:22px;margin:22px 4px 2px;font-weight:900}
+.donehead{display:flex;align-items:center;gap:12px;width:100%;min-height:64px;margin-top:14px;padding:0 20px;border-radius:18px;border:2px solid var(--line);background:var(--card);font-size:22px;font-weight:900;color:var(--ink);text-align:left}
+.donesearch{display:flex;align-items:center;gap:12px;margin:4px 0 2px}
+.donesearch input{flex:1;min-height:60px;font-size:20px;font-weight:700;border-radius:16px;border:2px solid var(--line);background:var(--field);padding:0 18px}
+.donesearch span{color:var(--muted);font-weight:800;white-space:nowrap}
+.job[hidden]{display:none!important}
+.donehead .chev{font-size:22px;width:22px;color:var(--doneink)}
 .donehead span{color:var(--muted);font-weight:700;font-size:17px}
 .donering{width:64px;height:64px;flex-shrink:0;border-radius:50%;background:var(--doneink);color:var(--onaccent);display:flex;align-items:center;justify-content:center;font-size:30px;font-weight:900}
 .legend{display:flex;flex-wrap:wrap;gap:8px 18px;margin:12px 4px 0;color:var(--muted);font-size:15px;font-weight:700}
@@ -675,17 +680,27 @@ function completedList(){
     if (ids[id]) continue; var pp = lsGet(k); if (pp && pp.name && pp.asm && pp.asm.at >= cut){ ids[id] = 1; out.push({ id: id, name: pp.name, updated: 0, doneAt: pp.asm.at, by: pp.asm.by }); } } } catch (e) {}
   return out.sort(function(a, b){ return b.doneAt - a.doneAt; });
 }
-var shownDone = [];
+var shownDone = [], doneQuery = '';
+// search inside Completed: hides rows that don't match, without redrawing (so the keyboard stays up)
+function filterDone(){
+  var q = doneQuery.trim().toLowerCase(), words = q ? q.split(/\s+/) : [], n = 0, rows = document.querySelectorAll('#jobs .job[data-d]');
+  Array.prototype.forEach.call(rows, function(r){ var nm = r.getAttribute('data-name') || '', hit = words.every(function(w){ return nm.indexOf(w) >= 0; }); r.hidden = !hit; if (hit) n++; });
+  var c = el('doneN'), none = el('doneNone'); if (c) c.textContent = q ? n + ' of ' + rows.length : ''; if (none) none.hidden = !(q && !n);
+}
+document.addEventListener('input', function(e){ if (e.target && e.target.id === 'doneQ'){ doneQuery = e.target.value; filterDone(); } });
 function renderList(cached){
   var box = el('jobs');
   fileKeys().then(function(have){
     shownDone = completedList();
-    var done = shownDone.length ? '<h2 class="donehead">Completed <span>· last ' + DONE_DAYS + ' days</span></h2>' + shownDone.map(function(f, k){
+    // collapsed by default; each tablet remembers if it was left open
+    var open = lsGet('shop-done-open') === 1;
+    var done = shownDone.length ? '<button type="button" class="donehead" data-act="donetoggle" aria-expanded="' + open + '"><span class="chev">' + (open ? '▾' : '▸') + '</span>Completed (' + shownDone.length + ') <span>· last ' + DONE_DAYS + ' days</span></button>' + (!open ? '' : '<div class="donesearch"><input type="search" id="doneQ" placeholder="Search completed jobs" autocomplete="off" aria-label="Search completed jobs" value="' + esc(doneQuery) + '"><span id="doneN"></span></div>' + shownDone.map(function(f, k){
       var on = have.indexOf(f.id) >= 0;
-      return '<button type="button" class="job done fin-job" data-d="' + k + '"><span class="ring donering" aria-hidden="true">✓</span><span class="t"><b>' + esc(f.name.replace(/\.xls[xm]$/i, '')) + '</b>' +
+      return '<button type="button" class="job done fin-job" data-d="' + k + '" data-name="' + esc(f.name.toLowerCase()) + '"><span class="ring donering" aria-hidden="true">✓</span><span class="t"><b>' + esc(f.name.replace(/\.xls[xm]$/i, '')) + '</b>' +
         '<span class="s"><span class="fin-tag">✓ Assembled · ' + esc(f.by || '') + ' · ' + esc(new Date(f.doneAt).toLocaleDateString([], { month: 'short', day: 'numeric' })) + '</span>' + (on ? ' · <span class="offline">✓ on tablet</span>' : '') + '</span></span></button>';
-    }).join('') : '';
+    }).join('') + '<div class="empty" id="doneNone" hidden>No completed jobs match.</div>') : '';
     if (!jobs.length){ box.innerHTML = '<div class="empty">No jobs in Ready to Fab yet. When a job is ready, it’s saved there from the office and shows up here.</div>' + done; return; }
+    setTimeout(filterDone, 0);
     box.innerHTML = jobs.map(function(f, k){
       var s = lsGet(SUM + f.id), p = s && s.total ? s.done / s.total : 0, on = have.indexOf(f.id) >= 0;
       var info = lsGet('shop-info:' + f.id), tag = info && info.u === f.updated ? info.label : '';
@@ -741,7 +756,7 @@ function loadList(){
     else renderList(true);
   });
 }
-el('jobs').addEventListener('click', function(e){ var b = e.target.closest('[data-k]'); if (b) return openJob(jobs[+b.getAttribute('data-k')]); var d = e.target.closest('[data-d]'); if (d) openJob(shownDone[+d.getAttribute('data-d')]); });
+el('jobs').addEventListener('click', function(e){ if (e.target.closest('[data-act="donetoggle"]')){ lsSet('shop-done-open', lsGet('shop-done-open') === 1 ? 0 : 1); return renderList(false); } var b = e.target.closest('[data-k]'); if (b) return openJob(jobs[+b.getAttribute('data-k')]); var d = e.target.closest('[data-d]'); if (d) openJob(shownDone[+d.getAttribute('data-d')]); });
 el('reload').onclick = loadList;
 
 // ---------- reading the workbook (values Excel already calculated) ----------
