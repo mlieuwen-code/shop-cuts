@@ -877,11 +877,19 @@ function layoutRow(unit, ncols){
   if (on){ var svg = ''; try { svg = LAY.svg(u); } catch (e) { svg = '<div class="legend">Couldn’t draw this unit.</div>'; } h += '<tr class="layrow"><td colspan="' + ncols + '"><div class="layout">' + svg + '</div></td></tr>'; }
   return h;
 }
-// Post Sheet: the "1 · POST CUTTING" heading row and every ✓ box in that section (down to the next "2 · …" heading)
+// Post Sheet: the "1 · POST CUTTING" heading row and the ✓ boxes in that section only.
+// The section stops at the first blank row, any other numbered heading, or anything about blocking or bracketing.
 function postSection(item){
   if (!item || item.sh.name !== 'POST SHEET') return null;
-  var L = item.L, c0 = L.cols[0], hr = null, end = Infinity;
-  L.rows.forEach(function(r){ var t = L.txt(r, c0); if (hr == null && /^1\s*[·.\-]\s*post cutting/i.test(t)) hr = r; else if (hr != null && end === Infinity && /^\d+\s*[·.\-]\s*\S/.test(t)) end = r; });
+  var L = item.L, hr = null, end = Infinity;
+  var rowTxt = function(r){ return L.cols.map(function(c){ return L.txt(r, c); }).join(' ').trim(); };
+  L.rows.forEach(function(r){
+    var t = rowTxt(r);
+    if (hr == null){ if (/(^|\s)1\s*[·.\-]\s*post cutting/i.test(t)) hr = r; return; }
+    if (end !== Infinity || r <= hr) return;
+    var hdr = L.cols.some(function(c){ return L.txt(r, c) === '✓'; });
+    if (!t || /block|bracket/i.test(t) || (!hdr && /^\d+\s*[·.\-]\s*\S/.test(t))) end = r;
+  });
   if (hr == null) return null;
   var keys = Object.keys(L.chk).filter(function(k){ var r = +k.split(':')[0]; return r > hr && r < end; }).map(function(k){ return item.sh.name + '|c' + k; });
   return keys.length ? { row: hr, keys: keys } : null;
