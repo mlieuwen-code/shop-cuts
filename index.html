@@ -703,7 +703,7 @@ function renderList(cached){
       var on = have.indexOf(f.id) >= 0;
       return '<button type="button" class="job done fin-job" data-d="' + k + '" data-name="' + esc(f.name.toLowerCase()) + '"><span class="ring donering" aria-hidden="true">✓</span><span class="t"><b>' + esc(f.name.replace(/\.xls[xm]$/i, '')) + '</b>' +
         '<span class="s"><span class="fin-tag">✓ Assembled · ' + esc(f.by || '') + ' · ' + esc(new Date(f.doneAt).toLocaleDateString([], { month: 'short', day: 'numeric' })) + '</span>' + (on ? ' · <span class="offline">✓ on tablet</span>' : '') + '</span></span></button>';
-    }).join('') + '<div class="empty" id="doneNone" hidden>No completed jobs match.</div>') : '';
+    }).join('') + '<div class="empty" id="doneNone" hidden>No completed jobs match.</div>');
     if (!jobs.length){ box.innerHTML = '<div class="empty">No jobs in Ready to Fab yet. When a job is ready, it’s saved there from the office and shows up here.</div>' + done; return; }
     setTimeout(filterDone, 0);
     box.innerHTML = jobs.map(function(f, k){
@@ -747,7 +747,7 @@ function prefetch(){
     });
   })();
 }
-el('ver').textContent = 'Shop Cuts · version Nov 5, 3:47 PM';
+el('ver').textContent = 'Shop Cuts · version Nov 5, 3:49 PM';
 var listFresh = false;   // once the backend has answered, the copy saved on the tablet never overwrites it
 function loadList(){
   kvGet('list').then(function(l){ kvGet('donelist').then(function(d){ if (listFresh) return; if (d && !doneJobs) doneJobs = d; if (l && !jobs.length){ jobs = l; renderList(true); } }); });
