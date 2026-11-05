@@ -131,7 +131,9 @@ table.sheet td.postsall{text-align:right;padding:6px 8px}
 .pcut .box{width:38px;height:38px;border-radius:10px;border:3px solid var(--dash);background:var(--field);display:inline-flex;align-items:center;justify-content:center;color:transparent;font-size:22px}
 .pcut.on{background:var(--done);border-color:var(--doneink);color:var(--doneink)}
 .pcut.on .box{background:var(--doneink);border-color:var(--doneink);color:var(--onaccent)}
-.sortbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0 0 12px}
+.sortbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0}
+table.sheet tr.sortrow td{background:var(--card)!important;padding:12px 8px!important;border-top:2px solid var(--line)}
+.sortbar .sgrp{display:inline-flex;align-items:center;gap:10px;padding-left:14px;border-left:2px solid var(--line)}
 .sortbar .slab{font-weight:900;color:var(--muted);margin-right:4px}
 .sbtn{min-height:52px;padding:0 18px;border-radius:14px;border:2px solid var(--line);background:var(--card);font-size:17px;font-weight:800}
 .sbtn.on{background:var(--accent);border-color:var(--accent);color:var(--onaccent)}
@@ -194,7 +196,6 @@ svg.laysvg{width:100%;max-height:440px;display:block}
     </div>
     <div class="tabs" id="tabs" role="tablist"></div>
     </div>
-    <div class="sortbar" id="sortbar" hidden></div>
     <div class="sheetwrap"><div id="sheet"></div></div>
     <div id="fin" class="fins" hidden></div>
     <div class="legend" id="legend"></div>
@@ -897,6 +898,11 @@ function readBlock(sd){
   var b = num(b13); if (b != null && Math.abs(b - STD_BLOCK) > 0.001) return { custom: true, text: fmt16(b) + '"' };
   return { custom: false };
 }
+function topRailsDone(){
+  var it = cutItem(); if (!it) return false;
+  var ks = Object.keys(it.L.chk).filter(function(k){ return /top rail/i.test(it.L.chk[k].head); }).map(function(k){ return it.sh.name + '|c' + k; });
+  return ks.length > 0 && ks.every(function(k){ return cur.done[k]; });
+}
 function postsCutDone(){
   var it = cur && cur.items.filter(function(x){ return x.sh.name === 'POST SHEET'; })[0], sc = it && sheetSections(it).filter(function(s){ return s.label === 'Posts cut'; })[0];
   return !!(sc && sc.keys.every(function(k){ return cur.done[k]; }));
@@ -909,6 +915,12 @@ function alertBox(html){
   var m = el('modal'), no = el('modalNo'), yes = el('modalYes'), t = el('modalText');
   t.innerHTML = html; el('modalInput').hidden = true; no.hidden = true; var yt = yes.textContent; yes.textContent = 'Got it'; m.classList.add('alert'); m.hidden = false;
   yes.onclick = function(){ m.hidden = true; no.hidden = false; yes.textContent = yt; m.classList.remove('alert'); };
+}
+// the sort bar sits in the Cut Sheet itself, just above the Rail tag / ✓ / Top rail heading row
+function sortBarHtml(){
+  var sbtn = function(o){ return '<button type="button" class="sbtn' + ((cur.sort || '') === o[0] ? ' on' : '') + '" data-sort="' + o[0] + '" aria-pressed="' + ((cur.sort || '') === o[0]) + '">' + o[1] + '</button>'; };
+  return '<div class="sortbar"><span class="slab">Sort</span>' + sbtn(['', 'Unit Order']) + sbtn(['long', 'Longest Top Rail']) + sbtn(['short', 'Shortest Top Rail']) +
+    sbtn(['clong', 'Longest Channel']) + sbtn(['cshort', 'Shortest Channel']) + '</div>';
 }
 function layoutRow(unit, ncols){
   var u = cur && cur.units[unit]; if (!u) return '';
@@ -956,11 +968,20 @@ function renderSheet(book, item, done){
   var order = L.rows, sorted = false, unitsInOrder = [];
   if (isCut && L.hdr != null){
     L.rows.forEach(function(r){ var tg = L.txt(r, L.cols[0]); if (r > L.hdr && /^\S+\.\d+$/.test(tg)){ var un = unitOf(tg); if (unitsInOrder.indexOf(un) < 0) unitsInOrder.push(un); } });
-    var topC = L.cols.filter(function(c){ return /top rail/i.test(L.txt(L.hdr, c)); })[0];
-    if (cur.sort && topC != null){
+    var byCh = /^c/.test(cur.sort || ''), shortFirst = /short$/.test(cur.sort || '');
+    var sortC = L.cols.filter(function(c){ return (byCh ? /channel/i : /top rail/i).test(L.txt(L.hdr, c)); })[0];
+    if (cur.sort && sortC != null){
       var isRail = function(r){ return r > L.hdr && /^\S+\.\d+$/.test(L.txt(r, L.cols[0])); };
-      var len = function(r){ var x = sd.cells[r + ':' + topC], v = x ? x.v : null; if (typeof v === 'number') return v; var m = /(\d+(?:\.\d+)?)(?:\s+(\d+)\s*\/\s*(\d+))?/.exec(String(v == null ? '' : v)); return m ? +m[1] + (m[2] ? m[2] / m[3] : 0) : -1; };
-      var rails = L.rows.filter(isRail).sort(function(a, b){ return cur.sort === 'short' ? len(a) - len(b) || a - b : len(b) - len(a) || a - b; });
+      // top rail: the one length; channels ("2@ 45 3/16" or "1@ 4, 3@ 39 5/16, …"): the longest piece on the line
+      var len = function(r){
+        var x = sd.cells[r + ':' + sortC], v = x ? x.v : null;
+        if (!byCh){ if (typeof v === 'number') return v; var m = /(\d+(?:\.\d+)?)(?:\s+(\d+)\s*\/\s*(\d+))?/.exec(String(v == null ? '' : v)); return m ? +m[1] + (m[2] ? m[2] / m[3] : 0) : -1; }
+        var t = String(v == null ? '' : v), re = /\d+\s*@\s*(\d+(?:\.\d+)?)(?:\s+(\d+)\s*\/\s*(\d+))?/g, mm, best = -1;
+        while ((mm = re.exec(t))) best = Math.max(best, +mm[1] + (mm[2] ? mm[2] / mm[3] : 0));
+        if (best < 0 && typeof v === 'number') best = v;
+        return best;
+      };
+      var rails = L.rows.filter(isRail).sort(function(a, b){ var la = len(a), lb = len(b); if (la < 0 || lb < 0) return (lb - la) || a - b; return shortFirst ? la - lb || a - b : lb - la || a - b; });
       order = L.rows.filter(function(r){ return r <= L.hdr; }).concat(rails, L.rows.filter(function(r){ return r > L.hdr && !isRail(r); }));
       sorted = true;
     }
@@ -977,6 +998,7 @@ function renderSheet(book, item, done){
     var tick = {}; rc.forEach(function(c){ if (done[pre + 'c' + r + ':' + c]) tick[L.chk[r + ':' + c].left] = 1; });
     var trc = [rowDone ? 'rowdone' : '', L.rowTap[r] ? 'tap' : '', need.length || L.rowTap[r] ? 'data' : '', r === L.hdr ? 'hdr' : (L.cols.some(function(c){ return L.txt(r, c) === '✓'; }) ? 'subhdr' : ''), /^\d+\s*[·.\-]\s*[A-Za-z]/.test(L.txt(r, L.cols[0])) ? 'sechead' : (L.hdr != null && r < L.hdr ? 'info' : '')].filter(Boolean).join(' ');
     var big = !!(need.length || L.rowTap[r]);
+    if (isCut && r === L.hdr) h += '<tr class="sortrow"><td colspan="' + L.cols.length + '">' + sortBarHtml() + '</td></tr>';
     h += '<tr' + (trc ? ' class="' + trc + '"' : '') + (L.rowTap[r] ? ' data-row="' + pre + 'r' + r + '"' : '') + '>';
     L.cols.forEach(function(c){
       var k = r + ':' + c; if (skip[k]) return;
@@ -1037,9 +1059,6 @@ function renderCur(){
   fitSheet();
   var c = counts(it);
   renderFin();
-  var sb = el('sortbar'), onCut = it.sh.name === 'CUT SHEET';
-  sb.hidden = !onCut;
-  if (onCut) sb.innerHTML = '<span class="slab">Sort</span>' + [['', 'Sheet order'], ['long', 'Longest top rail first'], ['short', 'Shortest first']].map(function(o){ return '<button type="button" class="sbtn' + ((cur.sort || '') === o[0] ? ' on' : '') + '" data-sort="' + o[0] + '" aria-pressed="' + ((cur.sort || '') === o[0]) + '">' + o[1] + '</button>'; }).join('');
   el('legend').innerHTML = it.view ? '<span>Totals for the job. Nothing to tick here.</span>' : (c.n ? '<span>Tap a box (or a row) when it’s cut. Tap again to undo.</span>' : '');
   renderTabs();
 }
@@ -1071,13 +1090,11 @@ window.addEventListener('resize', function(){ if (cur) fitSheet(); });
   if (window.ResizeObserver) new ResizeObserver(setH).observe(top);
   setH();
 })();
-el('sortbar').addEventListener('click', function(e){
-  var b = e.target.closest('[data-sort]'); if (!b || !cur) return;
-  cur.sort = b.getAttribute('data-sort'); lsSet('shop-sort:' + cur.f.id, cur.sort); renderCur();
-});
 el('tabs').addEventListener('click', function(e){ var b = e.target.closest('[data-tab]'); if (!b) return; cur.tab = +b.getAttribute('data-tab'); lsSet('shop-tab:' + cur.f.id, cur.tab); renderCur(); window.scrollTo(0, 0); });
 el('sheet').addEventListener('click', function(e){
   if (!cur) return;
+  var sbb = e.target.closest('[data-sort]');
+  if (sbb){ cur.sort = sbb.getAttribute('data-sort'); lsSet('shop-sort:' + cur.f.id, cur.sort); msg(''); var y1 = window.scrollY; renderCur(); window.scrollTo(0, y1); return; }
   var pa = e.target.closest('[data-act="secall"]');
   if (pa){
     var sr = +pa.getAttribute('data-sec'), ps = sheetSections(cur.items[cur.tab]).filter(function(sc){ return sc.row === sr; })[0]; if (!ps) return;
@@ -1090,8 +1107,15 @@ el('sheet').addEventListener('click', function(e){
   if (lb){ var un = lb.getAttribute('data-unit'); cur.open[un] = !cur.open[un]; var y0 = window.scrollY; renderCur(); window.scrollTo(0, y0); return; }
   var td = e.target.closest('td.chk'), tr = e.target.closest('tr[data-row]'), key = td ? td.getAttribute('data-key') : tr ? tr.getAttribute('data-row') : null;
   if (!key) return;
-  var was = postsCutDone();
+  var was = postsCutDone(), topWas = topRailsDone();
   if (cur.done[key]) delete cur.done[key]; else { cur.done[key] = 1; (cur.tl = cur.tl || []).push(Date.now()); }
+  if (!topWas && topRailsDone() && (cur.sort === 'long' || cur.sort === 'short')){
+    // every top rail is cut: he moves on to channels, so the list does too
+    cur.sort = cur.sort === 'long' ? 'clong' : 'cshort'; lsSet('shop-sort:' + cur.f.id, cur.sort);
+    saveProg(); renderCur(); window.scrollTo(0, 0);
+    msg('All top rails are cut. Now sorted by ' + (cur.sort === 'clong' ? 'Longest' : 'Shortest') + ' Channel.', true);
+    return;
+  }
   saveProg(); var y = window.scrollY; renderCur(); window.scrollTo(0, y); blockCheck(was);
 });
 function openJob(f){
