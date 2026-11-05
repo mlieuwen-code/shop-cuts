@@ -122,6 +122,11 @@ table.mgr td{padding:14px;border-top:1px solid var(--line);font-weight:700}
 table.mgr td.num{font-size:22px;white-space:nowrap}
 table.mgr .mut{color:var(--muted);font-weight:600}
 table.sheet td.floatrail{color:#9C0006!important;font-weight:900}
+table.sheet td.postsall{text-align:right;padding:6px 8px}
+.pcut{display:inline-flex;align-items:center;gap:12px;min-height:56px;padding:0 18px 0 10px;border-radius:14px;border:2px solid var(--line);background:var(--card);font-size:18px;font-weight:900;color:var(--ink)}
+.pcut .box{width:38px;height:38px;border-radius:10px;border:3px solid var(--dash);background:var(--field);display:inline-flex;align-items:center;justify-content:center;color:transparent;font-size:22px}
+.pcut.on{background:var(--done);border-color:var(--doneink);color:var(--doneink)}
+.pcut.on .box{background:var(--doneink);border-color:var(--doneink);color:var(--onaccent)}
 .legend{display:flex;flex-wrap:wrap;gap:8px 18px;margin:12px 4px 0;color:var(--muted);font-size:15px;font-weight:700}
 .offline{display:inline-flex;align-items:center;gap:6px;font-size:14px;font-weight:800;color:var(--muted)}
 .modal{position:fixed;inset:0;z-index:40;background:rgba(42,38,34,.45);display:flex;align-items:center;justify-content:center;padding:16px}
@@ -872,6 +877,15 @@ function layoutRow(unit, ncols){
   if (on){ var svg = ''; try { svg = LAY.svg(u); } catch (e) { svg = '<div class="legend">Couldn’t draw this unit.</div>'; } h += '<tr class="layrow"><td colspan="' + ncols + '"><div class="layout">' + svg + '</div></td></tr>'; }
   return h;
 }
+// Post Sheet: the "1 · POST CUTTING" heading row and every ✓ box in that section (down to the next "2 · …" heading)
+function postSection(item){
+  if (!item || item.sh.name !== 'POST SHEET') return null;
+  var L = item.L, c0 = L.cols[0], hr = null, end = Infinity;
+  L.rows.forEach(function(r){ var t = L.txt(r, c0); if (hr == null && /^1\s*[·.\-]\s*post cutting/i.test(t)) hr = r; else if (hr != null && end === Infinity && /^\d+\s*[·.\-]\s*\S/.test(t)) end = r; });
+  if (hr == null) return null;
+  var keys = Object.keys(L.chk).filter(function(k){ var r = +k.split(':')[0]; return r > hr && r < end; }).map(function(k){ return item.sh.name + '|c' + k; });
+  return keys.length ? { row: hr, keys: keys } : null;
+}
 function renderSheet(book, item, done){
   var L = item.L, sd = item.sd, sh = item.sh, pre = sh.name + '|';
   var vis = {}; L.rows.forEach(function(r, i){ vis['r' + r] = i; }); L.cols.forEach(function(c, i){ vis['c' + c] = i; });
@@ -884,6 +898,7 @@ function renderSheet(book, item, done){
   });
   var h = '<table class="sheet">';
   var isCut = sh.name === 'CUT SHEET' && cur && Object.keys(cur.units || {}).length, lastUnit = null;
+  var ps = postSection(item), psAll = ps && ps.keys.every(function(k){ return done[k]; });
   // floating rails (Non-Sub = Yes on INPUT): rail tag in bold red, same as the Excel cut sheet
   var floatTag = {}; if (sh.name === 'CUT SHEET' && cur) Object.keys(cur.units || {}).forEach(function(u){ cur.units[u].secs.forEach(function(s){ if (/^yes$/i.test(String(s.ns).trim())) floatTag[String(s.tag).trim()] = 1; }); });
   L.rows.forEach(function(r){
@@ -901,6 +916,7 @@ function renderSheet(book, item, done){
     h += '<tr' + (trc ? ' class="' + trc + '"' : '') + (L.rowTap[r] ? ' data-row="' + pre + 'r' + r + '"' : '') + '>';
     L.cols.forEach(function(c){
       var k = r + ':' + c; if (skip[k]) return;
+      if (ps && r === ps.row && c === L.cols[L.cols.length - 1]){ h += '<td class="postsall"><button type="button" class="pcut' + (psAll ? ' on' : '') + '" data-act="postsall" aria-pressed="' + !!psAll + '"><span class="box">✓</span>Posts cut</button></td>'; return; }
       var cell = sd.cells[k], t = show(book, cell), sp = span[k], xf = cell && book.st.xfs[cell.s], f = xf && book.st.fonts[xf.font];
       var attr = sp ? (sp.rs > 1 ? ' rowspan="' + sp.rs + '"' : '') + (sp.cs > 1 ? ' colspan="' + sp.cs + '"' : '') : '';
       if (L.chk[k]){ var key = pre + 'c' + k; h += '<td class="chk' + (done[key] ? ' on' : '') + '" data-key="' + esc(key) + '"' + attr + '><span class="box" role="checkbox" aria-checked="' + !!done[key] + '" aria-label="Done">✓</span></td>'; return; }
@@ -987,6 +1003,14 @@ window.addEventListener('resize', function(){ if (cur) fitSheet(); });
 el('tabs').addEventListener('click', function(e){ var b = e.target.closest('[data-tab]'); if (!b) return; cur.tab = +b.getAttribute('data-tab'); lsSet('shop-tab:' + cur.f.id, cur.tab); renderCur(); window.scrollTo(0, 0); });
 el('sheet').addEventListener('click', function(e){
   if (!cur) return;
+  var pa = e.target.closest('[data-act="postsall"]');
+  if (pa){
+    var ps = postSection(cur.items[cur.tab]); if (!ps) return;
+    var all = ps.keys.every(function(k){ return cur.done[k]; });
+    var go = function(){ var y = window.scrollY; if (all) ps.keys.forEach(function(k){ delete cur.done[k]; }); else { ps.keys.forEach(function(k){ cur.done[k] = 1; }); (cur.tl = cur.tl || []).push(Date.now()); } saveProg(); renderCur(); window.scrollTo(0, y); };
+    if (all) confirmBox('Untick all the post cutting boxes?', go); else go();
+    return;
+  }
   var lb = e.target.closest('.laybtn');
   if (lb){ var un = lb.getAttribute('data-unit'); cur.open[un] = !cur.open[un]; var y0 = window.scrollY; renderCur(); window.scrollTo(0, y0); return; }
   var td = e.target.closest('td.chk'), tr = e.target.closest('tr[data-row]'), key = td ? td.getAttribute('data-key') : tr ? tr.getAttribute('data-row') : null;

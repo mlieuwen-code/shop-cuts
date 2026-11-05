@@ -1,5 +1,5 @@
 // Keeps a full copy of the app on the tablet so it opens with no signal.
-const CACHE = 'shopcuts-a37e4b854a';
+const CACHE = 'shopcuts-673f1afa1f';
 const CORE = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(CORE.map(u => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k.startsWith('shopcuts-') && k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
