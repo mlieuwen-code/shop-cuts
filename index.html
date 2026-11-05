@@ -914,7 +914,7 @@ function postsCutDone(){
 }
 function blockCheck(was){
   if (!was && postsCutDone() && cur.block && cur.block.custom)
-    alertBox('<b class="big">Custom block height</b>This job’s blocks are <b>' + esc(cur.block.text) + '</b>, not the standard 38 5/16". Mount the blocks at the custom height.');
+    alertBox('<b class="big">Custom block height</b>This job’s blocks are <b>' + esc(cur.block.text) + '</b>. Mount the blocks at this height.');
 }
 function alertBox(html){
   var m = el('modal'), no = el('modalNo'), yes = el('modalYes'), t = el('modalText');
