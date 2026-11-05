@@ -709,7 +709,7 @@ function prefetch(){
 function loadList(){
   kvGet('list').then(function(l){ if (l && !jobs.length){ jobs = l; renderList(true); } });
   api('fablist', {}).then(function(r){
-    jobs = r.files || []; kvSet('list', jobs); renderList(false); msg(''); prefetch();
+    jobs = r.files || []; kvSet('list', jobs); renderList(false); msg(''); prefetch(); pullAll();
     // forget files that have left Ready to Fab
     fileKeys().then(function(ks){ ks.forEach(function(id){ if (!jobs.some(function(f){ return f.id === id; })) fileDel(id); }); });
   }, function(e){
@@ -1073,13 +1073,86 @@ function packTl(tl){ var m = (tl || []).map(function(t){ return Math.floor(t / 6
 function unpackTl(s){ if (!s) return []; var a = String(s).split('.'), v = 0; return a.map(function(x, i){ v = i ? v + parseInt(x, 36) : parseInt(x, 36); return v * 60000; }); }
 function progTl(p){ return p ? (p.tlp != null ? unpackTl(p.tlp) : (p.tl || [])) : []; }
 var syncTimer = null;
+// ---------- progress shared between tablets ----------
+// Every tick and untick remembers the second it happened. When two copies meet they merge box by box and the latest change wins,
+// so one tablet never wipes out another's ticks. Stored compactly (the backend keeps under 8.5k per job): seconds relative to a base, in base 36 (format 2).
+function nowSec(){ return Math.floor(Date.now() / 1000); }
+// short box names in storage: 'CUT SHEET|c9:2' is saved as 'C9:2', 'POST SHEET|c13:3' as 'P13:3'
+var KEYS_SHORT = [['CUT SHEET|c', 'C'], ['POST SHEET|c', 'P']];
+function kShort(k){ for (var i = 0; i < KEYS_SHORT.length; i++) if (k.indexOf(KEYS_SHORT[i][0]) === 0) return KEYS_SHORT[i][1] + k.slice(KEYS_SHORT[i][0].length); return k; }
+function kLong(k){ if (k.indexOf('|') >= 0) return k; for (var i = 0; i < KEYS_SHORT.length; i++) if (k.charAt(0) === KEYS_SHORT[i][1] && /^\d/.test(k.charAt(1))) return KEYS_SHORT[i][0] + k.slice(1); return k; }
+function decodeProg(p){
+  p = p || {}; var b = p.db, d = {}, u = {}, sc = p.v === 2 ? 1 : 60;
+  Object.keys(p.done || {}).forEach(function(k0){ var k = kLong(k0); d[k] = b == null ? 1 : Math.max(1, (b + parseInt(p.done[k0], 36)) * sc); });   // older saves stored 1: no time (counts as oldest), any later change wins
+  Object.keys(p.un || {}).forEach(function(k0){ var k = kLong(k0); u[k] = b == null ? 1 : Math.max(1, (b + parseInt(p.un[k0], 36)) * sc); });
+  return { t: p.t || 0, name: p.name, done: d, un: u, tl: progTl(p), tla: unpackTl(p.tlap), fin: p.fin || null, asm: p.asm || null, finX: p.finX || 0, asmX: p.asmX || 0 };
+}
+function encodeProg(s){
+  var ts = []; [s.done, s.un].forEach(function(o){ Object.keys(o).forEach(function(k){ ts.push(o[k]); }); });
+  var b = ts.length ? Math.min.apply(null, ts) : 0, rel = function(o){ var r = {}; Object.keys(o).forEach(function(k){ r[kShort(k)] = (o[k] - b).toString(36); }); return r; };
+  return { v: 2, t: s.t, name: s.name, db: b, done: rel(s.done), un: rel(s.un), tlp: packTl(s.tl), tlap: packTl(s.tla), fin: s.fin || null, asm: s.asm || null, finX: s.finX || 0, asmX: s.asmX || 0 };
+}
+function mergeProg(a, b){
+  var m = { t: Math.max(a.t || 0, b.t || 0), name: a.name || b.name, done: {}, un: {} }, keys = {};
+  [a.done, a.un, b.done, b.un].forEach(function(o){ Object.keys(o).forEach(function(k){ keys[k] = 1; }); });
+  Object.keys(keys).forEach(function(k){
+    var tick = Math.max(a.done[k] != null ? a.done[k] : -1, b.done[k] != null ? b.done[k] : -1), un = Math.max(a.un[k] != null ? a.un[k] : -1, b.un[k] != null ? b.un[k] : -1);
+    if (tick >= 0 && tick >= un) m.done[k] = tick; else if (un >= 0) m.un[k] = un;
+  });
+  var uniq = function(x, y){ var seen = {}; return x.concat(y).filter(function(t){ var q = Math.floor(t / 60000); if (seen[q]) return false; seen[q] = 1; return true; }); };
+  m.tl = uniq(a.tl, b.tl); m.tla = uniq(a.tla, b.tla);
+  // sign-offs: the latest of a sign-off or an undo wins
+  ['fin', 'asm'].forEach(function(s){
+    var x = s + 'X', best = null, bestT = -1;
+    [a, b].forEach(function(o){ if (o[s] && o[s].at > bestT){ best = o[s]; bestT = o[s].at; } });
+    var undo = Math.max(a[x] || 0, b[x] || 0);
+    m[s] = undo > bestT ? null : best; m[x] = undo;
+  });
+  return m;
+}
+function curState(){ return { t: cur.t || 0, name: cur.f.name, done: cur.done, un: cur.un || {}, tl: cur.tl || [], tla: cur.tla || [], fin: cur.fin || null, asm: cur.asm || null, finX: cur.finX || 0, asmX: cur.asmX || 0 }; }
+function applyState(s){ cur.t = s.t; cur.done = s.done; cur.un = s.un; cur.tl = s.tl; cur.tla = s.tla; cur.fin = s.fin; cur.asm = s.asm; cur.finX = s.finX; cur.asmX = s.asmX; }
+function setTick(key, on){ var m = nowSec(); cur.un = cur.un || {}; if (on){ cur.done[key] = m; delete cur.un[key]; } else { delete cur.done[key]; cur.un[key] = m; } }
+function writeSum(id, s, total){ var old = lsGet(SUM + id) || {}; lsSet(SUM + id, { done: s.dn != null ? s.dn : old.done, total: total != null ? total : old.total, fin: s.fin || null, asm: s.asm || null }); }
+function saveLocal(){
+  if (!cur) return;
+  lsSet(progKey(cur.f.id), encodeProg(curState()));
+  var tot = 0, dn = 0; cur.items.forEach(function(it){ var ks = itemKeys(it); tot += ks.length; ks.forEach(function(k){ if (cur.done[it.sh.name + '|' + k]) dn++; }); });
+  writeSum(cur.f.id, { dn: dn, fin: cur.fin, asm: cur.asm }, tot);
+}
 function saveProg(){
   if (!cur) return;
-  var p = { t: Date.now(), name: cur.f.name, done: cur.done, tlp: packTl(cur.tl), tlap: packTl(cur.tla), fin: cur.fin || null, asm: cur.asm || null }; lsSet(progKey(cur.f.id), p);
-  var tot = 0, dn = 0; cur.items.forEach(function(it){ var ks = itemKeys(it); tot += ks.length; ks.forEach(function(k){ if (cur.done[it.sh.name + '|' + k]) dn++; }); });
-  lsSet(SUM + cur.f.id, { done: dn, total: tot, fin: cur.fin || null, asm: cur.asm || null });
-  clearTimeout(syncTimer); var id = cur.f.id;
-  syncTimer = setTimeout(function(){ api('progset', { id: id, prog: JSON.stringify(p) }).catch(function(){}); }, 1500);
+  cur.t = Date.now(); saveLocal();
+  clearTimeout(syncTimer); syncTimer = setTimeout(syncNow, 800);
+}
+// pull the backend copy, merge, show any changes from the other tablet, push back what the backend is missing
+var syncing = false, syncAgain = false;
+function syncNow(){
+  if (!cur) return;
+  if (syncing){ syncAgain = true; return; }
+  syncing = true; var id = cur.f.id;
+  api('progget', { id: id }).then(function(r){
+    if (!cur || cur.f.id !== id) return;
+    var remote = decodeProg(r.prog ? JSON.parse(r.prog) : null), mine = curState(), m = mergeProg(mine, remote);
+    var mineJ = JSON.stringify(encodeProg(mine)), mJ = JSON.stringify(encodeProg(m)), remJ = JSON.stringify(encodeProg(remote));
+    if (mJ !== mineJ){ applyState(m); saveLocal(); var y = window.scrollY; renderCur(); window.scrollTo(0, y); }
+    if (mJ !== remJ) return api('progset', { id: id, prog: JSON.stringify(encodeProg(m)) });
+  }).catch(function(){}).then(function(){ syncing = false; if (syncAgain){ syncAgain = false; syncNow(); } });
+}
+// live: an open job checks for the other tablet's ticks every 30 seconds, and straight away when the app comes back to the front
+setInterval(function(){ if (cur && !document.hidden && !el('job').hidden) syncNow(); }, 30000);
+document.addEventListener('visibilitychange', function(){ if (!document.hidden){ if (cur && !el('job').hidden) syncNow(); else if (!el('list').hidden) pullAll(); } });
+// the job list: pull every job's progress so the counts and sign-offs match the other tablet
+function pullAll(then){
+  return Promise.all(jobs.map(function(f){
+    return api('progget', { id: f.id }).then(function(r){
+      if (!r.prog) return;
+      var local = decodeProg(lsGet(progKey(f.id))), m = mergeProg(local, decodeProg(JSON.parse(r.prog)));
+      lsSet(progKey(f.id), encodeProg(m));
+      var old = lsGet(SUM + f.id) || {}, dn = Object.keys(m.done).length;
+      writeSum(f.id, { dn: old.total ? Math.min(dn, old.total) : dn, fin: m.fin, asm: m.asm });
+    }).catch(function(){});
+  })).then(function(){ if (!el('list').hidden) renderList(false); if (then) then(); });
 }
 function counts(it){ var ks = itemKeys(it), d = ks.filter(function(k){ return cur.done[it.sh.name + '|' + k]; }).length; return { d: d, n: ks.length }; }
 function renderTabs(){
@@ -1137,7 +1210,7 @@ el('sheet').addEventListener('click', function(e){
   if (pa){
     var sr = +pa.getAttribute('data-sec'), ps = sheetSections(cur.items[cur.tab]).filter(function(sc){ return sc.row === sr; })[0]; if (!ps) return;
     var all = ps.keys.every(function(k){ return cur.done[k]; }), was = postsCutDone();
-    var go = function(){ var y = window.scrollY; if (all) ps.keys.forEach(function(k){ delete cur.done[k]; }); else { ps.keys.forEach(function(k){ cur.done[k] = 1; }); stamp(/^(block|bracket)/i.test(ps.label) ? 'asm' : 'cut'); } saveProg(); renderCur(); window.scrollTo(0, y); blockCheck(was); };
+    var go = function(){ var y = window.scrollY; if (all) ps.keys.forEach(function(k){ setTick(k, false); }); else { ps.keys.forEach(function(k){ if (!cur.done[k]) setTick(k, true); }); stamp(/^(block|bracket)/i.test(ps.label) ? 'asm' : 'cut'); } saveProg(); renderCur(); window.scrollTo(0, y); blockCheck(was); };
     if (all) confirmBox('Untick everything under “' + ps.label.replace(/ (cut|done)$/, '') + '”?', go); else go();
     return;
   }
@@ -1147,7 +1220,7 @@ el('sheet').addEventListener('click', function(e){
   var td = e.target.closest('td.chk'), tr = e.target.closest('tr[data-row]'), key = td ? td.getAttribute('data-key') : tr ? tr.getAttribute('data-row') : null;
   if (!key) return;
   var was = postsCutDone(), topWas = topRailsDone();
-  if (cur.done[key]) delete cur.done[key]; else { cur.done[key] = 1; stamp(tickKind(key)); }
+  if (cur.done[key]) setTick(key, false); else { setTick(key, true); stamp(tickKind(key)); }
   if (!topWas && topRailsDone() && (cur.sort === 'long' || cur.sort === 'short')){
     // every top rail is cut: he moves on to channels, so the list does too
     cur.sort = cur.sort === 'long' ? 'clong' : 'cshort'; lsSet('shop-sort:' + cur.f.id, cur.sort);
@@ -1171,21 +1244,18 @@ function openJob(f){
         items.forEach(function(it){ it.L = layout(book, it); });
         var p = loadProg(f.id), tab0 = lsGet('shop-tab:' + f.id);
         var cutsTab = items.map(function(it){ return it.sh.name; }).indexOf('CUT SHEET');
-        cur = { f: f, book: book, items: items, done: p.done || {}, tl: progTl(p), tla: unpackTl(p.tlap), fin: p.fin || null, asm: p.asm || null, sort: lsGet('shop-sort:' + f.id) || '', tab: tab0 != null && tab0 < items.length ? tab0 : (cutsTab >= 0 ? cutsTab : 0), units: {}, open: {} };
+        var ds = decodeProg(p); cur = { f: f, book: book, items: items, t: ds.t, done: ds.done, un: ds.un, tl: ds.tl, tla: ds.tla, fin: ds.fin, asm: ds.asm, finX: ds.finX, asmX: ds.asmX, sort: lsGet('shop-sort:' + f.id) || '', tab: tab0 != null && tab0 < items.length ? tab0 : (cutsTab >= 0 ? cutsTab : 0), units: {}, open: {} };
         var inSh = book.sheets.filter(function(s){ return s.name === 'INPUT'; })[0];
         if (inSh) return parseSheet(book, inSh).then(function(sd){ cur.units = readUnits(sd); cur.block = readBlock(sd); return items; });
         return items;
       }).then(function(items){
         el('jobName').textContent = f.name.replace(/\.xlsx$/i, '');
         el('list').hidden = true; el('job').hidden = false; window.scrollTo(0, 0);
-        renderCur(); saveProg();
+        renderCur(); saveLocal();
         try { localStorage.setItem('shop-open', f.id); } catch (e) {}
         msg(note || '', true);
-        // pick up ticks made on another device
-        api('progget', { id: f.id }).then(function(r){
-          var sp = r.prog ? JSON.parse(r.prog) : null;
-          if (sp && sp.t > (loadProg(f.id).t || 0) && cur && cur.f.id === f.id){ cur.done = sp.done || {}; cur.tl = progTl(sp); cur.tla = unpackTl(sp.tlap); cur.fin = sp.fin || null; cur.asm = sp.asm || null; lsSet(progKey(f.id), sp); renderCur(); saveProg(); }
-        }).catch(function(){});
+        // pick up ticks made on the other tablet (merged, never overwritten)
+        syncNow();
       });
     }).catch(function(e){ msg('Couldn’t read that cut sheet: ' + (e && e.message ? e.message : e)); });
   };
@@ -1253,7 +1323,7 @@ el('fin').addEventListener('click', function(e){
   if (a === 'name') signOff(k, b.getAttribute('data-n'));
   else if (a === 'other'){ var o = el('other_' + k); o.hidden = !o.hidden; }
   else if (a === 'otherok'){ var sel = el('sel_' + k); if (sel.value === '__new'){ var v = el('new_' + k).value.trim(); if (!v) return el('new_' + k).focus(); signOff(k, v); } else signOff(k, sel.value); }
-  else if (a === 'undo') confirmBox('Undo ' + st.title.toLowerCase() + ' for ' + cur.f.name.replace(/\.xls[xm]$/i, '') + '?', function(){ cur[k] = null; saveProg(); renderCur(); });
+  else if (a === 'undo') confirmBox('Undo ' + st.title.toLowerCase() + ' for ' + cur.f.name.replace(/\.xls[xm]$/i, '') + '?', function(){ cur[k] = null; cur[k + 'X'] = Date.now(); saveProg(); renderCur(); });
 });
 function confirmBox(text, then){
   var m = el('modal'); el('modalText').textContent = text; el('modalInput').hidden = true; m.hidden = false;
@@ -1289,8 +1359,7 @@ function renderMgr(){
 }
 function openMgr(){
   // ticks made on other tablets come in through the backend first
-  Promise.all(jobs.map(function(f){ return api('progget', { id: f.id }).then(function(r){ var sp = r.prog ? JSON.parse(r.prog) : null; if (sp && sp.t > (loadProg(f.id).t || 0)) lsSet(progKey(f.id), sp); }).catch(function(){}); }))
-    .then(renderMgr);
+  pullAll(renderMgr);
   renderMgr(); el('list').hidden = true; el('mgr').hidden = false; window.scrollTo(0, 0);
 }
 // hidden way in: press and hold the Shop Cuts logo for 2 seconds, then the manager PIN
