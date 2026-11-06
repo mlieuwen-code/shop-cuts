@@ -731,7 +731,18 @@ function railLabel(book){
   if (scr.length) return Promise.all(scr.map(function(sh){ return parseSheet(book, sh).then(function(sd){ var n = 0; for (var r = 7; r <= sd.maxR; r++){ var v = cellVal(sd, r, 1); if (v != null && v !== '' && !isNaN(+v)) n++; } return n; }); })).then(function(a){ var n = a.reduce(function(x, y){ return x + y; }, 0); return n + (n === 1 ? ' Screen' : ' Screens'); });
   return '';
 }
-function rememberInfo(f, book){ return Promise.resolve(railLabel(book)).then(function(label){ lsSet('shop-info:' + f.id, { u: f.updated, label: label }); }); }
+function rememberInfo(f, book, count){
+  return Promise.resolve(railLabel(book)).then(function(label){
+    lsSet('shop-info:' + f.id, { u: f.updated, label: label });
+    if (!count || book.raw) return;
+    // the job list's ring needs the job's total box count, even on a tablet that hasn't opened the job yet
+    return shopSheets(book).then(function(items){
+      var keys = []; items.forEach(function(it){ it.L = layout(book, it); itemKeys(it).forEach(function(k){ keys.push(it.sh.name + '|' + k); }); });
+      var p = decodeProg(lsGet(progKey(f.id))), dn = keys.filter(function(k){ return p.done[k]; }).length;
+      writeSum(f.id, { dn: dn, fin: p.fin, asm: p.asm }, keys.length);
+    }).catch(function(){});
+  });
+}
 // fetch new or changed jobs in the background: the list learns their rail counts, and they're on the tablet for when there's no signal
 var prefetching = false;
 function prefetch(){
@@ -741,13 +752,13 @@ function prefetch(){
     var f = todo.shift(); if (!f){ prefetching = false; return; }
     var info = lsGet('shop-info:' + f.id);
     fileGet(f.id).then(function(local){
-      if (local && local.updated >= f.updated && info && info.u === f.updated) return next();
+      if (local && local.updated >= f.updated && info && info.u === f.updated && (lsGet(SUM + f.id) || {}).total) return next();
       var got = local && local.updated >= f.updated ? Promise.resolve(local.b64) : apiNew('fabopen2', 'fabopen', { id: f.id }).then(function(r){ filePut({ id: f.id, name: f.name, updated: f.updated, b64: r.b64 }); return r.b64; });
-      return got.then(function(b64){ return parseBook(b64); }).then(function(book){ return rememberInfo(f, book); }).then(function(){ if (!cur) renderList(false); next(); }, function(){ next(); });
+      return got.then(function(b64){ return parseBook(b64); }).then(function(book){ return rememberInfo(f, book, true); }).then(function(){ if (!cur) renderList(false); next(); }, function(){ next(); });
     });
   })();
 }
-el('ver').textContent = 'Shop Cuts · version Nov 5, 4:11 PM';
+el('ver').textContent = 'Shop Cuts · version Nov 5, 4:18 PM';
 var listFresh = false;   // once the backend has answered, the copy saved on the tablet never overwrites it
 function loadList(){
   kvGet('list').then(function(l){ kvGet('donelist').then(function(d){ if (listFresh) return; if (d && !doneJobs) doneJobs = d; if (l && !jobs.length){ jobs = l; renderList(true); } }); });
@@ -1129,15 +1140,15 @@ function decodeProg(p){
   p = p || {}; var b = p.db, d = {}, u = {}, sc = p.v === 2 ? 1 : 60;
   Object.keys(p.done || {}).forEach(function(k0){ var k = kLong(k0); d[k] = b == null ? 1 : Math.max(1, (b + parseInt(p.done[k0], 36)) * sc); });   // older saves stored 1: no time (counts as oldest), any later change wins
   Object.keys(p.un || {}).forEach(function(k0){ var k = kLong(k0); u[k] = b == null ? 1 : Math.max(1, (b + parseInt(p.un[k0], 36)) * sc); });
-  return { t: p.t || 0, name: p.name, done: d, un: u, tl: progTl(p), tla: unpackTl(p.tlap), fin: p.fin || null, asm: p.asm || null, finX: p.finX || 0, asmX: p.asmX || 0 };
+  return { t: p.t || 0, tot: p.tot || 0, name: p.name, done: d, un: u, tl: progTl(p), tla: unpackTl(p.tlap), fin: p.fin || null, asm: p.asm || null, finX: p.finX || 0, asmX: p.asmX || 0 };
 }
 function encodeProg(s){
   var ts = []; [s.done, s.un].forEach(function(o){ Object.keys(o).forEach(function(k){ ts.push(o[k]); }); });
   var b = ts.length ? Math.min.apply(null, ts) : 0, rel = function(o){ var r = {}; Object.keys(o).forEach(function(k){ r[kShort(k)] = (o[k] - b).toString(36); }); return r; };
-  return { v: 2, t: s.t, name: s.name, db: b, done: rel(s.done), un: rel(s.un), tlp: packTl(s.tl), tlap: packTl(s.tla), fin: s.fin || null, asm: s.asm || null, finX: s.finX || 0, asmX: s.asmX || 0 };
+  return { v: 2, t: s.t, tot: s.tot || 0, name: s.name, db: b, done: rel(s.done), un: rel(s.un), tlp: packTl(s.tl), tlap: packTl(s.tla), fin: s.fin || null, asm: s.asm || null, finX: s.finX || 0, asmX: s.asmX || 0 };
 }
 function mergeProg(a, b){
-  var m = { t: Math.max(a.t || 0, b.t || 0), name: a.name || b.name, done: {}, un: {} }, keys = {};
+  var m = { t: Math.max(a.t || 0, b.t || 0), tot: Math.max(a.tot || 0, b.tot || 0), name: a.name || b.name, done: {}, un: {} }, keys = {};
   [a.done, a.un, b.done, b.un].forEach(function(o){ Object.keys(o).forEach(function(k){ keys[k] = 1; }); });
   Object.keys(keys).forEach(function(k){
     var tick = Math.max(a.done[k] != null ? a.done[k] : -1, b.done[k] != null ? b.done[k] : -1), un = Math.max(a.un[k] != null ? a.un[k] : -1, b.un[k] != null ? b.un[k] : -1);
@@ -1154,14 +1165,14 @@ function mergeProg(a, b){
   });
   return m;
 }
-function curState(){ return { t: cur.t || 0, name: cur.f.name, done: cur.done, un: cur.un || {}, tl: cur.tl || [], tla: cur.tla || [], fin: cur.fin || null, asm: cur.asm || null, finX: cur.finX || 0, asmX: cur.asmX || 0 }; }
+function curState(){ return { t: cur.t || 0, tot: cur.tot || 0, name: cur.f.name, done: cur.done, un: cur.un || {}, tl: cur.tl || [], tla: cur.tla || [], fin: cur.fin || null, asm: cur.asm || null, finX: cur.finX || 0, asmX: cur.asmX || 0 }; }
 function applyState(s){ cur.t = s.t; cur.done = s.done; cur.un = s.un; cur.tl = s.tl; cur.tla = s.tla; cur.fin = s.fin; cur.asm = s.asm; cur.finX = s.finX; cur.asmX = s.asmX; }
 function setTick(key, on){ var m = nowSec(); cur.un = cur.un || {}; if (on){ cur.done[key] = m; delete cur.un[key]; } else { delete cur.done[key]; cur.un[key] = m; } }
 function writeSum(id, s, total){ var old = lsGet(SUM + id) || {}; lsSet(SUM + id, { done: s.dn != null ? s.dn : old.done, total: total != null ? total : old.total, fin: s.fin || null, asm: s.asm || null }); }
 function saveLocal(){
   if (!cur) return;
-  lsSet(progKey(cur.f.id), encodeProg(curState()));
   var tot = 0, dn = 0; cur.items.forEach(function(it){ var ks = itemKeys(it); tot += ks.length; ks.forEach(function(k){ if (cur.done[it.sh.name + '|' + k]) dn++; }); });
+  cur.tot = tot; lsSet(progKey(cur.f.id), encodeProg(curState()));
   writeSum(cur.f.id, { dn: dn, fin: cur.fin, asm: cur.asm }, tot);
 }
 function saveProg(){
@@ -1193,8 +1204,8 @@ function pullAll(then){
       if (!r.prog) return;
       var local = decodeProg(lsGet(progKey(f.id))), m = mergeProg(local, decodeProg(JSON.parse(r.prog)));
       lsSet(progKey(f.id), encodeProg(m));
-      var old = lsGet(SUM + f.id) || {}, dn = Object.keys(m.done).length;
-      writeSum(f.id, { dn: old.total ? Math.min(dn, old.total) : dn, fin: m.fin, asm: m.asm });
+      var old = lsGet(SUM + f.id) || {}, dn = Object.keys(m.done).length, tot = m.tot || old.total;
+      writeSum(f.id, { dn: tot ? Math.min(dn, tot) : dn, fin: m.fin, asm: m.asm }, tot || undefined);
     }).catch(function(){});
   })).then(function(){ if (!el('list').hidden) renderList(false); if (then) then(); });
 }
