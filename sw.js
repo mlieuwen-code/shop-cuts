@@ -1,6 +1,6 @@
 // Shop Cuts: keeps a full copy of the app on the tablet so it opens with no signal.
 // With signal, the app page comes fresh from the web (so updates show up straight away); after 3 seconds, or offline, the tablet's copy is used.
-const CACHE = 'shopcuts-dde2e083cc';
+const CACHE = 'shopcuts-cc519d61cf';
 const CORE = ['./', 'index.html', 'app.webmanifest', 'icon-192.png', 'icon-512.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(CORE.map(u => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => (k.startsWith('shopcuts-') || k.startsWith('cutsheets-')) && k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });

@@ -161,6 +161,7 @@ table.sheet td.hival.hicustom{background:#9C0006!important;color:#fff!important;
 .toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:60;background:#1F1B17;color:#fff;font-size:19px;font-weight:800;padding:16px 26px;border-radius:999px;box-shadow:0 8px 24px rgba(0,0,0,.25);transition:opacity .35s,transform .35s;white-space:nowrap}
 .toast.out{opacity:0;transform:translate(-50%,12px)}
 .signoff{color:#8A4B00;font-weight:900;background:#FFE8A3;border-radius:8px;padding:2px 8px}
+table.sheet td.divl{border-left:3px solid #1F1B17!important}
 .legend{display:flex;flex-wrap:wrap;gap:8px 18px;margin:12px 4px 0;color:var(--muted);font-size:15px;font-weight:700}
 .offline{display:inline-flex;align-items:center;gap:6px;font-size:14px;font-weight:800;color:var(--muted)}
 .modal{position:fixed;inset:0;z-index:40;background:rgba(42,38,34,.45);display:flex;align-items:center;justify-content:center;padding:16px}
@@ -625,7 +626,7 @@ var PIN_KEY = 'ridgeway-crew-pin', PROG = 'shop-prog:', SUM = 'shop-sum:';
 var el = function(id){ return document.getElementById(id); };
 function esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 // a short notice at the bottom of the screen
-var VERSION = '11.5.839', toastT = null;
+var VERSION = '11.6.1147', toastT = null;
 function toast(t){ var b = el('toast'); b.textContent = t; b.hidden = false; b.classList.remove('out'); clearTimeout(toastT); toastT = setTimeout(function(){ b.classList.add('out'); setTimeout(function(){ b.hidden = true; }, 400); }, 3200); }
 function msg(t, ok){ var m = el('msg'); m.hidden = !t; m.className = 'msg ' + (ok ? 'ok' : 'err'); m.textContent = t || ''; }
 function lsGet(k){ try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
@@ -1063,6 +1064,8 @@ function renderSheet(book, item, done){
   var h = '<table class="sheet">';
   var isCut = sh.name === 'CUT SHEET' && cur && Object.keys(cur.units || {}).length, lastUnit = null;
   var hiSheet = /^(COVER|POST SHEET)$/.test(sh.name);
+  // Cut Sheet: a black line between the float lengths (Left / Right) and the posts (L Post …), so the two groups read apart
+  var divC = sh.name === 'CUT SHEET' && L.hdr != null ? L.cols.filter(function(c){ return /^l\s*post$/i.test(L.txt(L.hdr, c).trim()); })[0] : null;
   var secs = {}; sheetSections(item).forEach(function(sc){ secs[sc.row] = sc; });
   // floating rails (Non-Sub = Yes on INPUT): rail tag in bold red, same as the Excel cut sheet
   var floatTag = {}; if (sh.name === 'CUT SHEET' && cur) Object.keys(cur.units || {}).forEach(function(u){ cur.units[u].secs.forEach(function(s){ if (/^yes$/i.test(String(s.ns).trim())) floatTag[String(s.tag).trim()] = 1; }); });
@@ -1121,6 +1124,7 @@ function renderSheet(book, item, done){
         } else if (/^\s*(post|block)\s*(height|ht)\.?\s*$/i.test(t)){ cls.push('hilab'); hiNext = /block/i.test(t) ? 'block' : 'post'; }
       }
       if (tick[c]) cls.push('cut');
+      if (divC != null && c === divC && r >= L.hdr) cls.push('divl');
       if (c === L.cols[0] && L.hdr != null && r > L.hdr && floatTag[t.trim()]) cls.push('floatrail');
       if (f && f.b) cls.push('b');
       if (cell && typeof cell.v === 'number') cls.push('num');
