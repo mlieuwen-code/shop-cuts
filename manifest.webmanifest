@@ -1,4 +1,5 @@
 {
+ "id": "/shop-cuts/?app=shopcuts2",
  "name": "Shop Cuts",
  "short_name": "Shop Cuts",
  "start_url": "./",
@@ -6,7 +7,7 @@
  "display": "standalone",
  "orientation": "any",
  "background_color": "#F4EFE7",
- "theme_color": "#2F5D50",
+ "theme_color": "#E8590C",
  "icons": [
   {
    "src": "icon-192.png",
