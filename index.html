@@ -758,7 +758,7 @@ function prefetch(){
     });
   })();
 }
-el('ver').textContent = 'Shop Cuts · version Nov 5, 4:18 PM';
+el('ver').textContent = 'Shop Cuts · version 11.5.423';
 var listFresh = false;   // once the backend has answered, the copy saved on the tablet never overwrites it
 function loadList(){
   kvGet('list').then(function(l){ kvGet('donelist').then(function(d){ if (listFresh) return; if (d && !doneJobs) doneJobs = d; if (l && !jobs.length){ jobs = l; renderList(true); } }); });
