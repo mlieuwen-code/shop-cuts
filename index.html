@@ -747,7 +747,7 @@ function prefetch(){
     });
   })();
 }
-el('ver').textContent = 'Shop Cuts · version Nov 5, 3:49 PM';
+el('ver').textContent = 'Shop Cuts · version Nov 5, 4:11 PM';
 var listFresh = false;   // once the backend has answered, the copy saved on the tablet never overwrites it
 function loadList(){
   kvGet('list').then(function(l){ kvGet('donelist').then(function(d){ if (listFresh) return; if (d && !doneJobs) doneJobs = d; if (l && !jobs.length){ jobs = l; renderList(true); } }); });
@@ -1427,7 +1427,7 @@ function confirmBox(text, then){
 }
 
 // ---------- fab time: worked out from when boxes were ticked; only shown in the manager view ----------
-var MGR_PIN = '2580';   // manager PIN for the fab-times view (change it here)
+var MGR_PIN = '5742';   // manager PIN for the fab-times view (change it here)
 var GAP = 25 * 60000;   // a gap longer than this between ticks is a break, overnight or weekend, and isn't counted
 function fabTime(p, kind){
   var asm = kind === 'asm', tl = asm ? unpackTl(p.tlap) : progTl(p), ts = tl.slice(), so = asm ? p.asm : p.fin; if (so) ts.push(so.at);
