@@ -158,6 +158,8 @@ table.sheet td.hival.hicustom{background:#9C0006!important;color:#fff!important;
 #logo{touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 #logo svg{pointer-events:none}
 .ver{color:var(--muted);font-size:13px;font-weight:700;text-align:center;margin:28px 0 8px;opacity:.8}
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:60;background:#1F1B17;color:#fff;font-size:19px;font-weight:800;padding:16px 26px;border-radius:999px;box-shadow:0 8px 24px rgba(0,0,0,.25);transition:opacity .35s,transform .35s;white-space:nowrap}
+.toast.out{opacity:0;transform:translate(-50%,12px)}
 .legend{display:flex;flex-wrap:wrap;gap:8px 18px;margin:12px 4px 0;color:var(--muted);font-size:15px;font-weight:700}
 .offline{display:inline-flex;align-items:center;gap:6px;font-size:14px;font-weight:800;color:var(--muted)}
 .modal{position:fixed;inset:0;z-index:40;background:rgba(42,38,34,.45);display:flex;align-items:center;justify-content:center;padding:16px}
@@ -230,6 +232,7 @@ svg.laysvg{width:100%;max-height:440px;display:block}
     <div class="row"><button type="button" class="btn" id="modalNo">Cancel</button><button type="button" class="btn pri" id="modalYes">OK</button></div>
   </div>
 </div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 <script>/*!
 
 JSZip v3.10.1 - A JavaScript class for generating and reading zip files
@@ -620,6 +623,9 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbzfJwNBkDvCyr3_mzOfKA5q_b
 var PIN_KEY = 'ridgeway-crew-pin', PROG = 'shop-prog:', SUM = 'shop-sum:';
 var el = function(id){ return document.getElementById(id); };
 function esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+// a short notice at the bottom of the screen
+var VERSION = '11.5.426', toastT = null;
+function toast(t){ var b = el('toast'); b.textContent = t; b.hidden = false; b.classList.remove('out'); clearTimeout(toastT); toastT = setTimeout(function(){ b.classList.add('out'); setTimeout(function(){ b.hidden = true; }, 400); }, 3200); }
 function msg(t, ok){ var m = el('msg'); m.hidden = !t; m.className = 'msg ' + (ok ? 'ok' : 'err'); m.textContent = t || ''; }
 function lsGet(k){ try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
 function lsSet(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
@@ -758,23 +764,30 @@ function prefetch(){
     });
   })();
 }
-el('ver').textContent = 'Shop Cuts · version 11.5.423';
+el('ver').textContent = 'Shop Cuts · version ' + VERSION;
+var refreshAsked = false;
 var listFresh = false;   // once the backend has answered, the copy saved on the tablet never overwrites it
 function loadList(){
   kvGet('list').then(function(l){ kvGet('donelist').then(function(d){ if (listFresh) return; if (d && !doneJobs) doneJobs = d; if (l && !jobs.length){ jobs = l; renderList(true); } }); });
   apiNew('fablist2', 'fablist', {}).then(function(r){
     listFresh = true; jobs = r.files || []; doneJobs = r.done || null; kvSet('list', jobs); if (doneJobs) kvSet('donelist', doneJobs);
     renderList(false); msg(''); prefetch(); pullAll(); flushPending();
+    if (refreshAsked){ refreshAsked = false; toast('✓ Up to date · version ' + VERSION); }
     // forget files that are neither in Ready to Fab nor completed in the last 50 days
     fileKeys().then(function(ks){ var keep = {}; jobs.concat(completedList()).forEach(function(f){ keep[f.id] = 1; }); ks.forEach(function(id){ if (!keep[id]) fileDel(id); }); });
   }, function(e){
+    if (refreshAsked){ refreshAsked = false; toast('No signal, so this is the list from last time.'); }
     if (e.code === 'pin') return askPin(e.message === 'wrong PIN' ? 'That PIN didn’t work. Try again.' : 'Enter the crew PIN once on this tablet.', loadList);
     if (!jobs.length) el('jobs').innerHTML = '<div class="empty">Couldn’t reach Drive (' + esc(e.message || 'no signal') + '). Jobs opened before are still on this tablet once the list has loaded once.</div>';
     else renderList(true);
   });
 }
 el('jobs').addEventListener('click', function(e){ if (e.target.closest('[data-act="donetoggle"]')){ lsSet('shop-done-open', lsGet('shop-done-open') === 1 ? 0 : 1); return renderList(false); } var b = e.target.closest('[data-k]'); if (b) return openJob(jobs[+b.getAttribute('data-k')]); var d = e.target.closest('[data-d]'); if (d) openJob(shownDone[+d.getAttribute('data-d')]); });
-el('reload').onclick = loadList;
+// Refresh list: also checks for a newer version of the app (if one arrives, the app reloads and says so)
+el('reload').onclick = function(){
+  refreshAsked = true; loadList();
+  if (navigator.serviceWorker && navigator.serviceWorker.getRegistration) navigator.serviceWorker.getRegistration().then(function(reg){ if (reg) reg.update().catch(function(){}); });
+};
 
 // ---------- reading the workbook (values Excel already calculated) ----------
 var P = new DOMParser();
@@ -1505,13 +1518,14 @@ el('back').onclick = function(){ cur = null; try { localStorage.removeItem('shop
   var open = null; try { open = localStorage.getItem('shop-open'); } catch (e) {}
   if (open) kvGet('list').then(function(l){ var f = (l || []).filter(function(x){ return x.id === open; })[0]; if (f) openJob(f); });
 })();
+try { if (sessionStorage.getItem('shop-updated')){ sessionStorage.removeItem('shop-updated'); setTimeout(function(){ toast('✓ Updated to version ' + VERSION); }, 600); } } catch (e) {}
 if ('serviceWorker' in navigator) window.addEventListener('load', function(){
   // updates: check whenever the app comes back to the front; when a new version takes over, reload once to show it
   var had = !!navigator.serviceWorker.controller, reloaded = false;
   navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(function(reg){
     document.addEventListener('visibilitychange', function(){ if (!document.hidden) reg.update().catch(function(){}); });
   }).catch(function(){});
-  navigator.serviceWorker.addEventListener('controllerchange', function(){ if (had && !reloaded){ reloaded = true; location.reload(); } });
+  navigator.serviceWorker.addEventListener('controllerchange', function(){ if (had && !reloaded){ reloaded = true; try { sessionStorage.setItem('shop-updated', '1'); } catch (e) {} location.reload(); } });
 });
 window.__shop = { parseBook: parseBook, shopSheets: shopSheets, layout: layout, renderSheet: renderSheet, show: show, printArea: printArea };
 })();
