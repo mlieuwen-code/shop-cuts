@@ -160,6 +160,7 @@ table.sheet td.hival.hicustom{background:#9C0006!important;color:#fff!important;
 .ver{color:var(--muted);font-size:13px;font-weight:700;text-align:center;margin:28px 0 8px;opacity:.8}
 .toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:60;background:#1F1B17;color:#fff;font-size:19px;font-weight:800;padding:16px 26px;border-radius:999px;box-shadow:0 8px 24px rgba(0,0,0,.25);transition:opacity .35s,transform .35s;white-space:nowrap}
 .toast.out{opacity:0;transform:translate(-50%,12px)}
+.signoff{color:#8A4B00;font-weight:900;background:#FFE8A3;border-radius:8px;padding:2px 8px}
 .legend{display:flex;flex-wrap:wrap;gap:8px 18px;margin:12px 4px 0;color:var(--muted);font-size:15px;font-weight:700}
 .offline{display:inline-flex;align-items:center;gap:6px;font-size:14px;font-weight:800;color:var(--muted)}
 .modal{position:fixed;inset:0;z-index:40;background:rgba(42,38,34,.45);display:flex;align-items:center;justify-content:center;padding:16px}
@@ -624,7 +625,7 @@ var PIN_KEY = 'ridgeway-crew-pin', PROG = 'shop-prog:', SUM = 'shop-sum:';
 var el = function(id){ return document.getElementById(id); };
 function esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 // a short notice at the bottom of the screen
-var VERSION = '11.5.426', toastT = null;
+var VERSION = '11.5.432', toastT = null;
 function toast(t){ var b = el('toast'); b.textContent = t; b.hidden = false; b.classList.remove('out'); clearTimeout(toastT); toastT = setTimeout(function(){ b.classList.add('out'); setTimeout(function(){ b.hidden = true; }, 400); }, 3200); }
 function msg(t, ok){ var m = el('msg'); m.hidden = !t; m.className = 'msg ' + (ok ? 'ok' : 'err'); m.textContent = t || ''; }
 function lsGet(k){ try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
@@ -699,6 +700,14 @@ function filterDone(){
   var c = el('doneN'), none = el('doneNone'); if (c) c.textContent = q ? n + ' of ' + rows.length : ''; if (none) none.hidden = !(q && !n);
 }
 document.addEventListener('input', function(e){ if (e.target && e.target.id === 'doneQ'){ doneQuery = e.target.value; filterDone(); } });
+// the status line under a job on the list
+function jobStatus(s){
+  var day = function(t){ return esc(new Date(t).toLocaleDateString([], { month: 'short', day: 'numeric' })); };
+  if (s && s.asm) return '<span class="fin-tag">✓ Assembled · ' + esc(s.asm.by) + ' · ' + day(s.asm.at) + '</span>';
+  if (s && s.total && s.done >= s.total) return '<span class="signoff">All ticked · sign off Assembly complete</span>' + (s.fin ? ' · <span class="fin-tag">✓ Cut · ' + esc(s.fin.by) + '</span>' : '');
+  if (s && s.fin) return '<span class="fin-tag">✓ Cut · ' + esc(s.fin.by) + ' · ' + day(s.fin.at) + '</span>';
+  return s && s.total ? s.done + ' of ' + s.total + ' ticked' : 'Not started';
+}
 function renderList(cached){
   var box = el('jobs');
   fileKeys().then(function(have){
@@ -716,7 +725,7 @@ function renderList(cached){
       var s = lsGet(SUM + f.id), p = s && s.total ? s.done / s.total : 0, on = have.indexOf(f.id) >= 0;
       var info = lsGet('shop-info:' + f.id), tag = info && info.u === f.updated ? info.label : '';
       return '<button type="button" class="job' + (p >= 1 || (s && s.fin) ? ' done' : '') + '" data-k="' + k + '">' + ring(p) + '<span class="t"><b>' + esc(f.name.replace(/\.xls[xm]$/i, '')) + '</b>' +
-        '<span class="s">' + (s && (s.asm || s.fin) ? '<span class="fin-tag">✓ ' + (s.asm ? 'Assembled' : 'Cut') + ' · ' + esc((s.asm || s.fin).by) + ' · ' + esc(new Date((s.asm || s.fin).at).toLocaleDateString([], { month: 'short', day: 'numeric' })) + '</span>' : s && s.total ? s.done + ' of ' + s.total + ' ticked' : 'Not started') + ' · saved ' + esc(new Date(f.updated).toLocaleDateString([], { month: 'short', day: 'numeric' })) +
+        '<span class="s">' + jobStatus(s) + ' · saved ' + esc(new Date(f.updated).toLocaleDateString([], { month: 'short', day: 'numeric' })) +
         (on ? ' · <span class="offline">✓ on tablet</span>' : '') + '</span></span>' + (tag ? '<span class="cnt' + (/^\d/.test(tag) ? '' : ' warn') + '">' + (/^(\d+) (.+)$/.test(tag) ? '<b>' + tag.replace(/ .*/, '') + '</b>' + esc(tag.replace(/^\d+ /, '')) : esc(tag)) + '</span>' : '') + '</button>';
     }).join('') + done;
   });
@@ -1220,7 +1229,7 @@ function pullAll(then){
       var old = lsGet(SUM + f.id) || {}, dn = Object.keys(m.done).length, tot = m.tot || old.total;
       writeSum(f.id, { dn: tot ? Math.min(dn, tot) : dn, fin: m.fin, asm: m.asm }, tot || undefined);
     }).catch(function(){});
-  })).then(function(){ if (!el('list').hidden) renderList(false); if (then) then(); });
+  })).then(function(){ if (!el('list').hidden) renderList(false); catchUpCompleted(); if (then) then(); });
 }
 function counts(it){ var ks = itemKeys(it), d = ks.filter(function(k){ return cur.done[it.sh.name + '|' + k]; }).length; return { d: d, n: ks.length }; }
 function renderTabs(){
@@ -1407,6 +1416,27 @@ function unComplete(id){
   lsSet('shop-pending', pending().filter(function(p){ return p.id !== id; }));
   api('uncomplete', { id: id }).catch(function(){});
 }
+// catch-up: a job whose Assembly complete was signed off (on this tablet or another, or on an older version of the app)
+// but is still in Ready To Fab gets its hard copy made here and is moved to Completed
+var catching = {};
+function catchUpCompleted(){
+  jobs.forEach(function(f){
+    var p = decodeProg(lsGet(progKey(f.id)));
+    if (!p.asm || catching[f.id] || pending().some(function(x){ return x.id === f.id; })) return;
+    catching[f.id] = 1;
+    fileGet(f.id).then(function(local){
+      return local && local.b64 ? local.b64 : apiNew('fabopen2', 'fabopen', { id: f.id }).then(function(r){ filePut({ id: f.id, name: f.name, updated: f.updated, b64: r.b64 }); return r.b64; });
+    }).then(function(b64){ return parseBook(b64); }).then(function(book){
+      if (book.raw) return;
+      return shopSheets(book).then(function(items){
+        items.forEach(function(it){ it.L = layout(book, it); });
+        var q = decodeProg(lsGet(progKey(f.id))); if (!q.asm) return;
+        lsSet('shop-pending', pending().filter(function(x){ return x.id !== f.id; }).concat([{ id: f.id, name: f.name, by: q.asm.by, at: q.asm.at, html: printHtml({ name: f.name, items: items, done: q.done, fin: q.fin, asm: q.asm }) }]));
+        flushPending(false);
+      });
+    }).catch(function(){}).then(function(){ setTimeout(function(){ delete catching[f.id]; }, 60000); });
+  });
+}
 var flushing = false;
 function flushPending(say){
   var list = pending(); if (!list.length || flushing) return; flushing = true;
@@ -1421,20 +1451,21 @@ function flushPending(say){
   });
 }
 // the hard copy: every tab as the shop saw it, with ticks and who signed off; layouts and fab times are left out
-function printHtml(){
+function printHtml(o){
+  o = o || { name: cur.f.name, items: cur.items, done: cur.done, fin: cur.fin, asm: cur.asm };
   var c = function(x){ return esc(x); }, when = function(r){ return r ? c(r.by) + ', ' + c(new Date(r.at).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })) : '—'; };
   var h = '<html><head><meta charset="utf-8"></head><body style="font-family:Arial,sans-serif;font-size:10pt;color:#222">' +
-    '<h1 style="font-size:18pt;margin:0 0 4pt">' + c(cur.f.name.replace(/\.xls[xm]$/i, '')) + '</h1>' +
-    '<p style="margin:0 0 2pt"><b>Cutting complete:</b> ' + when(cur.fin) + '</p><p style="margin:0 0 10pt"><b>Assembly complete:</b> ' + when(cur.asm) + '</p>';
-  cur.items.forEach(function(it){
+    '<h1 style="font-size:18pt;margin:0 0 4pt">' + c(o.name.replace(/\.xls[xm]$/i, '')) + '</h1>' +
+    '<p style="margin:0 0 2pt"><b>Cutting complete:</b> ' + when(o.fin) + '</p><p style="margin:0 0 10pt"><b>Assembly complete:</b> ' + when(o.asm) + '</p>';
+  o.items.forEach(function(it){
     var L = it.L, pre = it.sh.name + '|';
     h += '<h2 style="font-size:13pt;margin:14pt 0 4pt">' + c(it.label) + '</h2><table style="border-collapse:collapse;width:100%;font-size:9pt">';
     L.rows.forEach(function(r){
-      var rc = L.cols.filter(function(cc){ return L.chk[r + ':' + cc]; }), allOn = rc.length && rc.every(function(cc){ return cur.done[pre + 'c' + r + ':' + cc]; });
+      var rc = L.cols.filter(function(cc){ return L.chk[r + ':' + cc]; }), allOn = rc.length && rc.every(function(cc){ return o.done[pre + 'c' + r + ':' + cc]; });
       h += '<tr' + (allOn ? ' style="background:#DCEFD8"' : '') + '>';
       L.cols.forEach(function(cc){
         var k = r + ':' + cc, t;
-        if (L.chk[k]) t = cur.done[pre + 'c' + k] ? '<b style="color:#2E6B2A">&#10003;</b>' : '<span style="color:#999">&#9633;</span>';
+        if (L.chk[k]) t = o.done[pre + 'c' + k] ? '<b style="color:#2E6B2A">&#10003;</b>' : '<span style="color:#999">&#9633;</span>';
         else t = c(L.txt(r, cc));
         h += '<td style="border:1px solid #ccc;padding:2pt 4pt;' + (r === L.hdr ? 'background:#E7DFCF;font-weight:bold;' : '') + '">' + t + '</td>';
       });
