@@ -134,6 +134,9 @@ tr.tap{cursor:pointer}
 .prhead span:not(.prflame){font-size:16px;font-weight:800;color:#A5501F}
 .prflame{font-size:24px}
 .prcard .job b .pri{background:#E8590C}
+.ipcard{background:var(--tint);border-color:var(--accent)}
+.ipcard .prhead{color:var(--deep)}
+.ipcard .prhead span:not(.prflame){color:var(--accent)}
 .prrest{font-size:18px;font-weight:900;color:var(--muted);margin:12px 4px 0}
 .mgrnote{color:var(--muted);font-weight:700;margin:0 0 14px}
 .mgrwrap{overflow-x:auto}
@@ -654,7 +657,7 @@ var PIN_KEY = 'ridgeway-crew-pin', PROG = 'shop-prog:', SUM = 'shop-sum:';
 var el = function(id){ return document.getElementById(id); };
 function esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 // a short notice at the bottom of the screen
-var VERSION = '11.9.955', toastT = null;
+var VERSION = '11.9.1021', toastT = null;
 function toast(t){ var b = el('toast'); b.textContent = t; b.hidden = false; b.classList.remove('out'); clearTimeout(toastT); toastT = setTimeout(function(){ b.classList.add('out'); setTimeout(function(){ b.hidden = true; }, 400); }, 3200); }
 function msg(t, ok){ var m = el('msg'); m.hidden = !t; m.className = 'msg ' + (ok ? 'ok' : 'err'); m.textContent = t || ''; }
 function lsGet(k){ try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
@@ -754,17 +757,24 @@ function renderList(cached){
     }).join('') + '<div class="empty" id="doneNone" hidden>No completed jobs match.</div>');
     if (!jobs.length){ box.innerHTML = '<div class="empty">No jobs in Ready to Fab yet. When a job is ready, it’s saved there from the office and shows up here.</div>' + done; return; }
     setTimeout(filterDone, 0);
-    var cards = jobs.map(function(f, k){
+    var pct = [], cards = jobs.map(function(f, k){
       var s = lsGet(SUM + f.id), p = s && s.total ? s.done / s.total : 0, on = have.indexOf(f.id) >= 0;
+      pct[k] = s && (s.done > 0 || s.fin) ? p : -1;   // -1 = not started
       var info = lsGet('shop-info:' + f.id), tag = info && info.u === f.updated ? info.label : '';
       var pr = prioRank(f.id);
       return '<button type="button" class="job' + (p >= 1 || (s && s.fin) ? ' done' : '') + '" data-k="' + k + '">' + ring(p) + '<span class="t"><b>' + (pr < Infinity ? '<span class="pri">#' + (pr + 1) + '</span>' : '') + esc(f.name.replace(/\.xls[xm]$/i, '')) + '</b>' +
         '<span class="s">' + jobStatus(s) + ' · saved ' + esc(new Date(f.updated).toLocaleDateString([], { month: 'short', day: 'numeric' })) +
         (on ? ' · <span class="offline">✓ on tablet</span>' : '') + '</span></span>' + (tag ? '<span class="cnt' + (/^\d/.test(tag) ? '' : ' warn') + '">' + (/^(\d+) (.+)$/.test(tag) ? '<b>' + tag.replace(/ .*/, '') + '</b>' + esc(tag.replace(/^\d+ /, '')) : esc(tag)) + '</span>' : '') + '</button>';
     });
-    // jobs the office marked as priority sit together in a Priority card at the top
-    var nP = jobs.filter(function(f){ return prioRank(f.id) < Infinity; }).length;
-    box.innerHTML = (nP ? '<div class="prcard"><div class="prhead"><span class="prflame" aria-hidden="true">⚡</span>Priority<span>· rush these first, in this order</span></div>' + cards.slice(0, nP).join('') + '</div>' + (nP < jobs.length ? '<div class="prrest">All other jobs</div>' : '') : '') + cards.slice(nP).join('') + done;
+    // Priority card (office's rush order), then In progress (most done first), then the rest, newest first
+    var ks = jobs.map(function(f, k){ return k; });
+    var pri = ks.filter(function(k){ return prioRank(jobs[k].id) < Infinity; });
+    var prog = ks.filter(function(k){ return pri.indexOf(k) < 0 && pct[k] >= 0; }).sort(function(a, b){ return pct[b] - pct[a] || a - b; });
+    var rest = ks.filter(function(k){ return pri.indexOf(k) < 0 && prog.indexOf(k) < 0; });
+    var pick = function(arr){ return arr.map(function(k){ return cards[k]; }).join(''); };
+    box.innerHTML = (pri.length ? '<div class="prcard"><div class="prhead"><span class="prflame" aria-hidden="true">⚡</span>Priority<span>· rush these first, in this order</span></div>' + pick(pri) + '</div>' : '') +
+      (prog.length ? '<div class="prcard ipcard"><div class="prhead"><span class="prflame" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" style="vertical-align:-4px"><circle cx="12" cy="12" r="9.5" fill="none" stroke="currentColor" stroke-width="3"/><path d="M12 5.5A6.5 6.5 0 0 1 18.5 12H12z" fill="currentColor"/></svg></span>In progress<span>· most done first</span></div>' + pick(prog) + '</div>' : '') +
+      (rest.length && (pri.length || prog.length) ? '<div class="prrest">Not started</div>' : '') + pick(rest) + done;
   });
   el('listNote').hidden = !cached;
   if (cached) el('listNote').textContent = 'No signal, so this is the list from last time. Jobs marked “on tablet” still open.';
