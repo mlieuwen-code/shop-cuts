@@ -114,6 +114,21 @@ tr.tap{cursor:pointer}
 .fin select,.fin input{min-height:64px;font-size:20px;font-weight:700;border-radius:16px;border:2px solid var(--line);background:var(--field);padding:0 16px;min-width:260px}
 .fnote{margin:12px 0 0;font-weight:700;color:var(--amberink)}
 .fin-tag{color:var(--doneink);font-weight:800}
+.mgrh{font-size:22px;font-weight:900;margin:4px 0 6px}
+.mgrh2{margin-top:22px}.mgrh3{margin-top:34px}
+.prio{display:flex;flex-direction:column;gap:8px}
+.prow{display:flex;align-items:center;gap:10px;background:var(--card);border-radius:16px;padding:10px 12px;box-shadow:0 2px 0 var(--line)}
+.prow.rest{background:transparent;box-shadow:none;border:2px dashed var(--line)}
+.pnum{flex-shrink:0;width:40px;height:40px;border-radius:12px;background:var(--accent);color:#fff;font-size:20px;font-weight:900;display:flex;align-items:center;justify-content:center}
+.pname{flex:1;min-width:0;font-size:19px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pday{flex-shrink:0;color:var(--muted);font-weight:700;font-size:15px}
+.pbtn{flex-shrink:0;min-width:48px;height:48px;border-radius:12px;border:0;background:var(--tint2);color:var(--deep);font-size:18px;font-weight:900;cursor:pointer}
+.pbtn:disabled{opacity:.3;cursor:default}
+.pbtn.px{background:#F3E1DC;color:#9C0006}
+.pbtn.padd{padding:0 16px}
+.pempty{color:var(--muted);font-weight:700;padding:10px 2px}
+.pclear{margin-top:10px;background:none;border:0;color:#9C0006;font-weight:800;font-size:16px;text-decoration:underline;cursor:pointer;padding:6px 2px}
+.job b .pri{display:inline-block;background:var(--accent);color:#fff;border-radius:10px;padding:1px 9px;margin-right:9px;font-size:18px;vertical-align:2px}
 .mgrnote{color:var(--muted);font-weight:700;margin:0 0 14px}
 .mgrwrap{overflow-x:auto}
 table.mgr{width:100%;border-collapse:collapse;background:var(--card);border-radius:18px;overflow:hidden;font-size:18px}
@@ -208,7 +223,14 @@ svg.laysvg{width:100%;max-height:440px;display:block}
 
   <section id="mgr" hidden>
     <div class="apphead"><button type="button" class="round" id="mgrBack" aria-label="Back to the job list"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2A2622" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button>
-      <div class="ttl"><div class="eyebrow">Manager</div><h2>Fab times</h2></div></div>
+      <div class="ttl"><div class="eyebrow">Manager</div><h2>Priority &amp; fab times</h2></div></div>
+    <h3 class="mgrh">Job priority</h3>
+    <p class="mgrnote">Jobs on this list show at the top of both tablets, numbered, in this order. Everything else follows, newest first.</p>
+    <div class="prio" id="prioOn"></div>
+    <button type="button" class="pclear" id="prioClear" hidden>Clear all priorities</button>
+    <h3 class="mgrh mgrh2">Not prioritized</h3>
+    <div class="prio" id="prioRest"></div>
+    <h3 class="mgrh mgrh3">Fab times</h3>
     <p class="mgrnote">Time between ticks, with breaks over 25 minutes left out (overnight, weekends, lunch). It starts at the first tick, so the first cut's own time isn't counted.</p>
     <div class="mgrwrap"><table class="mgr"><thead><tr><th>Job</th><th>Cut by</th><th>Cutting time</th><th>Assembled by</th><th>Assembly time</th><th>Dates</th></tr></thead><tbody id="mgrBody"></tbody></table></div>
   </section>
@@ -626,7 +648,7 @@ var PIN_KEY = 'ridgeway-crew-pin', PROG = 'shop-prog:', SUM = 'shop-sum:';
 var el = function(id){ return document.getElementById(id); };
 function esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 // a short notice at the bottom of the screen
-var VERSION = '11.6.1147', toastT = null;
+var VERSION = '11.9.619', toastT = null;
 function toast(t){ var b = el('toast'); b.textContent = t; b.hidden = false; b.classList.remove('out'); clearTimeout(toastT); toastT = setTimeout(function(){ b.classList.add('out'); setTimeout(function(){ b.hidden = true; }, 400); }, 3200); }
 function msg(t, ok){ var m = el('msg'); m.hidden = !t; m.className = 'msg ' + (ok ? 'ok' : 'err'); m.textContent = t || ''; }
 function lsGet(k){ try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
@@ -676,6 +698,10 @@ function api(action, extra){
 
 // ---------- job list ----------
 var jobs = [], doneJobs = null, DONE_DAYS = 50;
+// priority order set from the manager screen (file ids, most urgent first); other jobs follow, newest first
+var prio = lsGet('shop-prio') || [];
+function prioRank(id){ var i = prio.indexOf(id); return i < 0 ? Infinity : i; }
+function applyPrio(){ jobs.sort(function(a, b){ var ra = prioRank(a.id), rb = prioRank(b.id); return ra !== rb ? (ra < rb ? -1 : 1) : b.updated - a.updated; }); }
 // newer backend actions first; if Apps Script hasn't been redeployed yet, fall back to the old ones
 function apiNew(a2, a1, extra){ return api(a2, extra).catch(function(e){ if (e && /unknown request|not available/i.test(e.message || '')) return api(a1, extra); throw e; }); }
 function ring(p){
@@ -725,7 +751,8 @@ function renderList(cached){
     box.innerHTML = jobs.map(function(f, k){
       var s = lsGet(SUM + f.id), p = s && s.total ? s.done / s.total : 0, on = have.indexOf(f.id) >= 0;
       var info = lsGet('shop-info:' + f.id), tag = info && info.u === f.updated ? info.label : '';
-      return '<button type="button" class="job' + (p >= 1 || (s && s.fin) ? ' done' : '') + '" data-k="' + k + '">' + ring(p) + '<span class="t"><b>' + esc(f.name.replace(/\.xls[xm]$/i, '')) + '</b>' +
+      var pr = prioRank(f.id);
+      return '<button type="button" class="job' + (p >= 1 || (s && s.fin) ? ' done' : '') + '" data-k="' + k + '">' + ring(p) + '<span class="t"><b>' + (pr < Infinity ? '<span class="pri">#' + (pr + 1) + '</span>' : '') + esc(f.name.replace(/\.xls[xm]$/i, '')) + '</b>' +
         '<span class="s">' + jobStatus(s) + ' · saved ' + esc(new Date(f.updated).toLocaleDateString([], { month: 'short', day: 'numeric' })) +
         (on ? ' · <span class="offline">✓ on tablet</span>' : '') + '</span></span>' + (tag ? '<span class="cnt' + (/^\d/.test(tag) ? '' : ' warn') + '">' + (/^(\d+) (.+)$/.test(tag) ? '<b>' + tag.replace(/ .*/, '') + '</b>' + esc(tag.replace(/^\d+ /, '')) : esc(tag)) + '</span>' : '') + '</button>';
     }).join('') + done;
@@ -780,8 +807,8 @@ var listFresh = false;   // once the backend has answered, the copy saved on the
 function loadList(){
   kvGet('list').then(function(l){ kvGet('donelist').then(function(d){ if (listFresh) return; if (d && !doneJobs) doneJobs = d; if (l && !jobs.length){ jobs = l; renderList(true); } }); });
   apiNew('fablist2', 'fablist', {}).then(function(r){
-    listFresh = true; jobs = r.files || []; doneJobs = r.done || null; kvSet('list', jobs); if (doneJobs) kvSet('donelist', doneJobs);
-    renderList(false); msg(''); prefetch(); pullAll(); flushPending();
+    listFresh = true; jobs = r.files || []; doneJobs = r.done || null; if (Array.isArray(r.prio)){ prio = r.prio; lsSet('shop-prio', prio); } applyPrio(); kvSet('list', jobs); if (doneJobs) kvSet('donelist', doneJobs);
+    renderList(false); if (!el('mgr').hidden) renderMgr(); msg(''); prefetch(); pullAll(); flushPending();
     if (refreshAsked){ refreshAsked = false; toast('✓ Up to date · version ' + VERSION); }
     // forget files that are neither in Ready to Fab nor completed in the last 50 days
     fileKeys().then(function(ks){ var keep = {}; jobs.concat(completedList()).forEach(function(f){ keep[f.id] = 1; }); ks.forEach(function(id){ if (!keep[id]) fileDel(id); }); });
@@ -1222,7 +1249,9 @@ function syncNow(){
 }
 // live: an open job checks for the other tablet's ticks every 30 seconds, and straight away when the app comes back to the front
 setInterval(function(){ if (cur && !document.hidden && !el('job').hidden) syncNow(); }, 30000);
-document.addEventListener('visibilitychange', function(){ if (!document.hidden){ if (cur && !el('job').hidden) syncNow(); else if (!el('list').hidden) pullAll(); } });
+document.addEventListener('visibilitychange', function(){ if (!document.hidden){ if (cur && !el('job').hidden) syncNow(); else if (!el('list').hidden) loadList(); } });
+// the job list re-checks Drive every minute while it's on screen (new jobs, priority changes from the office)
+setInterval(function(){ if (!document.hidden && !el('list').hidden && el('modal').hidden) loadList(); }, 60000);
 // the job list: pull every job's progress so the counts and sign-offs match the other tablet
 function pullAll(then){
   return Promise.all(jobs.map(function(f){
@@ -1497,6 +1526,7 @@ function fabTime(p, kind){
 function hm(ms){ var m = Math.round(ms / 60000), h = Math.floor(m / 60); return h ? h + 'h ' + (m % 60 < 10 ? '0' : '') + (m % 60) + 'm' : m + 'm'; }
 function day(t){ return new Date(t).toLocaleDateString([], { month: 'short', day: 'numeric' }); }
 function renderMgr(){
+  renderPrio();
   // jobs in Ready to Fab, plus any job this tablet has ticked that has since left the folder
   var list = jobs.map(function(f){ return { id: f.id, name: f.name }; }), ids = {};
   list.forEach(function(j){ ids[j.id] = 1; });
@@ -1511,10 +1541,47 @@ function renderMgr(){
   }).sort(function(a, b){ return b.k - a.k || (b.t || 0) - (a.t || 0); });
   el('mgrBody').innerHTML = rows.length ? rows.map(function(r){ return r.h; }).join('') : '<tr><td colspan="6" class="mut">No jobs in the list.</td></tr>';
 }
+// ---------- job priority (manager screen, works on a computer too) ----------
+function renderPrio(){
+  var ids = {}; jobs.forEach(function(f){ ids[f.id] = f; });
+  var on = prio.filter(function(id){ return ids[id]; }), rest = jobs.filter(function(f){ return on.indexOf(f.id) < 0; }).slice().sort(function(a, b){ return b.updated - a.updated; });
+  var nm = function(f){ return esc(f.name.replace(/\.xls[xm]$/i, '')); };
+  el('prioOn').innerHTML = on.length ? on.map(function(id, i){
+    return '<div class="prow"><span class="pnum">' + (i + 1) + '</span><span class="pname">' + nm(ids[id]) + '</span>' +
+      '<button type="button" class="pbtn" data-pa="up" data-pi="' + i + '"' + (i ? '' : ' disabled') + ' aria-label="Move up">▲</button>' +
+      '<button type="button" class="pbtn" data-pa="down" data-pi="' + i + '"' + (i < on.length - 1 ? '' : ' disabled') + ' aria-label="Move down">▼</button>' +
+      '<button type="button" class="pbtn px" data-pa="off" data-pi="' + i + '" aria-label="Take off the priority list">✕</button></div>';
+  }).join('') : '<div class="pempty">No priorities set, so the tablets show the newest job first. Add jobs below.</div>';
+  el('prioRest').innerHTML = rest.length ? rest.map(function(f){
+    return '<div class="prow rest"><span class="pname">' + nm(f) + '</span><span class="pday">saved ' + esc(new Date(f.updated).toLocaleDateString([], { month: 'short', day: 'numeric' })) + '</span>' +
+      '<button type="button" class="pbtn padd" data-pa="add" data-id="' + esc(f.id) + '">+ Add</button></div>';
+  }).join('') : '<div class="pempty">Every job in Ready to Fab is on the list.</div>';
+  el('prioClear').hidden = !on.length;
+  return on;
+}
+var prioSaving = 0;
+function savePrio(next){
+  var before = prio; prio = next; lsSet('shop-prio', prio); applyPrio(); renderPrio();
+  var n = ++prioSaving;
+  api('prioset', { prio: next }).then(function(r){ if (n === prioSaving) toast('✓ Priority saved · the tablets show it within a minute'); }, function(e){
+    if (n !== prioSaving) return;
+    prio = before; lsSet('shop-prio', prio); applyPrio(); renderPrio();
+    toast(e && /unknown request/i.test(e.message || '') ? 'Not saved: Apps Script needs the new version deployed first.' : 'Not saved: no signal. Try again.');
+  });
+}
+el('mgr').addEventListener('click', function(e){
+  if (e.target.closest('#prioClear')) return savePrio([]);
+  var b = e.target.closest('[data-pa]'); if (!b) return;
+  var on = renderPrio().slice(), i = +b.getAttribute('data-pi'), a = b.getAttribute('data-pa');
+  if (a === 'add') on.push(b.getAttribute('data-id'));
+  else if (a === 'off') on.splice(i, 1);
+  else { var j = a === 'up' ? i - 1 : i + 1; if (j < 0 || j >= on.length) return; var t = on[i]; on[i] = on[j]; on[j] = t; }
+  savePrio(on);
+});
 function openMgr(){
   // ticks made on other tablets come in through the backend first
   pullAll(renderMgr);
-  renderMgr(); el('list').hidden = true; el('mgr').hidden = false; window.scrollTo(0, 0);
+  renderMgr(); renderPrio(); el('list').hidden = true; el('mgr').hidden = false; window.scrollTo(0, 0); loadList();
 }
 // hidden way in: press and hold the Shop Cuts logo for 2 seconds, or tap it 5 times quickly, then the manager PIN.
 // Touch screens: the browser's own long-press (select / menu) cancels pointer events, so the hold uses touch events and ignores cancels.
