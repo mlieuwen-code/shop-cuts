@@ -129,6 +129,12 @@ tr.tap{cursor:pointer}
 .pempty{color:var(--muted);font-weight:700;padding:10px 2px}
 .pclear{margin-top:10px;background:none;border:0;color:#9C0006;font-weight:800;font-size:16px;text-decoration:underline;cursor:pointer;padding:6px 2px}
 .job b .pri{display:inline-block;background:var(--accent);color:#fff;border-radius:10px;padding:1px 9px;margin-right:9px;font-size:18px;vertical-align:2px}
+.prcard{background:#FCE8DC;border:3px solid #E8590C;border-radius:26px;padding:12px;display:flex;flex-direction:column;gap:10px}
+.prhead{display:flex;align-items:center;gap:10px;font-size:24px;font-weight:900;color:#8A3205;padding:4px 8px 2px}
+.prhead span:not(.prflame){font-size:16px;font-weight:800;color:#A5501F}
+.prflame{font-size:24px}
+.prcard .job b .pri{background:#E8590C}
+.prrest{font-size:18px;font-weight:900;color:var(--muted);margin:12px 4px 0}
 .mgrnote{color:var(--muted);font-weight:700;margin:0 0 14px}
 .mgrwrap{overflow-x:auto}
 table.mgr{width:100%;border-collapse:collapse;background:var(--card);border-radius:18px;overflow:hidden;font-size:18px}
@@ -648,7 +654,7 @@ var PIN_KEY = 'ridgeway-crew-pin', PROG = 'shop-prog:', SUM = 'shop-sum:';
 var el = function(id){ return document.getElementById(id); };
 function esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 // a short notice at the bottom of the screen
-var VERSION = '11.9.619', toastT = null;
+var VERSION = '11.9.955', toastT = null;
 function toast(t){ var b = el('toast'); b.textContent = t; b.hidden = false; b.classList.remove('out'); clearTimeout(toastT); toastT = setTimeout(function(){ b.classList.add('out'); setTimeout(function(){ b.hidden = true; }, 400); }, 3200); }
 function msg(t, ok){ var m = el('msg'); m.hidden = !t; m.className = 'msg ' + (ok ? 'ok' : 'err'); m.textContent = t || ''; }
 function lsGet(k){ try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
@@ -748,14 +754,17 @@ function renderList(cached){
     }).join('') + '<div class="empty" id="doneNone" hidden>No completed jobs match.</div>');
     if (!jobs.length){ box.innerHTML = '<div class="empty">No jobs in Ready to Fab yet. When a job is ready, it’s saved there from the office and shows up here.</div>' + done; return; }
     setTimeout(filterDone, 0);
-    box.innerHTML = jobs.map(function(f, k){
+    var cards = jobs.map(function(f, k){
       var s = lsGet(SUM + f.id), p = s && s.total ? s.done / s.total : 0, on = have.indexOf(f.id) >= 0;
       var info = lsGet('shop-info:' + f.id), tag = info && info.u === f.updated ? info.label : '';
       var pr = prioRank(f.id);
       return '<button type="button" class="job' + (p >= 1 || (s && s.fin) ? ' done' : '') + '" data-k="' + k + '">' + ring(p) + '<span class="t"><b>' + (pr < Infinity ? '<span class="pri">#' + (pr + 1) + '</span>' : '') + esc(f.name.replace(/\.xls[xm]$/i, '')) + '</b>' +
         '<span class="s">' + jobStatus(s) + ' · saved ' + esc(new Date(f.updated).toLocaleDateString([], { month: 'short', day: 'numeric' })) +
         (on ? ' · <span class="offline">✓ on tablet</span>' : '') + '</span></span>' + (tag ? '<span class="cnt' + (/^\d/.test(tag) ? '' : ' warn') + '">' + (/^(\d+) (.+)$/.test(tag) ? '<b>' + tag.replace(/ .*/, '') + '</b>' + esc(tag.replace(/^\d+ /, '')) : esc(tag)) + '</span>' : '') + '</button>';
-    }).join('') + done;
+    });
+    // jobs the office marked as priority sit together in a Priority card at the top
+    var nP = jobs.filter(function(f){ return prioRank(f.id) < Infinity; }).length;
+    box.innerHTML = (nP ? '<div class="prcard"><div class="prhead"><span class="prflame" aria-hidden="true">⚡</span>Priority<span>· rush these first, in this order</span></div>' + cards.slice(0, nP).join('') + '</div>' + (nP < jobs.length ? '<div class="prrest">All other jobs</div>' : '') : '') + cards.slice(nP).join('') + done;
   });
   el('listNote').hidden = !cached;
   if (cached) el('listNote').textContent = 'No signal, so this is the list from last time. Jobs marked “on tablet” still open.';
