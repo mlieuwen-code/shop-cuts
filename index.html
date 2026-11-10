@@ -158,11 +158,16 @@ table.sheet td.postsall{text-align:right;padding:6px 8px}
 .pcut .box{width:38px;height:38px;border-radius:10px;border:3px solid var(--dash);background:var(--field);display:inline-flex;align-items:center;justify-content:center;color:transparent;font-size:22px}
 .pcut.on{background:var(--done);border-color:var(--doneink);color:var(--doneink)}
 .pcut.on .box{background:var(--doneink);border-color:var(--doneink);color:var(--onaccent)}
-.sortbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0}
+.sortbar{display:flex;flex-wrap:nowrap;align-items:center;gap:8px;margin:0;overflow-x:auto;scrollbar-width:none}
+.sortbar .sseg{display:inline-flex;align-items:center;flex-shrink:0}
+.sortbar .sgl{font-size:14px;font-weight:900;color:var(--muted);margin:0 6px 0 4px;white-space:nowrap}
+.sortbar .sseg .sbtn{border-radius:0}
+.sortbar .sseg .sbtn:nth-child(2){border-radius:12px 0 0 12px;border-right-width:1px}
+.sortbar .sseg .sbtn:nth-child(3){border-radius:0 12px 12px 0;border-left-width:1px}
 table.sheet tr.sortrow td{background:var(--card)!important;padding:12px 8px!important;border-top:2px solid var(--line)}
 .sortbar .sgrp{display:inline-flex;align-items:center;gap:10px;padding-left:14px;border-left:2px solid var(--line)}
-.sortbar .slab{font-weight:900;color:var(--muted);margin-right:4px}
-.sbtn{min-height:52px;padding:0 18px;border-radius:14px;border:2px solid var(--line);background:var(--card);font-size:17px;font-weight:800}
+.sortbar .slab{font-weight:900;color:var(--muted);margin-right:2px;flex-shrink:0}
+.sbtn{min-height:50px;padding:0 13px;border-radius:12px;border:2px solid var(--line);background:var(--card);font-size:16px;font-weight:800;white-space:nowrap;flex-shrink:0}
 .sbtn.on{background:var(--accent);border-color:var(--accent);color:var(--onaccent)}
 table.sheet tr.laysec td{border-top:6px solid var(--accent)}
 .modal.alert .box2{border:4px solid var(--amberink);max-width:560px}
@@ -660,7 +665,7 @@ var PIN_KEY = 'ridgeway-crew-pin', PROG = 'shop-prog:', SUM = 'shop-sum:';
 var el = function(id){ return document.getElementById(id); };
 function esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 // a short notice at the bottom of the screen
-var VERSION = '11.10.507', toastT = null;
+var VERSION = '11.10.654', toastT = null;
 function toast(t){ var b = el('toast'); b.textContent = t; b.hidden = false; b.classList.remove('out'); clearTimeout(toastT); toastT = setTimeout(function(){ b.classList.add('out'); setTimeout(function(){ b.hidden = true; }, 400); }, 3200); }
 function msg(t, ok){ var m = el('msg'); m.hidden = !t; m.className = 'msg ' + (ok ? 'ok' : 'err'); m.textContent = t || ''; }
 function lsGet(k){ try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
@@ -1070,8 +1075,10 @@ function alertBox(html){
 // the sort bar sits in the Cut Sheet itself, just above the Rail tag / ✓ / Top rail heading row
 function sortBarHtml(){
   var sbtn = function(o){ return '<button type="button" class="sbtn' + ((cur.sort || '') === o[0] ? ' on' : '') + '" data-sort="' + o[0] + '" aria-pressed="' + ((cur.sort || '') === o[0]) + '">' + o[1] + '</button>'; };
-  return '<div class="sortbar"><span class="slab">Sort</span>' + sbtn(['', 'Unit Order']) + sbtn(['long', 'Longest Top Rail']) + sbtn(['short', 'Shortest Top Rail']) +
-    sbtn(['clong', 'Longest Channel']) + sbtn(['cshort', 'Shortest Channel']) + sbtn(['opt', 'Optimal Cut']) + '</div>';
+  // one compact line: Unit Order · Top rail [Longest|Shortest] · Channel [Longest|Shortest] · Optimal Cut
+  var seg = function(lab, a, b){ return '<span class="sseg"><span class="sgl">' + lab + '</span>' + sbtn(a) + sbtn(b) + '</span>'; };
+  return '<div class="sortbar"><span class="slab">Sort</span>' + sbtn(['', 'Unit Order']) + seg('Top rail', ['long', 'Longest'], ['short', 'Shortest']) +
+    seg('Channel', ['clong', 'Longest'], ['cshort', 'Shortest']) + sbtn(['opt', 'Optimal Cut']) + '</div>';
 }
 // Optimal Cut: packs top rails onto 25' (300") sticks with a 1/8" kerf per cut, filling each stick as full as it can
 // (exact best fill per stick, in 1/16ths), most-full sticks first. Returns [{ rows, used, off }] plus any piece too long for a stick.
