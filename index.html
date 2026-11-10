@@ -660,7 +660,7 @@ var PIN_KEY = 'ridgeway-crew-pin', PROG = 'shop-prog:', SUM = 'shop-sum:';
 var el = function(id){ return document.getElementById(id); };
 function esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 // a short notice at the bottom of the screen
-var VERSION = '11.10.502', toastT = null;
+var VERSION = '11.10.507', toastT = null;
 function toast(t){ var b = el('toast'); b.textContent = t; b.hidden = false; b.classList.remove('out'); clearTimeout(toastT); toastT = setTimeout(function(){ b.classList.add('out'); setTimeout(function(){ b.hidden = true; }, 400); }, 3200); }
 function msg(t, ok){ var m = el('msg'); m.hidden = !t; m.className = 'msg ' + (ok ? 'ok' : 'err'); m.textContent = t || ''; }
 function lsGet(k){ try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
@@ -1077,10 +1077,11 @@ function sortBarHtml(){
 // (exact best fill per stick, in 1/16ths), most-full sticks first. Returns [{ rows, used, off }] plus any piece too long for a stick.
 var STICK = 300, KERF = 0.125;
 function packSticks(items){
-  var U = 16, cap = Math.round((STICK + KERF) * U), left = items.filter(function(it){ return it.len > 0 && it.len <= STICK; }), out = [];
+  // same rule as the cost sheet's STICK CALC: every piece takes its length + 1/8" kerf, out of a 300" stick
+  var U = 16, cap = STICK * U, left = items.filter(function(it){ return it.len > 0 && it.len <= STICK; }), out = [];
   var tooLong = items.filter(function(it){ return it.len > STICK; });
   while (left.length){
-    var w = left.map(function(it){ return Math.round((it.len + KERF) * U); });
+    var w = left.map(function(it){ return Math.ceil((it.len + KERF) * U - 1e-6); });
     // reach[t] = the piece that first made total t (pieces taken once each); prev[t] = the total before it
     var reach = new Int16Array(cap + 1).fill(-1), prev = new Int32Array(cap + 1).fill(-1); reach[0] = 9999;
     for (var i = 0; i < left.length; i++) for (var t = cap; t >= w[i]; t--) if (reach[t] < 0 && reach[t - w[i]] >= 0 && reach[t - w[i]] !== i){ reach[t] = i; prev[t] = t - w[i]; }
@@ -1088,11 +1089,18 @@ function packSticks(items){
     var pick = []; for (var x = tot; x > 0; x = prev[x]) pick.push(reach[x]);
     if (!pick.length) pick = [0];
     var picked = pick.map(function(i){ return left[i]; }).sort(function(a, b){ return b.len - a.len || a.row - b.row; });
-    var used = picked.reduce(function(a, it){ return a + it.len; }, 0) + KERF * picked.length;
-    out.push({ items: picked, used: used, off: Math.max(0, STICK - used) });
+    out.push(stickOf(picked));
     left = left.filter(function(it, i){ return pick.indexOf(i) < 0; });
   }
+  // never more sticks than the cost sheet's first-fit count: if first-fit somehow does better, use its layout
+  var ffd = [], fit = items.filter(function(it){ return it.len > 0 && it.len <= STICK; }).slice().sort(function(a, b){ return b.len - a.len || a.row - b.row; });
+  fit.forEach(function(it){ var need = it.len + KERF, bin = ffd.filter(function(b){ return b.room >= need - 1e-9; })[0]; if (!bin){ bin = { room: STICK, items: [] }; ffd.push(bin); } bin.room -= need; bin.items.push(it); });
+  if (ffd.length < out.length) out = ffd.map(function(b){ return stickOf(b.items); });
   return { sticks: out, tooLong: tooLong };
+}
+function stickOf(items){
+  var used = items.reduce(function(a, it){ return a + it.len; }, 0) + KERF * Math.max(0, items.length - 1);
+  return { items: items, used: used, off: Math.max(0, STICK - used - (STICK - used > 0 ? KERF : 0)) };
 }
 function fmtIn(x){
   var w = Math.floor(x + 1e-9), n = Math.round((x - w) * 16); if (n === 16){ w++; n = 0; }
