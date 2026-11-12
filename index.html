@@ -231,6 +231,11 @@ td.chk.ro .box{width:26px;height:26px;border-width:2px;border-radius:7px;font-si
 td.chk.ro.on .box{background:var(--doneink)}
 body.weld .pcut{pointer-events:none}
 body.weld tr.tap{cursor:default}
+.wring{display:flex;align-items:center;justify-content:center;border-radius:50%;background:#E8590C;color:#fff}
+.wring svg{width:34px;height:34px}
+.bpnote{background:#FFF3E6;border:3px solid #E8590C;border-radius:16px;padding:12px 16px;margin:2px 2px 12px;font-weight:700;color:#5A2A08;font-size:17px;line-height:1.4}
+.bpnote b{display:block;font-size:20px;font-weight:900;color:#8A3205}
+table.sheet td.bp{box-shadow:inset 0 0 0 3px #E8590C;font-weight:900!important;color:#5A2A08}
 </style>
 </head><body>
 
@@ -264,7 +269,7 @@ body.weld tr.tap{cursor:default}
     <div class="prio" id="prioRest"></div>
     <h3 class="mgrh mgrh3">Fab times</h3>
     <p class="mgrnote">Time between ticks, with breaks over 25 minutes left out (overnight, weekends, lunch). It starts at the first tick, so the first cut's own time isn't counted.</p>
-    <div class="mgrwrap"><table class="mgr"><thead><tr><th>Job</th><th>Cut by</th><th>Cutting time</th><th>Assembled by</th><th>Assembly time</th><th>Welded by</th><th>Welding time</th><th>Dates</th></tr></thead><tbody id="mgrBody"></tbody></table></div>
+    <div class="mgrwrap"><table class="mgr"><thead><tr><th>Job</th><th>Cut by</th><th>Cutting time</th><th>Assembled by</th><th>Assembly time</th><th>Welded by</th><th>Dates</th></tr></thead><tbody id="mgrBody"></tbody></table></div>
   </section>
 
   <section id="job" hidden>
@@ -680,6 +685,8 @@ var PIN_KEY = 'ridgeway-crew-pin', PROG = 'shop-prog:', SUM = 'shop-sum:';
 // One source, two apps: Shop Cuts (saw + assembly tablets) and Shop Welds (the welder's tablet, built with WELD = true).
 // Welding is the last stage: Welding complete, signed off in Shop Welds, is what completes a job.
 var WELD = /*__WELD__*/false;
+// the welder signs off once per job; set this to true to bring back a Weld box on every rail tag
+var WELD_BOXES = false;
 // Weld progress is its own small record on the backend, 'prog:<file id>.w' (same format as the shop's; its 'fin' is the Welding complete
 // sign-off and its 'tl' the weld tick times). Only Shop Welds writes it, and Shop Welds never writes the shop's record.
 var WPROG = 'weld-prog:', WSUM = 'weld-sum:', UI = WELD ? 'weld-' : 'shop-';
@@ -690,7 +697,7 @@ function wId(id){ return id + '.w'; }
 var el = function(id){ return document.getElementById(id); };
 function esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 // a short notice at the bottom of the screen
-var VERSION = '11.12.558', toastT = null;
+var VERSION = '11.12.653', toastT = null;
 function toast(t){ var b = el('toast'); b.textContent = t; b.hidden = false; b.classList.remove('out'); clearTimeout(toastT); toastT = setTimeout(function(){ b.classList.add('out'); setTimeout(function(){ b.hidden = true; }, 400); }, 3200); }
 function msg(t, ok){ var m = el('msg'); m.hidden = !t; m.className = 'msg ' + (ok ? 'ok' : 'err'); m.textContent = t || ''; }
 function lsGet(k){ try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
@@ -842,13 +849,13 @@ function renderWeldList(box, have, done){
   var shop = info.filter(function(x){ return !(x.asm || x.ws.fin); });
   shownW = ready.concat(shop).map(function(x){ return x.f; });
   var card = function(x, i, isReady){
-    var f = x.f, on = have.indexOf(f.id) >= 0, pr = prioRank(f.id), st;
+    var f = x.f, on = have.indexOf(f.id) >= 0, pr = prioRank(f.id), st, inf = lsGet('shop-info:' + f.id), tag = inf && inf.label ? inf.label : '';
     if (x.ws.fin) st = '<span class="fin-tag">✓ Welded · ' + esc(x.ws.fin.by) + ' · ' + day(x.ws.fin.at) + '</span>';
-    else if (isReady) st = (x.ws.d ? '<span class="signoff">' + x.ws.d + ' of ' + x.ws.n + ' welded</span>' : 'Not started') + ' · assembled' + (x.asm.by ? ' by ' + esc(x.asm.by) : '') + ' ' + day(x.asm.at);
+    else if (isReady) st = (x.ws.d ? '<span class="signoff">' + x.ws.d + ' of ' + x.ws.n + ' welded</span>' : WELD_BOXES ? 'Not started' : '<span class="signoff">Ready to weld</span>') + ' · assembled' + (x.asm.by ? ' by ' + esc(x.asm.by) : '') + ' ' + day(x.asm.at);
     else st = 'Still in the shop · ' + jobStatus(x.s.total ? x.s : null) + (x.ws.d ? ' · ' + x.ws.d + ' welded' : '');
-    return '<button type="button" class="job' + (x.ws.fin ? ' done' : '') + (isReady ? '' : ' wait') + '" data-w="' + i + '">' + (isReady || x.ws.d ? ring(x.p) : '<span class="ring waitring" aria-hidden="true">…</span>') +
+    return '<button type="button" class="job' + (x.ws.fin ? ' done' : '') + (isReady ? '' : ' wait') + '" data-w="' + i + '">' + (x.ws.fin ? '<span class="ring donering" aria-hidden="true">✓</span>' : WELD_BOXES && (isReady || x.ws.d) ? ring(x.p) : isReady ? '<span class="ring wring" aria-hidden="true">' + SPARK + '</span>' : '<span class="ring waitring" aria-hidden="true">…</span>') +
       '<span class="t"><b>' + (pr < Infinity ? '<span class="pri">#' + (pr + 1) + '</span>' : '') + esc(f.name.replace(/\.xls[xm]$/i, '')) + '</b><span class="s">' + st + (on ? ' · <span class="offline">✓ on tablet</span>' : '') + '</span></span>' +
-      (x.ws.n ? '<span class="cnt"><b>' + x.ws.n + '</b>' + (x.ws.n === 1 ? 'Rail' : 'Rails') + '</span>' : '') + '</button>';
+      (tag ? '<span class="cnt' + (/^\d/.test(tag) ? '' : ' warn') + '">' + (/^(\d+) (.+)$/.test(tag) ? '<b>' + tag.replace(/ .*/, '') + '</b>' + esc(tag.replace(/^\d+ /, '')) : esc(tag)) + '</span>' : '') + '</button>';
   };
   box.innerHTML = (ready.length ? '<div class="prcard wcard"><div class="prhead"><span class="prflame" aria-hidden="true">' + SPARK + '</span>Ready to weld<span>· priority jobs first, then longest waiting</span></div>' + ready.map(function(x, i){ return card(x, i, true); }).join('') + '</div>'
       : '<div class="empty">Nothing is waiting on welding right now.</div>') +
@@ -1097,6 +1104,7 @@ function readUnits(sd){
 // block height from INPUT: B13 is the block height (38 5/16 standard), D13 an override, D14 the list when units differ
 var STD_BLOCK = 38.3125;
 function fmt16(v){ var n = Math.round(v * 16), w = Math.floor(n / 16), f = n % 16, g = 16; while (f && f % 2 === 0){ f /= 2; g /= 2; } return w + (f ? ' ' + f + '/' + g : ''); }
+function isTop(){ return !!(cur && /^top/i.test(String(cur.mount || '').trim())); }
 function readBlock(sd){
   var b13 = cellVal(sd, 13, 2), d13 = cellVal(sd, 13, 4), d14 = cellVal(sd, 14, 4);
   var num = function(v){ return typeof v === 'number' ? v : (v != null && String(v).trim() !== '' && !isNaN(+v) ? +v : null); };
@@ -1128,7 +1136,7 @@ function cutKeys(kind){
 }
 // welding: one box per rail tag on the Cut Sheet, kept by tag ('W|201.1') in the weld record
 function weldRows(it){
-  if (!it) return [];
+  if (!it || !WELD_BOXES) return [];
   var L = it.L, seen = {}, out = [];
   Object.keys(L.chk).forEach(function(k){
     var ck = L.chk[k]; if (!/rail tag/i.test(ck.head)) return;
@@ -1138,7 +1146,7 @@ function weldRows(it){
   return out.sort(function(a, b){ return a.row - b.row; });
 }
 function weldKeys(){ return weldRows(cutItem()).map(function(x){ return x.key; }); }
-function weldAll(){ var ks = weldKeys(); return ks.length > 0 && ks.every(function(k){ return cur.w.done[k]; }); }
+function weldAll(){ if (!WELD_BOXES) return true; var ks = weldKeys(); return ks.length > 0 && ks.every(function(k){ return cur.w.done[k]; }); }
 function allDone(keys){ return keys.length > 0 && keys.every(function(k){ return cur.done[k]; }); }
 function postsCutDone(){
   var it = cur && cur.items.filter(function(x){ return x.sh.name === 'POST SHEET'; })[0], sc = it && sheetSections(it).filter(function(s){ return s.label === 'Posts cut'; })[0];
@@ -1196,7 +1204,7 @@ function fmtIn(x){
 }
 function layoutRow(unit, ncols){
   var u = cur && cur.units[unit]; if (!u) return '';
-  var on = !!cur.open[unit];
+  var on = WELD ? cur.open[unit] !== false : !!cur.open[unit];
   var h = '<tr class="unitbar"><td colspan="' + ncols + '"><button type="button" class="laybtn" data-unit="' + esc(unit) + '" aria-expanded="' + on + '"><span class="lb' + (on ? ' on' : '') + '">' + (on ? '✓' : '') + '</span>Unit ' + esc(unit) + ' layout</button></td></tr>';
   if (on){ var svg = ''; try { svg = LAY.svg(u); } catch (e) { svg = '<div class="legend">Couldn’t draw this unit.</div>'; } h += '<tr class="layrow"><td colspan="' + ncols + '"><div class="layout">' + svg + '</div></td></tr>'; }
   return h;
@@ -1231,7 +1239,7 @@ function renderSheet(book, item, done){
     span[m.r1 + ':' + m.c1] = { rs: rs, cs: cs };
     L.rows.forEach(function(r){ L.cols.forEach(function(c){ if (r >= m.r1 && r <= m.r2 && c >= m.c1 && c <= m.c2 && !(r === m.r1 && c === m.c1)) skip[r + ':' + c] = 1; }); });
   });
-  var h = '<table class="sheet">';
+  var h = (WELD && isTop() && /^(CUT SHEET|POST SHEET)$/.test(sh.name) ? '<div class="bpnote"><b>Top mount · weld-on base plates</b>' + (sh.name === 'POST SHEET' ? 'Post lengths are in section 1. The plates to weld, and how many of each, are in section 3. The Cuts tab shows which plate goes on each rail end.' : 'The L Post and R Post columns show which base plate goes on each end of the rail. The Posts tab has the post lengths and the plate totals.') + '</div>' : '') + '<table class="sheet">';
   var isCut = sh.name === 'CUT SHEET' && cur && Object.keys(cur.units || {}).length, lastUnit = null;
   var hiSheet = /^(COVER|POST SHEET)$/.test(sh.name);
   // Cut Sheet: a black line between the float lengths (Left / Right) and the posts (L Post …), so the two groups read apart
@@ -1242,6 +1250,12 @@ function renderSheet(book, item, done){
   // Shop Welds: a Weld box in front of every rail tag; the shop's own boxes are shown small and can't be changed here
   var wmap = {}, wcol = false; if (WELD && sh.name === 'CUT SHEET' && cur) weldRows(item).forEach(function(x){ wmap[x.row] = x.key; wcol = true; });
   var NC = L.cols.length + (wcol ? 1 : 0);
+  // Shop Welds, top mount jobs: the base plate codes stand out (L Post / R Post on the Cut Sheet, the plate list on the Post Sheet)
+  var bpC = {}, bpFrom = Infinity, bpTo = Infinity;
+  if (WELD && isTop()){
+    if (sh.name === 'CUT SHEET' && L.hdr != null) L.cols.forEach(function(c){ if (/^[lr]\s*post$/i.test(L.txt(L.hdr, c).trim())) bpC[c] = 1; });
+    if (sh.name === 'POST SHEET') L.rows.forEach(function(r){ var t0 = L.txt(r, L.cols[0]); if (SEC_RE.test(t0)){ bpFrom = /bracket|plate/i.test(t0) ? r : Infinity; bpTo = Infinity; } else if (r > bpFrom && bpTo === Infinity && !t0) bpTo = r; });
+  }
   // sorted by top rail: rail rows reordered, every unit layout moved to the bottom in unit order
   var order = L.rows, sorted = false, unitsInOrder = [], stickHead = {};
   if (isCut && L.hdr != null){
@@ -1312,6 +1326,7 @@ function renderSheet(book, item, done){
       if (tick[c]) cls.push('cut');
       if (divC != null && c === divC && r >= L.hdr) cls.push('divl');
       if (c === L.cols[0] && L.hdr != null && r > L.hdr && floatTag[t.trim()]) cls.push('floatrail');
+      if (((bpC[c] && r > L.hdr) || (r > bpFrom && r < bpTo && c === L.cols[0] && !L.cols.some(function(cc){ return L.txt(r, cc) === '✓'; }))) && /[A-Za-z]/.test(t)) cls.push('bp');
       if (f && f.b) cls.push('b');
       if (cell && typeof cell.v === 'number') cls.push('num');
       if (xf && xf.h === 'center') cls.push('c');
@@ -1468,11 +1483,11 @@ function counts(it){
 function renderTabs(){
   el('tabs').innerHTML = cur.items.map(function(it, k){
     var c = counts(it);
-    return '<button type="button" class="tab' + (k === cur.tab ? ' on' : '') + (c.n && c.d === c.n ? ' full' : '') + '" data-tab="' + k + '" role="tab" aria-selected="' + (k === cur.tab) + '">' + esc(WELD && it.sh.name === 'CUT SHEET' ? 'Welds' : it.label) + (c.n ? '<small>' + c.d + '/' + c.n + '</small>' : '') + '</button>';
+    return '<button type="button" class="tab' + (k === cur.tab ? ' on' : '') + (c.n && c.d === c.n ? ' full' : '') + '" data-tab="' + k + '" role="tab" aria-selected="' + (k === cur.tab) + '">' + esc(WELD && WELD_BOXES && it.sh.name === 'CUT SHEET' ? 'Welds' : it.label) + (c.n ? '<small>' + c.d + '/' + c.n + '</small>' : '') + '</button>';
   }).join('');
   var tot = 0, dn = 0; cur.items.forEach(function(it){ var c = counts(it); tot += c.n; dn += c.d; });
-  el('jobBar').style.width = (tot ? Math.round(dn / tot * 100) : 0) + '%';
-  el('jobSub').textContent = WELD ? (tot ? dn + ' of ' + tot + ' welded' : 'Nothing to weld on this job') : (tot ? dn + ' of ' + tot + ' ticked' : 'Ready to fab');
+  el('jobBar').style.width = (WELD && !WELD_BOXES ? (cur.w.fin ? 100 : 0) : tot ? Math.round(dn / tot * 100) : 0) + '%';
+  el('jobSub').textContent = WELD && !WELD_BOXES ? (cur.w.fin ? 'Welded · ' + cur.w.fin.by : asmOK() ? 'Ready to weld' : 'Still in the shop') : WELD ? (tot ? dn + ' of ' + tot + ' welded' : 'Nothing to weld on this job') : (tot ? dn + ' of ' + tot + ' ticked' : 'Ready to fab');
 }
 function renderCur(){
   var it = cur.items[cur.tab];
@@ -1480,7 +1495,8 @@ function renderCur(){
   fitSheet();
   var c = counts(it);
   renderFin();
-  if (WELD) el('legend').innerHTML = c.n ? '<span>Tap a rail’s Weld box when it’s welded. Tap again to undo. The small boxes show what the shop has cut and assembled.</span>' : '<span>Here to look at. Welds are ticked on the Welds tab.</span>';
+  if (WELD && !WELD_BOXES) el('legend').innerHTML = '<span>This tablet is for looking: the small boxes show what the shop has cut and assembled. When the whole job is welded, sign off Welding complete.</span>';
+  else if (WELD) el('legend').innerHTML = c.n ? '<span>Tap a rail’s Weld box when it’s welded. Tap again to undo. The small boxes show what the shop has cut and assembled.</span>' : '<span>Here to look at. Welds are ticked on the Welds tab.</span>';
   else el('legend').innerHTML = it.view ? '<span>Totals for the job. Nothing to tick here.</span>' : (c.n ? '<span>Tap a box (or a row) when it’s cut. Tap again to undo.</span>' : '');
   renderTabs();
 }
@@ -1530,7 +1546,7 @@ el('sheet').addEventListener('click', function(e){
   }
   if (e.target.closest('[data-act="laysall"]')){ cur.showLays = !cur.showLays; var y2 = window.scrollY; renderCur(); window.scrollTo(0, y2); return; }
   var lb = e.target.closest('.laybtn');
-  if (lb){ var un = lb.getAttribute('data-unit'); cur.open[un] = !cur.open[un]; var y0 = window.scrollY; renderCur(); window.scrollTo(0, y0); return; }
+  if (lb){ var un = lb.getAttribute('data-unit'); cur.open[un] = !(WELD ? cur.open[un] !== false : cur.open[un]); var y0 = window.scrollY; renderCur(); window.scrollTo(0, y0); return; }
   var td = e.target.closest('td.chk'), tr = e.target.closest('tr[data-row]'), key = td ? td.getAttribute('data-key') : tr ? tr.getAttribute('data-row') : null;
   if (!key) return;
   var was = postsCutDone(), topWas = topRailsDone();
@@ -1560,7 +1576,12 @@ function openJob(f){
         var cutsTab = items.map(function(it){ return it.sh.name; }).indexOf('CUT SHEET');
         var ds = decodeProg(p); cur = { f: f, book: book, items: items, t: ds.t, done: ds.done, un: ds.un, tl: ds.tl, tla: ds.tla, fin: ds.fin, asm: ds.asm, finX: ds.finX, asmX: ds.asmX, w: wLoad(f.id), sort: WELD ? '' : (lsGet('shop-sort:' + f.id) || ''), tab: tab0 != null && tab0 < items.length && !WELD ? tab0 : (cutsTab >= 0 ? cutsTab : 0), units: {}, open: {} };
         var inSh = book.sheets.filter(function(s){ return s.name === 'INPUT'; })[0];
-        if (inSh) return parseSheet(book, inSh).then(function(sd){ cur.units = readUnits(sd); cur.block = readBlock(sd); return items; });
+        if (inSh) return parseSheet(book, inSh).then(function(sd){
+          cur.units = readUnits(sd); cur.block = readBlock(sd); cur.mount = cellVal(sd, 7, 2);
+          // top mount: the welder starts on the Post Sheet (post numbers and base plates)
+          if (WELD && isTop()){ var pi = items.map(function(it){ return it.sh.name; }).indexOf('POST SHEET'); if (pi >= 0) cur.tab = pi; }
+          return items;
+        });
         return items;
       }).then(function(items){
         el('jobName').textContent = f.name.replace(/\.xlsx$/i, '');
@@ -1597,7 +1618,7 @@ var STAGES = [
   { k: 'fin', kind: 'cut', title: 'Cutting complete', ask: 'Every top rail and channel is ticked. Who finished cutting?', un: 'Some top rail or channel boxes were unticked after cutting was signed off.' },
   { k: 'asm', kind: 'asm', title: 'Assembly complete', ask: 'Every rail tag is ticked. Who finished assembly?', un: 'Some rail tags were unticked after assembly was signed off.' }
 ];
-var WSTAGE = { k: 'wld', title: 'Welding complete', ask: 'Every rail is ticked. Who finished welding?', un: 'Some rails were unticked after welding was signed off.' };
+var WSTAGE = { k: 'wld', title: 'Welding complete', ask: WELD_BOXES ? 'Every rail is ticked. Who finished welding?' : 'Tap your name when this whole job is welded.', un: 'Some rails were unticked after welding was signed off.' };
 function asmOK(){ return !!(cur.asm || cur.f.late || isPreview()); }
 function stageCard(st, all, rec){
   var k = st.k;
@@ -1616,12 +1637,12 @@ function stageCard(st, all, rec){
 }
 function renderFin(){
   var box = el('fin'), ci = cutItem(), it = cur.items[cur.tab];
-  if (!ci || it !== ci){ box.hidden = true; return; }
+  if (!WELD && (!ci || it !== ci)){ box.hidden = true; return; }   // the weld tablet shows its sign-off under every tab
   var h = '', when = function(rec){ var at = new Date(rec.at); return esc(rec.by) + ' · ' + esc(at.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })) + ', ' + esc(at.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })); };
   if (WELD){
     var allW = weldAll();
     if (cur.w.fin || (allW && asmOK())) h = stageCard(WSTAGE, allW, cur.w.fin);
-    else if (allW) h = '<div class="fin"><div class="fh"><span class="fbox"></span><div><b>Waiting on Assembly complete</b><span>Every rail is welded. Once Assembly complete is signed off in Shop Cuts, Welding complete can be signed off here.</span></div></div></div>';
+    else if (allW) h = '<div class="fin"><div class="fh"><span class="fbox"></span><div><b>Still in the shop</b><span>Welding complete can be signed off here once Assembly complete is signed off in Shop Cuts.</span></div></div></div>';
   } else {
     STAGES.forEach(function(st){ var all = allDone(cutKeys(st.kind)); if (all || cur[st.k]) h += stageCard(st, all, cur[st.k]); });
     // welding is the last stage and is signed off on the weld tablet; here it only shows where the job is at
@@ -1754,12 +1775,12 @@ function renderMgr(){
   var rows = list.map(function(f){
     var p = loadProg(f.id), w = lsGet(WPROG + f.id) || {}, ft = fabTime(p, 'cut'), fa = fabTime(p, 'asm'), fw = fabTime(w, 'cut'), nm = esc(f.name.replace(/\.xls[xm]$/i, ''));
     var first = Math.min(ft.first || Infinity, fa.first || Infinity, fw.first || Infinity), last = Math.max(ft.last, fa.last, fw.last);
-    if (!ft.ticks && !fa.ticks && !fw.ticks && !p.fin && !p.asm && !w.fin) return { k: 0, h: '<tr><td>' + nm + '</td><td class="mut">Not started</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>' };
+    if (!ft.ticks && !fa.ticks && !fw.ticks && !p.fin && !p.asm && !w.fin) return { k: 0, h: '<tr><td>' + nm + '</td><td class="mut">Not started</td><td></td><td></td><td></td><td></td><td></td></tr>' };
     var who = function(rec, t){ return rec ? '✓ ' + esc(rec.by) : (t.ticks ? '<span class="mut">In progress</span>' : ''); }, tm = function(rec, t){ return '<td class="num"><b>' + (t.ticks || rec ? hm(t.active) : '') + '</b></td>'; };
-    return { k: w.fin ? 4 : p.asm ? 3 : p.fin ? 2 : 1, t: last, h: '<tr><td>' + nm + '</td><td>' + who(p.fin, ft) + '</td>' + tm(p.fin, ft) + '<td>' + who(p.asm, fa) + '</td>' + tm(p.asm, fa) + '<td>' + who(w.fin, fw) + '</td>' + tm(w.fin, fw) + '<td class="mut">' +
+    return { k: w.fin ? 4 : p.asm ? 3 : p.fin ? 2 : 1, t: last, h: '<tr><td>' + nm + '</td><td>' + who(p.fin, ft) + '</td>' + tm(p.fin, ft) + '<td>' + who(p.asm, fa) + '</td>' + tm(p.asm, fa) + '<td>' + who(w.fin, fw) + '</td><td class="mut">' +
       (first < Infinity ? day(first) + (day(first) !== day(last) ? ' – ' + day(last) : '') : '') + '</td></tr>' };
   }).sort(function(a, b){ return b.k - a.k || (b.t || 0) - (a.t || 0); });
-  el('mgrBody').innerHTML = rows.length ? rows.map(function(r){ return r.h; }).join('') : '<tr><td colspan="8" class="mut">No jobs in the list.</td></tr>';
+  el('mgrBody').innerHTML = rows.length ? rows.map(function(r){ return r.h; }).join('') : '<tr><td colspan="7" class="mut">No jobs in the list.</td></tr>';
 }
 // ---------- job priority (manager screen, works on a computer too) ----------
 function renderPrio(){
