@@ -236,6 +236,9 @@ body.weld tr.tap{cursor:default}
 .bpnote{background:#FFF3E6;border:3px solid #E8590C;border-radius:16px;padding:12px 16px;margin:2px 2px 12px;font-weight:700;color:#5A2A08;font-size:17px;line-height:1.4}
 .bpnote b{display:block;font-size:20px;font-weight:900;color:#8A3205}
 table.sheet td.bp{box-shadow:inset 0 0 0 3px #E8590C;font-weight:900!important;color:#5A2A08}
+table.sheet td.bp small.bpd{display:block;font-size:14px;font-weight:800;color:#8A3205;margin-top:2px;white-space:nowrap}
+.bpnote .bpkey{display:block;margin:4px 0 6px;font-size:16px;font-weight:700;color:#5A2A08}
+.bpnote .bpkey i{font-style:normal;font-weight:900;background:#E8590C;color:#fff;border-radius:6px;padding:0 6px;margin-right:3px}
 </style>
 </head><body>
 
@@ -697,7 +700,7 @@ function wId(id){ return id + '.w'; }
 var el = function(id){ return document.getElementById(id); };
 function esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 // a short notice at the bottom of the screen
-var VERSION = '11.12.737', toastT = null;
+var VERSION = '11.12.745', toastT = null;
 function toast(t){ var b = el('toast'); b.textContent = t; b.hidden = false; b.classList.remove('out'); clearTimeout(toastT); toastT = setTimeout(function(){ b.classList.add('out'); setTimeout(function(){ b.hidden = true; }, 400); }, 3200); }
 function msg(t, ok){ var m = el('msg'); m.hidden = !t; m.className = 'msg ' + (ok ? 'ok' : 'err'); m.textContent = t || ''; }
 function lsGet(k){ try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
@@ -1104,6 +1107,14 @@ function readUnits(sd){
 // block height from INPUT: B13 is the block height (38 5/16 standard), D13 an override, D14 the list when units differ
 var STD_BLOCK = 38.3125;
 function fmt16(v){ var n = Math.round(v * 16), w = Math.floor(n / 16), f = n % 16, g = 16; while (f && f % 2 === 0){ f /= 2; g /= 2; } return w + (f ? ' ' + f + '/' + g : ''); }
+// base plate codes in plain words: Cen = centred on the plate, Off = offset (post not centred), Rev = reverse offset.
+// Plates: 4x4 for 2x2 posts, 5x5 for the bigger posts (3x2 / 3x3).
+function bpDesc(code){
+  var c = String(code || '').trim(), big = /^(2x3|3x2|3x3)/i.test(c) || /^3x/i.test(String(cur && cur.post || '')), size = big ? '5x5' : '4x4';
+  if (!/^(E|EC|IC|Mid|Joint|T|W|2x3|3x2|3x3|6EP)\b/i.test(c)) return '';
+  var how = /-Rev-/i.test(c) ? 'reverse offset' : /-Off-/i.test(c) ? 'offset' : /-Cen\b/i.test(c) ? 'centred' : '';
+  return size + ' plate' + (how ? ' · ' + how : '');
+}
 function isTop(){ return !!(cur && /^top/i.test(String(cur.mount || '').trim())); }
 function readBlock(sd){
   var b13 = cellVal(sd, 13, 2), d13 = cellVal(sd, 13, 4), d14 = cellVal(sd, 14, 4);
@@ -1241,7 +1252,7 @@ function renderSheet(book, item, done){
     span[m.r1 + ':' + m.c1] = { rs: rs, cs: cs };
     L.rows.forEach(function(r){ L.cols.forEach(function(c){ if (r >= m.r1 && r <= m.r2 && c >= m.c1 && c <= m.c2 && !(r === m.r1 && c === m.c1)) skip[r + ':' + c] = 1; }); });
   });
-  var h = (WELD && isTop() && /^(CUT SHEET|POST SHEET)$/.test(sh.name) ? '<div class="bpnote"><b>Top mount · weld-on base plates</b>' + (sh.name === 'POST SHEET' ? 'Post lengths are in section 1. The plates to weld, and how many of each, are in section 3. The Cuts tab shows which plate goes on each rail end.' : 'The L Post and R Post columns show which base plate goes on each end of the rail. The Posts tab has the post lengths and the plate totals.') + '</div>' : '') + '<table class="sheet">';
+  var h = (WELD && isTop() && /^(CUT SHEET|POST SHEET)$/.test(sh.name) ? '<div class="bpnote"><b>Top mount · weld-on base plates</b><span class="bpkey"><i>Cen</i> centred on the plate · <i>Off</i> offset (post not centred) · <i>Rev</i> reverse offset · <i>L / R</i> left / right end of the rail · 4x4 plates for 2x2 posts, 5x5 for 3x2 / 3x3</span>' + (sh.name === 'POST SHEET' ? 'Post lengths are in section 1. The plates to weld, and how many of each, are in section 3. The Cuts tab shows which plate goes on each rail end.' : 'The L Post and R Post columns show which base plate goes on each end of the rail. The Posts tab has the post lengths and the plate totals.') + '</div>' : '') + '<table class="sheet">';
   var isCut = sh.name === 'CUT SHEET' && cur && Object.keys(cur.units || {}).length, lastUnit = null;
   var hiSheet = /^(COVER|POST SHEET)$/.test(sh.name);
   // Cut Sheet: a black line between the float lengths (Left / Right) and the posts (L Post …), so the two groups read apart
@@ -1334,7 +1345,8 @@ function renderSheet(book, item, done){
       if (xf && xf.h === 'center') cls.push('c');
       if ((xf && xf.wrap) || t.length > 22) cls.push('wrapcell');
       var style = (cell ? fillCss(book, cell.s) : '') + (f && f.rgb && /^FF[0-9A-F]{6}$/i.test(f.rgb) && f.rgb.slice(2).toUpperCase() !== '000000' ? 'color:#' + f.rgb.slice(2) + ';' : '');
-      h += '<td' + (cls.length ? ' class="' + cls.join(' ') + '"' : '') + (style ? ' style="' + style + '"' : '') + attr + '>' + (big ? measure(t) : esc(t)) + '</td>';
+      var bd = cls.indexOf('bp') >= 0 ? bpDesc(t) : '';
+      h += '<td' + (cls.length ? ' class="' + cls.join(' ') + '"' : '') + (style ? ' style="' + style + '"' : '') + attr + '>' + (big ? measure(t) : esc(t)) + (bd ? '<small class="bpd">' + esc(bd) + '</small>' : '') + '</td>';
     });
     h += '</tr>';
   });
@@ -1579,7 +1591,7 @@ function openJob(f){
         var ds = decodeProg(p); cur = { f: f, book: book, items: items, t: ds.t, done: ds.done, un: ds.un, tl: ds.tl, tla: ds.tla, fin: ds.fin, asm: ds.asm, finX: ds.finX, asmX: ds.asmX, w: wLoad(f.id), sort: WELD ? '' : (lsGet('shop-sort:' + f.id) || ''), tab: tab0 != null && tab0 < items.length && !WELD ? tab0 : (cutsTab >= 0 ? cutsTab : 0), units: {}, open: {} };
         var inSh = book.sheets.filter(function(s){ return s.name === 'INPUT'; })[0];
         if (inSh) return parseSheet(book, inSh).then(function(sd){
-          cur.units = readUnits(sd); cur.block = readBlock(sd); cur.mount = cellVal(sd, 7, 2);
+          cur.units = readUnits(sd); cur.block = readBlock(sd); cur.mount = cellVal(sd, 7, 2); cur.post = cellVal(sd, 10, 2);
           // top mount: the welder starts on the Post Sheet (post numbers and base plates)
           if (WELD && isTop()){ var pi = items.map(function(it){ return it.sh.name; }).indexOf('POST SHEET'); if (pi >= 0) cur.tab = pi; }
           return items;
