@@ -697,7 +697,7 @@ function wId(id){ return id + '.w'; }
 var el = function(id){ return document.getElementById(id); };
 function esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 // a short notice at the bottom of the screen
-var VERSION = '11.12.653', toastT = null;
+var VERSION = '11.12.737', toastT = null;
 function toast(t){ var b = el('toast'); b.textContent = t; b.hidden = false; b.classList.remove('out'); clearTimeout(toastT); toastT = setTimeout(function(){ b.classList.add('out'); setTimeout(function(){ b.hidden = true; }, 400); }, 3200); }
 function msg(t, ok){ var m = el('msg'); m.hidden = !t; m.className = 'msg ' + (ok ? 'ok' : 'err'); m.textContent = t || ''; }
 function lsGet(k){ try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
@@ -1202,9 +1202,11 @@ function fmtIn(x){
   var w = Math.floor(x + 1e-9), n = Math.round((x - w) * 16); if (n === 16){ w++; n = 0; }
   if (!n) return w + '"'; var d = 16; while (n % 2 === 0){ n /= 2; d /= 2; } return (w ? w + ' ' : '') + n + '/' + d + '"';
 }
+// unit layouts start closed, except on the weld tablet for top mount jobs (where the base plate orientation matters)
+function layOpen(unit){ return cur.open[unit] == null ? (WELD && isTop()) : !!cur.open[unit]; }
 function layoutRow(unit, ncols){
   var u = cur && cur.units[unit]; if (!u) return '';
-  var on = WELD ? cur.open[unit] !== false : !!cur.open[unit];
+  var on = layOpen(unit);
   var h = '<tr class="unitbar"><td colspan="' + ncols + '"><button type="button" class="laybtn" data-unit="' + esc(unit) + '" aria-expanded="' + on + '"><span class="lb' + (on ? ' on' : '') + '">' + (on ? '✓' : '') + '</span>Unit ' + esc(unit) + ' layout</button></td></tr>';
   if (on){ var svg = ''; try { svg = LAY.svg(u); } catch (e) { svg = '<div class="legend">Couldn’t draw this unit.</div>'; } h += '<tr class="layrow"><td colspan="' + ncols + '"><div class="layout">' + svg + '</div></td></tr>'; }
   return h;
@@ -1546,7 +1548,7 @@ el('sheet').addEventListener('click', function(e){
   }
   if (e.target.closest('[data-act="laysall"]')){ cur.showLays = !cur.showLays; var y2 = window.scrollY; renderCur(); window.scrollTo(0, y2); return; }
   var lb = e.target.closest('.laybtn');
-  if (lb){ var un = lb.getAttribute('data-unit'); cur.open[un] = !(WELD ? cur.open[un] !== false : cur.open[un]); var y0 = window.scrollY; renderCur(); window.scrollTo(0, y0); return; }
+  if (lb){ var un = lb.getAttribute('data-unit'); cur.open[un] = !layOpen(un); var y0 = window.scrollY; renderCur(); window.scrollTo(0, y0); return; }
   var td = e.target.closest('td.chk'), tr = e.target.closest('tr[data-row]'), key = td ? td.getAttribute('data-key') : tr ? tr.getAttribute('data-row') : null;
   if (!key) return;
   var was = postsCutDone(), topWas = topRailsDone();
