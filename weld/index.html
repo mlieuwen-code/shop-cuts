@@ -252,6 +252,49 @@ table.sheet td.bp svg.bpi.tall{height:70px}
 .modal.wask #modalText b.big{display:block;font-size:28px;margin-bottom:4px}
 .modal.wask .wjob{display:block;font-size:22px;font-weight:900;color:var(--deep);margin-bottom:12px}
 .modal.wask .wnames{display:flex;flex-wrap:wrap;gap:12px;margin-top:14px}
+/* ---------- Steady Hand (break game) ---------- */
+.gopen{text-align:center;margin:26px 0 0}
+.gopen .btn{background:var(--chip2);color:var(--muted);font-size:16px;min-height:48px}
+.gstat{flex-shrink:0;min-width:84px;padding:6px 14px;border-radius:16px;background:var(--tint2);color:var(--deep);text-align:center;line-height:1.1}
+.gstat span{display:block;font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.5px}
+.gstat b{display:block;font-size:26px;font-weight:900;font-variant-numeric:tabular-nums}
+.gcard{background:var(--card);border-radius:20px;padding:12px;box-shadow:0 2px 0 var(--line)}
+.ghead{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;padding:2px 6px 10px}
+.ghead b{font-size:20px;font-weight:900}
+#gHint{display:block;min-height:1.5em;padding:8px 6px 2px;color:var(--muted);font-weight:700;font-size:16px}
+.gstage{position:relative;border-radius:14px;overflow:hidden;background:#23262A;line-height:0}
+#gCanvas{display:block;width:100%;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.gres{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:16px;background:rgba(35,38,42,.82);color:#FFFDF9;text-align:center;line-height:1.3}
+.gres .gscore{font-size:64px;font-weight:900;line-height:1;font-variant-numeric:tabular-nums}
+.gres .ggrade{font-size:24px;font-weight:900}
+.gres .gparts{display:flex;gap:18px;flex-wrap:wrap;justify-content:center;font-size:16px;font-weight:700;opacity:.9}
+.gres .gnew{font-size:18px;font-weight:900;color:#FFC46B}
+.gres .btn{margin-top:8px;min-width:200px}
+.gres{overflow-y:auto;justify-content:safe center}
+.gboard{list-style:none;margin:4px 0;padding:0;width:min(420px,100%);font-size:18px;line-height:1.3}
+.gboard li{display:flex;gap:12px;padding:3px 12px;border-radius:8px;font-weight:700}
+.gboard li span{width:26px;text-align:right;opacity:.7}
+.gboard li b{flex:1;text-align:left;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gboard li i{font-style:normal;font-weight:900;font-variant-numeric:tabular-nums}
+.gboard li.me{background:#FFC46B;color:#2A2622}
+.gnames{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;align-items:center;max-width:640px}
+.gnames .btn{min-width:0;margin-top:0;min-height:46px}
+.gnames input{min-height:46px;border-radius:14px;border:0;padding:0 14px;font-size:17px;font-weight:700;width:150px;background:#FFFDF9;color:#2A2622}
+.gnames .ghost{color:#FFFDF9}
+.ghead{align-items:center}
+.ghead .btn{min-height:40px;font-size:15px;padding:0 14px}
+.gwho{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:center;font-size:17px;font-weight:800}
+.gwho .btn{min-width:0;margin-top:0;min-height:44px}
+.gtiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;width:100%;max-width:900px}
+.gtile{border:0;border-radius:12px;padding:8px 10px;background:rgba(255,253,249,.12);color:#FFFDF9;text-align:left;line-height:1.25;display:grid;grid-template-columns:auto 1fr;column-gap:8px}
+.gtile b{grid-row:span 2;font-size:26px;font-weight:900;align-self:center;min-width:26px;text-align:center}
+.gtile span{font-size:15px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gtile i{font-style:normal;font-size:14px;font-weight:700;opacity:.8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gtile.day{background:#FFC46B;color:#2A2622}
+.gpace{display:flex;align-items:center;gap:12px;padding:12px 6px 4px;font-size:14px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;white-space:nowrap}
+.gbar{position:relative;flex:1;height:18px;border-radius:9px;background:var(--chip2)}
+.gzone{position:absolute;left:45%;width:10%;top:0;bottom:0;background:var(--done);border-left:2px solid var(--doneink);border-right:2px solid var(--doneink)}
+.gneedle{position:absolute;top:-5px;bottom:-5px;width:6px;margin-left:-3px;border-radius:3px;background:var(--ink);left:0}
 </style>
 </head><body>
 
@@ -271,7 +314,19 @@ table.sheet td.bp svg.bpi.tall{height:70px}
     <div class="hello"><h1>Ready to fab</h1><p>Pick a job. Tick things off as they’re cut.</p></div>
     <div id="listNote" class="note" hidden></div>
     <div id="jobs" class="jobs"><div class="empty">Loading jobs…</div></div>
+    <div class="gopen"><button type="button" class="btn" id="gOpen"><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1l2.6 8.4L23 12l-8.4 2.6L12 23l-2.6-8.4L1 12l8.4-2.6z" fill="currentColor"/></svg>Steady Hand · break game</button></div>
     <p class="ver" id="ver"></p>
+  </section>
+
+  <section id="game" hidden>
+    <div class="apphead"><button type="button" class="round" id="gBack" aria-label="Back to the job list"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2A2622" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button>
+      <div class="ttl"><div class="eyebrow">Break game</div><h2>Steady Hand</h2></div>
+      <div class="gstat"><span>Total</span><b id="gTotal">0</b></div><div class="gstat"><span>Best</span><b id="gBest">–</b></div></div>
+    <div class="gcard">
+      <div class="ghead"><b id="gJoint"></b><span id="gHint"></span><span style="flex:1"></span><button type="button" class="btn" id="gBoard">Leaderboard</button></div>
+      <div class="gstage"><canvas id="gCanvas"></canvas><div class="gres" id="gRes" hidden></div></div>
+      <div class="gpace" aria-hidden="true"><span>Too slow</span><div class="gbar"><i class="gzone"></i><i class="gneedle" id="gNeedle"></i></div><span>Too fast</span></div>
+    </div>
   </section>
 
   <section id="mgr" hidden>
@@ -713,7 +768,7 @@ function wId(id){ return id + '.w'; }
 var el = function(id){ return document.getElementById(id); };
 function esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 // a short notice at the bottom of the screen
-var VERSION = '11.12.916', toastT = null;
+var VERSION = '11.12.1440', toastT = null;
 function toast(t){ var b = el('toast'); b.textContent = t; b.hidden = false; b.classList.remove('out'); clearTimeout(toastT); toastT = setTimeout(function(){ b.classList.add('out'); setTimeout(function(){ b.hidden = true; }, 400); }, 3200); }
 function msg(t, ok){ var m = el('msg'); m.hidden = !t; m.className = 'msg ' + (ok ? 'ok' : 'err'); m.textContent = t || ''; }
 function lsGet(k){ try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
@@ -2026,5 +2081,306 @@ if ('serviceWorker' in navigator) window.addEventListener('load', function(){
 window.__shop = { parseBook: parseBook, shopSheets: shopSheets, layout: layout, renderSheet: renderSheet, show: show, printArea: printArea };
 })();
 
+</script>
+<script>
+// ---------- Steady Hand: a break game for the weld tablet. Stands on its own: nothing here touches jobs, sign-offs or Drive. ----------
+(function(){
+  var $ = function(id){ return document.getElementById(id); };
+  var sec = $('game'), cv = $('gCanvas'), opener = $('gOpen'); if (!sec || !cv || !opener) return;
+  var ctx = cv.getContext('2d'), W = 0, H = 0, PAD = 60, BOARD = 'weld-game-board', CREW = ['Ian', 'Chris', 'Dave', 'Jim', 'Matt'], K = 1, BAND = .1, redo = null;
+  cv.parentNode.parentNode.appendChild($('gHint'));   // the hint sits under the plate, so changing it never moves the plate under a finger
+  var calm = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // each joint: f(t, w, h) gives the seam from t = 0 to 1 inside a w x h box; secs is the travel time that scores full marks
+  var JOINTS = [
+    { name: 'Flat seam', secs: 5, f: function(t, w, h){ return [t * w, h / 2]; } },
+    { name: 'Curved top rail', secs: 5.5, f: function(t, w, h){ return [t * w, h / 2 + h * .34 * Math.sin(t * Math.PI * 2)]; } },
+    { name: 'Base plate corner', down: true, secs: 5.5, f: function(t, w, h){ var a = w * .8, tot = a + h * .8, d = t * tot; return d < a ? [d, h * .1] : [a, h * .1 + (d - a)]; } },
+    { name: 'Round post', closed: true, secs: 6.5, f: function(t, w, h){ var r = Math.min(w, h) / 2, a = -Math.PI / 2 + t * Math.PI * 1.9; return [w / 2 + r * Math.cos(a), h / 2 + r * Math.sin(a)]; } },
+    { name: 'Picket run', secs: 7, f: function(t, w, h){ return [t * w, h / 2 + h * .36 * Math.sin(t * Math.PI * 5)]; } },
+    { name: 'Stair stringer', secs: 6.5, f: function(t, w, h){ var a = w / 4, b = h / 3, d = t * (w + h), k; for (k = 0; k < 4; k++){ if (d <= a) return [k * a + d, k * b]; d -= a; if (k < 3){ if (d <= b) return [(k + 1) * a, k * b + d]; d -= b; } } return [w, h]; } },
+    { name: 'Base plate, all round', closed: true, secs: 8, f: function(t, w, h){ var x0 = w * .15, bw = w * .7, d = t * (2 * bw + 2 * h) * .97; if (d <= bw) return [x0 + d, 0]; d -= bw; if (d <= h) return [x0 + bw, d]; d -= h; if (d <= bw) return [x0 + bw - d, h]; d -= bw; return [x0, h - d]; } },
+    { name: 'Tightening wave', secs: 8, f: function(t, w, h){ return [t * w, h / 2 + h * .36 * Math.sin(Math.PI * 2 * (t + 2.5 * t * t))]; } },
+    { name: 'Scroll', closed: true, secs: 9, f: function(t, w, h){ var a = t * Math.PI * 4.5 - Math.PI / 2, r = 1 - .75 * t, ry = h / 2, rx = Math.min(w / 2, ry * 1.7); return [w / 2 + rx * r * Math.cos(a), h / 2 + ry * r * Math.sin(a)]; } },
+    { name: 'Figure eight', closed: true, secs: 9, f: function(t, w, h){ var a = t * Math.PI * 2 * .96; return [w / 2 + w * .46 * Math.sin(a), h / 2 + h / 2 * Math.sin(2 * a)]; } }
+  ];
+  // today's joint: a seam made from the date, the same all day on this tablet and a new one tomorrow, with its own record
+  var DAY = (function(){ var d = new Date(); return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate(); })();
+  JOINTS.push((function(){
+    var r = DAY % 2147483647, rnd = function(){ r = r * 48271 % 2147483647; return r / 2147483647; }, a = [], i;
+    for (i = 0; i < 3; i++) a.push([.5 + rnd() * (1 + i * 1.5), rnd() * 6.28, (.34 - i * .09) * (.6 + rnd() * .4)]);
+    return { name: 'Today’s joint', daily: true, secs: 7, f: function(t, w, h){ var y = 0, k; for (k = 0; k < 3; k++) y += a[k][2] * Math.sin(a[k][0] * t * 6.28 + a[k][1]); return [t * w, h / 2 + h * .6 * y]; } };
+  })());
+  var lvl = 0, scores = [], P = [], L = [], total = 1, v0 = 1, RUN = 10, D = 0, mode = 'run', who = '', zoneT = 0, zoneBest = 0, fb = '';
+  var prog, welding, over, spd, lastAdv, accSum, paceSum, dots, sparks, fx, fy, raf = 0, lastFrame = 0, tex = null, tex2 = null, part = null, hole = null, breakT = 0;
+  // one bead ripple, drawn once and stamped along the weld: bright for a good bead, sooty where it left the seam
+  function sprite(a, b, c){
+    var s = document.createElement('canvas'), m = s.getContext('2d'), g; s.width = s.height = 64;
+    g = m.createRadialGradient(23, 21, 2, 32, 32, 31); g.addColorStop(0, a); g.addColorStop(.5, b); g.addColorStop(1, c);
+    m.fillStyle = g; m.beginPath(); m.arc(32, 32, 30, 0, 7); m.fill(); m.strokeStyle = 'rgba(0,0,0,.4)'; m.lineWidth = 2.5; m.stroke(); return s;
+  }
+  var GOOD = sprite('#FFFFFF', '#C6CCD2', '#727A82'), BAD = sprite('#A39A92', '#5E544D', '#2B2623');
+  // the plate: brushed aluminum, made once per size from a soft gradient, thousands of fine brush lines and a couple of light bands
+  function metal(v){
+    var c = document.createElement('canvas'), m = c.getContext('2d'), w = c.width = cv.width, h = c.height = cv.height, i, g;
+    g = m.createLinearGradient(0, 0, 0, h); g.addColorStop(0, '#CDD2D7'); g.addColorStop(.4, '#AEB4BA'); g.addColorStop(.6, '#BCC2C8'); g.addColorStop(1, '#969CA3');
+    m.fillStyle = g; m.fillRect(0, 0, w, h);
+    for (i = 0; i < h * 7; i++){ var len = w * (.1 + Math.random() * .6); m.globalAlpha = .03 + Math.random() * .1; m.fillStyle = Math.random() < .5 ? '#FFFFFF' : '#2F353B'; if (v) m.fillRect(Math.random() * w, Math.random() * h - len / 2, 1, len); else m.fillRect(Math.random() * w - len / 2, Math.random() * h, len, 1); }
+    m.globalAlpha = 1; g = m.createLinearGradient(0, 0, w, h * .4);
+    g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(.28, 'rgba(255,255,255,.28)'); g.addColorStop(.45, 'rgba(255,255,255,0)'); g.addColorStop(.72, 'rgba(0,0,0,.12)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+    m.fillStyle = g; m.fillRect(0, 0, w, h);
+    g = m.createRadialGradient(w / 2, h / 2, Math.min(w, h) * .45, w / 2, h / 2, Math.max(w, h) * .75); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,.28)');
+    m.fillStyle = g; m.fillRect(0, 0, w, h);
+    if (v){ m.fillStyle = 'rgba(255,255,255,.16)'; m.fillRect(0, 0, w, h); }   // the second piece: grain running the other way, a shade lighter
+    return c;
+  }
+
+  function esc(s){ return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+  function get(k, d){ try { var v = JSON.parse(localStorage.getItem(BOARD + k)); return v == null ? d : v; } catch (e) { return d; } }
+  function put(k, v){ try { localStorage.setItem(BOARD + k, JSON.stringify(v)); } catch (e) {} }
+  // sound: an arc buzz that roughens when the bead leaves the seam, a ding for a good joint, a clang when one lets go
+  var AC = null, buzz = null, mute = get('-mute', false);
+  function audio(){
+    if (AC){ if (AC.state === 'suspended') AC.resume(); return; } if (mute) return;
+    try { var A = window.AudioContext || window.webkitAudioContext, o, o2, g; AC = new A(); o = AC.createOscillator(); o2 = AC.createOscillator(); g = AC.createGain(); o.type = 'sawtooth'; o.frequency.value = 110; o2.type = 'square'; o2.frequency.value = 57; g.gain.value = 0; o.connect(g); o2.connect(g); g.connect(AC.destination); o.start(); o2.start(); buzz = { o: o, g: g }; } catch (e) { AC = null; }
+  }
+  function hum(on, rough){ if (!buzz) return; try { buzz.g.gain.setTargetAtTime(on && !mute ? .05 : 0, AC.currentTime, .03); buzz.o.frequency.setTargetAtTime(rough ? 70 + Math.random() * 60 : 110, AC.currentTime, .02); } catch (e) {} }
+  function tone(f, dur, type, vol){ if (!AC || mute) return; try { var o = AC.createOscillator(), g = AC.createGain(); o.type = type || 'sine'; o.frequency.value = f; g.gain.setValueAtTime(vol || .12, AC.currentTime); g.gain.exponentialRampToValueAtTime(.001, AC.currentTime + dur); o.connect(g); g.connect(AC.destination); o.start(); o.stop(AC.currentTime + dur); } catch (e) {} }
+  function shake(p){ try { if (!mute && navigator.vibrate) navigator.vibrate(p); } catch (e) {} }
+  // the leaderboard: the ten best full runs, kept on this tablet
+  function board(){ try { var b = JSON.parse(localStorage.getItem(BOARD) || '[]'); return Array.isArray(b) ? b : []; } catch (e) { return []; } }
+  function best(){ var b = board(); return b.length ? b[0].s : 0; }
+  function addScore(name, s){ var b = board(), row = { n: name, s: s, t: Date.now() }; b.push(row); b.sort(function(x, y){ return y.s - x.s || x.t - y.t; }); b = b.slice(0, 10); try { localStorage.setItem(BOARD, JSON.stringify(b)); } catch (e) {} return b.indexOf(row); }
+  // names to tap: the crew, then anyone else who has put a score up on this tablet
+  function others(){ try { var o = JSON.parse(localStorage.getItem(BOARD + '-names') || '[]'); return Array.isArray(o) ? o : []; } catch (e) { return []; } }
+  function names(){ return CREW.concat(others().filter(function(n){ return CREW.indexOf(n) < 0; })).slice(0, 9); }
+  function remember(n){ if (names().indexOf(n) >= 0) return; try { localStorage.setItem(BOARD + '-names', JSON.stringify(others().concat([n]))); } catch (e) {} }
+  // mine: the row to light up (-1 = that run missed the top ten); after: what the button does once a run is over
+  function showBoard(mine, after){
+    var b = board(), R = $('gRes');
+    R.innerHTML = '<div class="ggrade">Leaderboard · this tablet</div>' + (b.length ? '<ol class="gboard">' + b.map(function(r, i){ return '<li' + (i === mine ? ' class="me"' : '') + '><span>' + (i + 1) + '</span><b>' + esc(r.n) + '</b><i>' + r.s + '</i></li>'; }).join('') + '</ol>' : '<div class="gparts">No runs yet. Finish all ' + RUN + ' joints to get on the board.</div>') +
+      (mine === -1 ? '<div class="gparts">That run didn’t make the top ten.</div>' : '') + '<button type="button" class="btn pri" id="gNext">' + (after ? 'Joints' : 'Close') + '</button>';
+    R.hidden = false; $('gNext').onclick = after || function(){ if (redo) redo(); else R.hidden = true; };
+  }
+  function sum(){ return scores.reduce(function(a, b){ return a + b; }, 0); }
+  function hud(){
+    $('gTotal').textContent = mode === 'run' ? sum() : (scores.length ? scores[scores.length - 1] : 0); $('gTotal').previousSibling.textContent = mode === 'run' ? 'Total' : 'Score'; $('gBest').textContent = best() || '–';
+    var r = get('-rec', {})[JOINTS[lvl].daily ? 'd' + DAY : 'j' + lvl];
+    $('gJoint').textContent = (mode === 'run' ? 'Joint ' + (lvl + 1) + ' of ' + RUN + ' · ' : '') + JOINTS[lvl].name + (r ? ' · record ' + r.s + ' ' + r.n : ' · no record yet');
+  }
+  function hint(t){ $('gHint').textContent = t; }
+
+  function fit(){
+    var w = Math.round(cv.parentNode.clientWidth); if (!w) return;
+    var h = Math.round(Math.max(260, Math.min(window.innerHeight - 300, w * .55))), dpr = Math.min(2, window.devicePixelRatio || 1);
+    if (w === W && h === H && tex) return;
+    W = w; H = h; cv.style.height = h + 'px'; cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    PAD = Math.max(44, Math.min(80, w * .07)); tex = metal(); tex2 = metal(true);
+  }
+  function startJoint(){
+    fit();
+    var J = JOINTS[lvl], n = 500, i, p;
+    if (mode === 'one') scores = [];
+    zoneT = 0; zoneBest = 0; fb = ''; D = J.daily ? 5 : lvl;
+    P = []; L = [0];
+    for (i = 0; i <= n; i++){ p = J.f(i / n, W - 2 * PAD, H - 2 * PAD); P.push([p[0] + PAD, p[1] + PAD]); if (i) L.push(L[i - 1] + Math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1])); }
+    total = L[n] || 1; v0 = total / J.secs;
+    // every joint is pickier than the last: tighter to the seam (K), a narrower speed band (BAND), and a shorter leash before the arc breaks
+    K = 1 - D * .045; BAND = .1 - D * .005; redo = null;
+    var z = sec.querySelector('.gzone'); z.style.left = (1 - BAND) * 50 + '%'; z.style.width = BAND * 100 + '%';
+    prog = 0; welding = false; over = false; spd = 0; accSum = 0; paceSum = 0; dots = []; sparks = []; breakT = 0;
+    // the second piece of metal: the part inside a closed seam (a post, a base plate), or everything on the far side of an open one
+    var cut = function(paint){
+      var q = document.createElement('canvas'), m = q.getContext('2d'), e = P[n]; q.width = cv.width; q.height = cv.height; m.setTransform(cv.width / W, 0, 0, cv.height / H, 0, 0);
+      m.beginPath(); m.moveTo(P[0][0], P[0][1]); for (i = 1; i <= n; i++) m.lineTo(P[i][0], P[i][1]);
+      if (!J.closed){ if (J.down){ m.lineTo(e[0], H); m.lineTo(W, H); } else m.lineTo(W, e[1]); m.lineTo(W, 0); m.lineTo(0, 0); m.lineTo(0, P[0][1]); }
+      m.closePath(); m.clip(); paint(m); return q;
+    };
+    part = cut(function(m){ m.drawImage(tex2, 0, 0, W, H); });
+    hole = cut(function(m){ m.fillStyle = '#15171A'; m.fillRect(0, 0, W, H); });
+    $('gRes').hidden = true; hud(); hint('Press the green dot and drag along the seam. Keep the needle in the green. Stray, stall or lift and the arc breaks.');
+  }
+  // the front page of the game: who's welding, the full run, and every joint with its record and whose name is on it
+  function home(){
+    welding = false; over = true; redo = home; hum(false);
+    var r = get('-rec', {}), R = $('gRes');
+    R.innerHTML = '<div class="gwho">Welder <button type="button" class="btn" id="gWho">' + esc(who) + ' ▾</button><button type="button" class="btn" id="gMute">' + (mute ? 'Sound off' : 'Sound on') + '</button></div>' +
+      '<button type="button" class="btn pri" id="gRun">Full run · ' + RUN + ' joints for the leaderboard</button>' +
+      '<div class="gparts">Or take a shot at one joint. Beat the record and your name goes on it.</div><div class="gtiles">' +
+      JOINTS.map(function(J, i){ var x = r[J.daily ? 'd' + DAY : 'j' + i]; return '<button type="button" class="gtile' + (J.daily ? ' day' : '') + '" data-gj="' + i + '"><b>' + (J.daily ? '★' : i + 1) + '</b><span>' + esc(J.name) + '</span><i>' + (x ? x.s + ' · ' + esc(x.n) : 'no record yet') + '</i></button>'; }).join('') + '</div>';
+    R.hidden = false; $('gJoint').textContent = 'Pick a joint'; hint('');
+    $('gWho').onclick = pickWho; $('gMute').onclick = function(){ mute = !mute; put('-mute', mute); home(); };
+    $('gRun').onclick = function(){ mode = 'run'; newGame(); };
+    Array.prototype.forEach.call(R.querySelectorAll('[data-gj]'), function(b){ b.onclick = function(){ mode = 'one'; lvl = +b.getAttribute('data-gj'); startJoint(); }; });
+  }
+  function pickWho(){
+    var R = $('gRes'); over = true; redo = pickWho;
+    R.innerHTML = '<div class="ggrade">Who’s welding?</div><div class="gnames">' + names().map(function(n){ return '<button type="button" class="btn" data-gn="' + esc(n) + '">' + esc(n) + '</button>'; }).join('') + '<input id="gName" type="text" maxlength="16" placeholder="Other name" aria-label="Other name" autocomplete="off"><button type="button" class="btn pri" id="gSave">OK</button></div>';
+    R.hidden = false;
+    var set = function(n){ n = String(n || '').trim().slice(0, 16); if (!n) return $('gName').focus(); remember(n); who = n; put('-who', n); home(); };
+    Array.prototype.forEach.call(R.querySelectorAll('[data-gn]'), function(b){ b.onclick = function(){ set(b.getAttribute('data-gn')); }; });
+    $('gSave').onclick = function(){ set($('gName').value); };
+  }
+  function newGame(){ lvl = 0; scores = []; startJoint(); }
+
+  // picky on purpose: full marks within 4px of the seam, nothing past 24; full marks only from 90% to 110% of the target travel speed
+  function accScore(d){ d /= K; return d <= 4 ? 1 : d >= 24 ? 0 : 1 - (d - 4) / 20; }
+  function paceScore(r){ var lo = 1 - BAND, hi = 1 + BAND; return r >= lo && r <= hi ? 1 : r < lo ? Math.max(0, (r - lo + .3) / .3) : Math.max(0, 1 - (r - hi) / .4); }
+
+  function pos(e){ var b = cv.getBoundingClientRect(); return [e.clientX - b.left, e.clientY - b.top]; }
+  function advance(x, y){
+    var now = performance.now(), i, d, bd = 1e9, bi = prog;
+    fx = x; fy = y;
+    // only look a short way ahead along the seam, so a bead can't jump across a curve or a corner
+    for (i = prog; i < P.length && L[i] - L[prog] <= 140; i++){ d = Math.hypot(P[i][0] - x, P[i][1] - y); if (d < bd){ bd = d; bi = i; } }
+    if (bd > 45 - D * 1.5){ finish('Off the seam'); return; }
+    if (bi > prog){
+      var dl = L[bi] - L[prog], dt = Math.max(4, now - lastAdv);
+      spd += (dl / dt * 1000 - spd) * Math.min(1, dt / 180);
+      var a1 = accScore(bd), p1 = paceScore(spd / v0);
+      accSum += dl * a1; paceSum += dl * p1; hum(true, a1 < 1);
+      // dialed in: dead on the seam and in the green at the same time; otherwise say what's wrong, up where the finger isn't covering it
+      if (a1 === 1 && p1 === 1){ if (!zoneT) zoneT = now; zoneBest = Math.max(zoneBest, now - zoneT); } else { zoneT = 0; fb = a1 < 1 && a1 <= p1 ? 'OFF THE SEAM' : spd < v0 ? 'TOO SLOW' : 'TOO FAST'; }
+      prog = bi; lastAdv = now; hint('');
+    }
+    var last = dots[dots.length - 1];
+    if (!last || Math.hypot(last.x - x, last.y - y) >= 6) dots.push({ x: x, y: y, r: Math.max(6, Math.min(18, 11 / Math.sqrt(Math.max(.2, spd / v0)))), off: bd > 12 * K, t: now });
+    if (!calm) for (i = 0; i < 2; i++){ var a = Math.random() * Math.PI * 2, v = 60 + Math.random() * 220; sparks.push({ x: x, y: y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 80, t: now, life: 250 + Math.random() * 350 }); }
+    if (prog >= P.length - 1) finish();
+  }
+  function finish(why){
+    if (over) return;
+    welding = false; over = true;
+    var cov = L[prog] / total, acc = prog ? accSum / L[prog] : 0, pace = prog ? paceSum / L[prog] : 0, s = Math.round(100 * cov * acc * pace);   // the three multiply: one weak spot drags the whole joint down
+    scores.push(s);
+    var lastJoint = mode === 'run' && lvl === RUN - 1, tot = sum(), record = lastJoint && tot > best();
+    // the joint's own record: anyone can take it, in a full run or a one-off
+    var key = JOINTS[lvl].daily ? 'd' + DAY : 'j' + lvl, recs = get('-rec', {}), old = recs[key], took = s > 0 && (!old || s > old.s);
+    if (took){ recs[key] = { s: s, n: who }; put('-rec', recs); }
+    var rank = lastJoint ? addScore(who, tot) : -2;
+    var broke = s < 35, grade = (why || (cov < .98 ? 'Arc broke' : s >= 85 ? 'Stack of dimes' : s >= 65 ? 'Solid bead' : s >= 50 ? 'It’ll hold' : s >= 35 ? 'Barely holding' : 'No fusion')) + (broke ? ' · it broke apart' : '');
+    var pc = function(x){ return Math.round(x * 100) + '%'; };
+    redo = function(){
+    $('gRes').innerHTML = '<div class="gscore">' + s + '</div><div class="ggrade">' + grade + '</div>' +
+      '<div class="gparts"><span>On the seam ' + pc(acc) + '</span><span>Travel speed ' + pc(pace) + '</span><span>Welded ' + pc(cov) + '</span><span>Dialed in ' + (zoneBest / 1000).toFixed(1) + 's</span></div>' +
+      (took ? '<div class="gnew">' + (old && old.n !== who ? 'Joint record — you took it from ' + esc(old.n) : old ? 'You beat your own record' : 'First record on this joint') + '</div>' : old ? '<div class="gparts">Record ' + old.s + ' · ' + esc(old.n) + (old.s - s <= 5 ? ' · so close' : '') + '</div>' : '') +
+      (lastJoint ? '<div class="ggrade">Total ' + tot + ' of ' + RUN * 100 + '</div>' + (record ? '<div class="gnew">New best run on this tablet</div>' : '') : '') +
+      '<div class="gnames"><button type="button" class="btn pri" id="gNext">' + (mode === 'one' ? 'Again' : lastJoint ? 'Leaderboard' : 'Next joint') + '</button><button type="button" class="btn ghost" id="gHome">' + (mode === 'run' && !lastJoint ? 'Quit run' : 'Joints') + '</button></div>';
+    $('gRes').hidden = false; $('gHome').onclick = home;
+    $('gNext').onclick = mode === 'one' ? function(){ startJoint(); } : lastJoint ? function(){ redo = function(){ showBoard(rank, home); }; redo(); } : function(){ lvl++; startJoint(); };
+    };
+    // under 35 the weld lets go: the pieces come apart first, then the score shows
+    if (broke){ breakT = performance.now(); var me = redo; setTimeout(function(){ if (redo === me) me(); }, 1700); } else redo();
+    hum(false);
+    if (broke){ tone(90, .5, 'sawtooth', .2); tone(63, .7, 'square', .15); shake([60, 40, 140]); } else { tone(s >= 85 ? 880 : 520, .18); if (s >= 85) setTimeout(function(){ tone(1320, .35); }, 140); }
+    if (took) setTimeout(function(){ tone(1760, .45); shake(80); }, 320);
+    hud(); hint(broke ? 'The weld let go.' : '');
+  }
+
+  cv.addEventListener('pointerdown', function(e){
+    if (over || welding || !P.length) return;
+    var p = pos(e), at = P[prog];
+    if (Math.hypot(p[0] - at[0], p[1] - at[1]) > 36){ hint(prog ? 'Pick the bead up where it stopped.' : 'Start on the green dot.'); return; }
+    e.preventDefault(); try { cv.setPointerCapture(e.pointerId); } catch (err) {}
+    welding = true; lastAdv = performance.now(); if (!prog) spd = v0 * .8; advance(p[0], p[1]);
+  });
+  cv.addEventListener('pointermove', function(e){ if (!welding) return; e.preventDefault(); var p = pos(e); advance(p[0], p[1]); });
+  // lifting off breaks the arc: the joint is scored on what got welded
+  var lift = function(){ if (welding) finish(); };
+  cv.addEventListener('pointerup', lift); cv.addEventListener('pointercancel', lift);
+  cv.addEventListener('contextmenu', function(e){ e.preventDefault(); });
+
+  // the spool gun that follows the finger: the wire tip sits on the touch point and the gun leans back up and to the left, clear of the hand
+  function gun(){
+    var g;
+    ctx.save(); ctx.translate(fx, fy); ctx.rotate(-2.18); ctx.scale(1, -1); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    ctx.shadowColor = 'rgba(0,0,0,.35)'; ctx.shadowBlur = 14; ctx.shadowOffsetY = 8;
+    // welding lead trailing out of the grip
+    ctx.beginPath(); ctx.moveTo(190, 96); ctx.quadraticCurveTo(205, 170, 290, 190); ctx.strokeStyle = '#141619'; ctx.lineWidth = 11; ctx.stroke();
+    // grip and trigger
+    ctx.beginPath(); ctx.moveTo(150, 14); ctx.lineTo(188, 14); ctx.lineTo(208, 96); ctx.lineTo(172, 102); ctx.closePath(); ctx.fillStyle = '#191B1F'; ctx.fill();
+    ctx.beginPath(); ctx.moveTo(136, 16); ctx.lineTo(150, 16); ctx.lineTo(152, 42); ctx.lineTo(141, 36); ctx.closePath(); ctx.fillStyle = '#C0392B'; ctx.fill();
+    // spool canister on top, with its hub
+    ctx.beginPath(); ctx.arc(172, -40, 36, 0, 7); g = ctx.createRadialGradient(160, -52, 4, 172, -40, 38); g.addColorStop(0, '#5A6068'); g.addColorStop(1, '#22252A'); ctx.fillStyle = g; ctx.fill();
+    ctx.shadowColor = 'transparent';
+    ctx.strokeStyle = '#0F1113'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.beginPath(); ctx.arc(172, -40, 24, 0, 7); ctx.strokeStyle = 'rgba(255,255,255,.14)'; ctx.lineWidth = 3; ctx.stroke();
+    ctx.beginPath(); ctx.arc(172, -40, 8, 0, 7); ctx.fillStyle = '#AEB4BA'; ctx.fill();
+    // body
+    g = ctx.createLinearGradient(0, -20, 0, 18); g.addColorStop(0, '#4A4F56'); g.addColorStop(.35, '#2A2D32'); g.addColorStop(1, '#17191C');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(112, -12); ctx.lineTo(128, -20); ctx.lineTo(222, -20); ctx.quadraticCurveTo(232, -20, 232, -8); ctx.lineTo(232, 8); ctx.quadraticCurveTo(232, 18, 222, 18); ctx.lineTo(128, 18); ctx.lineTo(112, 10); ctx.closePath(); ctx.fill();
+    // barrel
+    g = ctx.createLinearGradient(0, -7, 0, 7); g.addColorStop(0, '#9AA1A8'); g.addColorStop(.4, '#5C636A'); g.addColorStop(1, '#2E3237');
+    ctx.fillStyle = g; ctx.fillRect(44, -7, 70, 14);
+    // copper nozzle and the wire
+    g = ctx.createLinearGradient(0, -12, 0, 12); g.addColorStop(0, '#F0B37A'); g.addColorStop(.45, '#C07A3A'); g.addColorStop(1, '#7A4A1E');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(12, -7); ctx.lineTo(48, -12); ctx.lineTo(48, 12); ctx.lineTo(12, 7); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(13, 0); ctx.strokeStyle = '#E6EAEE'; ctx.lineWidth = 2.5; ctx.stroke();
+    ctx.restore();
+  }
+  function draw(now){
+    raf = requestAnimationFrame(draw);
+    var dt = Math.min(50, now - (lastFrame || now)), i, d, s; lastFrame = now;
+    if (welding && now - lastAdv > 1200 - D * 50) finish('Burned through');   // parked in one spot too long
+    if (welding && now - lastAdv > 300){ zoneT = 0; fb = 'TOO SLOW'; }
+    if (welding && now - lastAdv > 150) spd += (0 - spd) * Math.min(1, dt / 180);   // sitting still: the needle drops to Too slow
+    $('gNeedle').style.left = Math.max(0, Math.min(100, (welding || over ? spd / v0 : 0) * 50)) + '%';
+    ctx.clearRect(0, 0, W, H);
+    if (tex) ctx.drawImage(tex, 0, 0, W, H); else { ctx.fillStyle = '#B4BAC0'; ctx.fillRect(0, 0, W, H); }
+    if (part && !breakT) ctx.drawImage(part, 0, 0, W, H);
+    if (part && breakT){
+      // the bench shows where the second piece sat, and the piece swings away from the start of the seam with a jolt
+      var bp = Math.min(1, (now - breakT) / 900), be = bp * bp, cl = JOINTS[lvl].closed, jolt = bp < .3 && !calm ? (Math.random() - .5) * 8 : 0;
+      ctx.drawImage(hole, 0, 0, W, H);
+      ctx.save(); ctx.translate(P[0][0] + jolt, P[0][1] + jolt); ctx.rotate((cl ? .3 : -.07) * be); ctx.translate(-P[0][0] + (cl ? 50 : 10) * be, -P[0][1] - (cl ? 40 : 60) * be);
+      ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowOffsetX = 6; ctx.shadowOffsetY = 10; ctx.drawImage(part, 0, 0, W, H); ctx.restore();
+    }
+    if (!P.length) return;
+    // the joint: a dark gap between the two pieces, with a light guide line down the middle
+    ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(P[0][0], P[0][1]); for (i = 1; i < P.length; i++) ctx.lineTo(P[i][0], P[i][1]);
+    ctx.shadowColor = 'rgba(255,255,255,.75)'; ctx.shadowOffsetY = 3; ctx.strokeStyle = '#17191C'; ctx.lineWidth = 9; ctx.stroke(); ctx.shadowColor = 'transparent'; ctx.shadowOffsetY = 0;   // the gap, with a lit lower edge
+    ctx.strokeStyle = '#8A9199'; ctx.lineWidth = 2; ctx.setLineDash([8, 10]); ctx.stroke(); ctx.setLineDash([]);
+    // the frosted band the arc leaves on aluminum either side of the bead
+    if (prog){ ctx.beginPath(); ctx.moveTo(P[0][0], P[0][1]); for (i = 1; i <= prog; i++) ctx.lineTo(P[i][0], P[i][1]); ctx.strokeStyle = 'rgba(246,248,250,.42)'; ctx.lineWidth = 46; ctx.stroke(); }
+    var e = P[P.length - 1];
+    ctx.beginPath(); ctx.arc(e[0], e[1], 12, 0, 7); ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.fill(); ctx.strokeStyle = '#17191C'; ctx.lineWidth = 4; ctx.stroke();
+    // the bead: fat where the travel was slow, thin where it was fast, brown where it wandered off the seam, glowing while it's fresh
+    for (i = 0; i < dots.length; i++){
+      d = dots[i];
+      ctx.drawImage(d.off ? BAD : GOOD, d.x - d.r, d.y - d.r, d.r * 2, d.r * 2); ctx.beginPath(); ctx.arc(d.x, d.y, d.r, 0, 7);
+      var hot = 1 - (now - d.t) / 900; if (hot > 0){ ctx.globalAlpha = hot; ctx.fillStyle = '#FF8A1F'; ctx.fill(); ctx.globalAlpha = 1; }
+    }
+    if (breakT && prog){   // the bead, cracked down the middle
+      ctx.beginPath(); ctx.moveTo(P[0][0], P[0][1]); for (i = 4; i <= prog; i += 4) ctx.lineTo(P[i][0] + (i % 8 ? 3 : -3), P[i][1] + (i % 8 ? -3 : 3)); ctx.strokeStyle = '#15171A'; ctx.lineWidth = 2.5; ctx.stroke();
+    }
+    if (!over && !welding){
+      s = P[prog]; var pulse = calm ? 0 : 3 * Math.sin(now / 250);
+      ctx.beginPath(); ctx.arc(s[0], s[1], 16 + pulse, 0, 7); ctx.fillStyle = '#3FA34D'; ctx.fill(); ctx.strokeStyle = '#FFFDF9'; ctx.lineWidth = 3; ctx.stroke();
+    }
+    if (welding){
+      gun();
+      var lab = zoneT ? 'DIALED IN ' + ((now - zoneT) / 1000).toFixed(1) + 's' : fb;
+      ctx.font = '900 22px Nunito, system-ui, sans-serif'; ctx.textBaseline = 'top'; ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.strokeText(lab, 16, 14); ctx.fillStyle = zoneT ? '#1F6B2A' : '#A12D22'; ctx.fillText(lab, 16, 14);
+      var g = ctx.createRadialGradient(fx, fy, 0, fx, fy, 46);
+      g.addColorStop(0, 'rgba(255,255,255,.95)'); g.addColorStop(.25, 'rgba(170,215,255,.6)'); g.addColorStop(1, 'rgba(170,215,255,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(fx, fy, 46, 0, 7); ctx.fill();
+    }
+    ctx.fillStyle = '#FFC46B';
+    for (i = sparks.length - 1; i >= 0; i--){
+      s = sparks[i]; var age = now - s.t; if (age > s.life){ sparks.splice(i, 1); continue; }
+      s.vy += 900 * dt / 1000; s.x += s.vx * dt / 1000; s.y += s.vy * dt / 1000;
+      ctx.globalAlpha = 1 - age / s.life; ctx.fillRect(s.x - 1.5, s.y - 1.5, 3, 3);
+    }
+    ctx.globalAlpha = 1;
+  }
+  function open(){
+    $('list').hidden = true; sec.hidden = false; window.scrollTo(0, 0);
+    fit(); audio(); who = get('-who', ''); if (who) home(); else pickWho(); lastFrame = 0; cancelAnimationFrame(raf); raf = requestAnimationFrame(draw);
+  }
+  function close(){ cancelAnimationFrame(raf); raf = 0; welding = false; hum(false); sec.hidden = true; $('list').hidden = false; window.scrollTo(0, 0); }
+  $('gRes').addEventListener('click', audio); opener.onclick = open; $('gBack').onclick = close; $('gBoard').onclick = function(){ if (!welding) showBoard(); };
+  // turning the tablet changes the plate size: the joint in hand starts over, the scores so far are kept
+  window.addEventListener('resize', function(){ if (sec.hidden || over) return; var w = W, h = H; fit(); if (w !== W || h !== H) startJoint(); });
+})();
 </script>
 </body></html>
