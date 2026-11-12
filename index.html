@@ -239,6 +239,8 @@ table.sheet td.bp{box-shadow:inset 0 0 0 3px #E8590C;font-weight:900!important;c
 table.sheet td.bp small.bpd{display:block;font-size:14px;font-weight:800;color:#8A3205;margin-top:2px;white-space:nowrap}
 .bpnote .bpkey{display:block;margin:4px 0 6px;font-size:16px;font-weight:700;color:#5A2A08}
 .bpnote .bpkey i{font-style:normal;font-weight:900;background:#E8590C;color:#fff;border-radius:6px;padding:0 6px;margin-right:3px}
+table.sheet td.bp .bpw{display:inline-flex;align-items:center;gap:10px;text-align:left}
+table.sheet td.bp svg.bpi{width:76px;height:49px;flex-shrink:0}
 </style>
 </head><body>
 
@@ -700,7 +702,7 @@ function wId(id){ return id + '.w'; }
 var el = function(id){ return document.getElementById(id); };
 function esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 // a short notice at the bottom of the screen
-var VERSION = '11.12.745', toastT = null;
+var VERSION = '11.12.800', toastT = null;
 function toast(t){ var b = el('toast'); b.textContent = t; b.hidden = false; b.classList.remove('out'); clearTimeout(toastT); toastT = setTimeout(function(){ b.classList.add('out'); setTimeout(function(){ b.hidden = true; }, 400); }, 3200); }
 function msg(t, ok){ var m = el('msg'); m.hidden = !t; m.className = 'msg ' + (ok ? 'ok' : 'err'); m.textContent = t || ''; }
 function lsGet(k){ try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
@@ -1115,6 +1117,23 @@ function bpDesc(code){
   var how = /-Rev-/i.test(c) ? 'reverse offset' : /-Off-/i.test(c) ? 'offset' : /-Cen\b/i.test(c) ? 'centred' : '';
   return size + ' plate' + (how ? ' · ' + how : '');
 }
+// a small top-down picture of the plate, the post on it, and which way the rail leaves (drawn to the shop drawings:
+// 4" plate, 2" post, bolt holes 3/8" in; offset = post 1/4" from the outer edge, plate reaching in under the rail; Rev = flipped)
+function bpIcon(code){
+  var c = String(code || '').trim(), m = /^E-(Cen|Off|Rev)-(L|R)$/i.exec(c), mid = /^Mid-Cen$/i.test(c), cen = /-Cen$/i.test(c);
+  if (!m && !mid && !cen) return '';
+  var X0 = 18, W = 64, P = 32, px = X0 + (W - P) / 2, rails = [];
+  if (m){
+    var k = m[1].toLowerCase(), left = m[2].toUpperCase() === 'L';   // L: rail runs off to the right of the post
+    if (k === 'off') px = left ? X0 + 4 : X0 + W - 4 - P;
+    if (k === 'rev') px = left ? X0 + W - 4 - P : X0 + 4;
+    rails.push(left ? [px + P, 100] : [0, px]);
+  } else if (mid) rails.push([0, px], [px + P, 100]);
+  var h = '<svg class="bpi" viewBox="0 0 100 64" aria-hidden="true"><rect x="' + X0 + '" y="0.5" width="' + W + '" height="63" rx="3" fill="#E9E5DC" stroke="#5F5E5A" stroke-width="1.5"/>';
+  [[X0 + 6, 6], [X0 + W - 6, 6], [X0 + 6, 58], [X0 + W - 6, 58]].forEach(function(o){ h += '<circle cx="' + o[0] + '" cy="' + o[1] + '" r="3" fill="none" stroke="#5F5E5A" stroke-width="1.3"/>'; });
+  rails.forEach(function(r){ h += '<line x1="' + r[0] + '" y1="32" x2="' + r[1] + '" y2="32" stroke="#2F5D50" stroke-width="8"/>'; });
+  return h + '<rect x="' + px + '" y="16" width="' + P + '" height="' + P + '" fill="#1F1B17"/></svg>';
+}
 function isTop(){ return !!(cur && /^top/i.test(String(cur.mount || '').trim())); }
 function readBlock(sd){
   var b13 = cellVal(sd, 13, 2), d13 = cellVal(sd, 13, 4), d14 = cellVal(sd, 14, 4);
@@ -1252,7 +1271,7 @@ function renderSheet(book, item, done){
     span[m.r1 + ':' + m.c1] = { rs: rs, cs: cs };
     L.rows.forEach(function(r){ L.cols.forEach(function(c){ if (r >= m.r1 && r <= m.r2 && c >= m.c1 && c <= m.c2 && !(r === m.r1 && c === m.c1)) skip[r + ':' + c] = 1; }); });
   });
-  var h = (WELD && isTop() && /^(CUT SHEET|POST SHEET)$/.test(sh.name) ? '<div class="bpnote"><b>Top mount · weld-on base plates</b><span class="bpkey"><i>Cen</i> centred on the plate · <i>Off</i> offset (post not centred) · <i>Rev</i> reverse offset · <i>L / R</i> left / right end of the rail · 4x4 plates for 2x2 posts, 5x5 for 3x2 / 3x3</span>' + (sh.name === 'POST SHEET' ? 'Post lengths are in section 1. The plates to weld, and how many of each, are in section 3. The Cuts tab shows which plate goes on each rail end.' : 'The L Post and R Post columns show which base plate goes on each end of the rail. The Posts tab has the post lengths and the plate totals.') + '</div>' : '') + '<table class="sheet">';
+  var h = (WELD && isTop() && /^(CUT SHEET|POST SHEET)$/.test(sh.name) ? '<div class="bpnote"><b>Top mount · weld-on base plates</b><span class="bpkey"><i>Cen</i> centred on the plate · <i>Off</i> offset: post at the outer end, plate reaches in under the rail · <i>Rev</i> reverse offset: plate sticks out past the end · <i>L / R</i> left / right end of the rail · 4x4 plates for 2x2 posts, 5x5 for 3x2 / 3x3</span>' + (sh.name === 'POST SHEET' ? 'Post lengths are in section 1. The plates to weld, and how many of each, are in section 3. The Cuts tab shows which plate goes on each rail end.' : 'The L Post and R Post columns show which base plate goes on each end of the rail. The Posts tab has the post lengths and the plate totals.') + '</div>' : '') + '<table class="sheet">';
   var isCut = sh.name === 'CUT SHEET' && cur && Object.keys(cur.units || {}).length, lastUnit = null;
   var hiSheet = /^(COVER|POST SHEET)$/.test(sh.name);
   // Cut Sheet: a black line between the float lengths (Left / Right) and the posts (L Post …), so the two groups read apart
@@ -1346,7 +1365,7 @@ function renderSheet(book, item, done){
       if ((xf && xf.wrap) || t.length > 22) cls.push('wrapcell');
       var style = (cell ? fillCss(book, cell.s) : '') + (f && f.rgb && /^FF[0-9A-F]{6}$/i.test(f.rgb) && f.rgb.slice(2).toUpperCase() !== '000000' ? 'color:#' + f.rgb.slice(2) + ';' : '');
       var bd = cls.indexOf('bp') >= 0 ? bpDesc(t) : '';
-      h += '<td' + (cls.length ? ' class="' + cls.join(' ') + '"' : '') + (style ? ' style="' + style + '"' : '') + attr + '>' + (big ? measure(t) : esc(t)) + (bd ? '<small class="bpd">' + esc(bd) + '</small>' : '') + '</td>';
+      h += '<td' + (cls.length ? ' class="' + cls.join(' ') + '"' : '') + (style ? ' style="' + style + '"' : '') + attr + '>' + (bd ? '<span class="bpw">' + bpIcon(t) + '<span>' + (big ? measure(t) : esc(t)) + '<small class="bpd">' + esc(bd) + '</small></span></span>' : (big ? measure(t) : esc(t))) + '</td>';
     });
     h += '</tr>';
   });
