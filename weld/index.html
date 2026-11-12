@@ -703,7 +703,7 @@ function wId(id){ return id + '.w'; }
 var el = function(id){ return document.getElementById(id); };
 function esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 // a short notice at the bottom of the screen
-var VERSION = '11.12.823', toastT = null;
+var VERSION = '11.12.829', toastT = null;
 function toast(t){ var b = el('toast'); b.textContent = t; b.hidden = false; b.classList.remove('out'); clearTimeout(toastT); toastT = setTimeout(function(){ b.classList.add('out'); setTimeout(function(){ b.hidden = true; }, 400); }, 3200); }
 function msg(t, ok){ var m = el('msg'); m.hidden = !t; m.className = 'msg ' + (ok ? 'ok' : 'err'); m.textContent = t || ''; }
 function lsGet(k){ try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
@@ -1281,7 +1281,7 @@ function renderSheet(book, item, done){
     span[m.r1 + ':' + m.c1] = { rs: rs, cs: cs };
     L.rows.forEach(function(r){ L.cols.forEach(function(c){ if (r >= m.r1 && r <= m.r2 && c >= m.c1 && c <= m.c2 && !(r === m.r1 && c === m.c1)) skip[r + ':' + c] = 1; }); });
   });
-  var h = (WELD && isTop() && /^(CUT SHEET|POST SHEET)$/.test(sh.name) ? '<div class="bpnote"><b>Top mount · weld-on base plates</b><span class="bpkey"><i>Cen</i> centred on the plate · <i>Off</i> offset: post at the outer end, plate reaches in under the rail · <i>Rev</i> reverse offset: plate sticks out past the end · <i>L / R</i> left / right end of the rail · <i>EC</i> corner turns right with the run, <i>IC</i> turns left · 4x4 plates for 2x2 posts</span>' + (sh.name === 'POST SHEET' ? 'Post lengths are in section 1. The plates to weld, and how many of each, are under Base plates. The Cuts tab shows which plate goes on each rail end.' : 'The L Post and R Post columns show which base plate goes on each end of the rail. The Posts tab has the post lengths and the plate totals.') + '</div>' : '') + '<table class="sheet">';
+  var h = (WELD && isTop() && /^(CUT SHEET|POST SHEET)$/.test(sh.name) ? '<div class="bpnote"><b>Top mount · weld-on base plates</b><span class="bpkey"><i>Cen</i> centred on the plate · <i>Off</i> offset: post at the outer end, plate reaches in under the rail · <i>Rev</i> reverse offset: plate sticks out past the end · <i>L / R</i> left / right end of the rail · <i>EC</i> corner turns right with the run, <i>IC</i> turns left · 4x4 plates for 2x2 posts</span>' + (sh.name === 'POST SHEET' ? 'The plates to weld, and how many of each. The Cuts tab shows which plate goes on each rail end.' : 'The L Post and R Post columns show which base plate goes on each end of the rail. The Posts tab has the post lengths and the plate totals.') + '</div>' : '') + '<table class="sheet">';
   var isCut = sh.name === 'CUT SHEET' && cur && Object.keys(cur.units || {}).length, lastUnit = null;
   var hiSheet = /^(COVER|POST SHEET)$/.test(sh.name);
   // Cut Sheet: a black line between the float lengths (Left / Right) and the posts (L Post …), so the two groups read apart
@@ -1330,6 +1330,16 @@ function renderSheet(book, item, done){
       sorted = true;
     }
   }
+  if (WELD && sh.name === 'POST SHEET' && isTop()){
+    var inSec = null, firstSec = true;
+    order = order.filter(function(r){
+      var t0 = L.txt(r, L.cols[0]);
+      if (SEC_RE.test(t0)){ inSec = /bracket|plate/i.test(t0); firstSec = false; return inSec; }
+      if (firstSec) return !/^\s*(post height|block height|bracket height|standoff)\b/i.test(t0);
+      if (inSec && !L.cols.some(function(c){ return L.txt(r, c) !== ''; })) inSec = false;   // the plate list ends at the first blank row
+      return inSec;
+    });
+  }
   order.forEach(function(r){
     if (isCut && !sorted && L.hdr != null && r > L.hdr){
       var tg = L.txt(r, L.cols[0]), un = /^\S+\.\d+$/.test(tg) ? unitOf(tg) : null;
@@ -1353,6 +1363,7 @@ function renderSheet(book, item, done){
       if (secs[r] && c === L.cols[L.cols.length - 1]){ var sc = secs[r], sa = sc.keys.every(function(kk){ return done[kk]; }); var sp0 = span[k], at0 = sp0 ? (sp0.rs > 1 ? ' rowspan="' + sp0.rs + '"' : '') + (sp0.cs > 1 ? ' colspan="' + sp0.cs + '"' : '') : ''; h += '<td class="postsall"' + at0 + '><button type="button" class="pcut' + (sa ? ' on' : '') + '" data-act="secall" data-sec="' + r + '" aria-pressed="' + sa + '"><span class="box">✓</span>' + esc(topWords(sc.label)) + '</button></td>'; return; }
       var cell = sd.cells[k], t = sh.name === 'POST SHEET' ? topWords(show(book, cell)) : show(book, cell), sp = span[k], xf = cell && book.st.xfs[cell.s], f = xf && book.st.fonts[xf.font];
       // top mount: a centred plate's method reads WELD-ON Centered (the cut sheet says just "WELD-ON plate" for Mid-Cen)
+      if (WELD && sh.name === 'POST SHEET' && isTop() && c === L.cols[0]) t = t.replace(/^\d+\s*[·.\-]\s*/, '');   // only the plates show, so no section number
       if (sh.name === 'POST SHEET' && isTop() && /^weld-on plate$/i.test(t.trim()) && /^(Mid|EC|IC|Joint|E)-Cen(-[LR])?$/i.test(L.txt(r, L.cols[0]).trim())) t = 'WELD-ON Centered';
       var attr = sp ? (sp.rs > 1 ? ' rowspan="' + sp.rs + '"' : '') + (sp.cs > 1 ? ' colspan="' + sp.cs + '"' : '') : '';
       if (L.chk[k]){ var key = pre + 'c' + k; h += '<td class="chk' + (done[key] ? ' on' : '') + (WELD ? ' ro' : '') + '" data-key="' + esc(key) + '"' + attr + '><span class="box" role="checkbox" aria-checked="' + !!done[key] + '" aria-label="Done">✓</span></td>'; return; }
@@ -1528,7 +1539,7 @@ function counts(it){
 function renderTabs(){
   el('tabs').innerHTML = cur.items.map(function(it, k){
     var c = counts(it);
-    return '<button type="button" class="tab' + (k === cur.tab ? ' on' : '') + (c.n && c.d === c.n ? ' full' : '') + '" data-tab="' + k + '" role="tab" aria-selected="' + (k === cur.tab) + '">' + esc(WELD && WELD_BOXES && it.sh.name === 'CUT SHEET' ? 'Welds' : it.label) + (c.n ? '<small>' + c.d + '/' + c.n + '</small>' : '') + '</button>';
+    return '<button type="button" class="tab' + (k === cur.tab ? ' on' : '') + (c.n && c.d === c.n ? ' full' : '') + '" data-tab="' + k + '" role="tab" aria-selected="' + (k === cur.tab) + '">' + esc(WELD && WELD_BOXES && it.sh.name === 'CUT SHEET' ? 'Welds' : WELD && it.sh.name === 'POST SHEET' && isTop() ? 'Base plates' : it.label) + (c.n ? '<small>' + c.d + '/' + c.n + '</small>' : '') + '</button>';
   }).join('');
   var tot = 0, dn = 0; cur.items.forEach(function(it){ var c = counts(it); tot += c.n; dn += c.d; });
   el('jobBar').style.width = (WELD && !WELD_BOXES ? (cur.w.fin ? 100 : 0) : tot ? Math.round(dn / tot * 100) : 0) + '%';
