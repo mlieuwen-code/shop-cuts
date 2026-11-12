@@ -703,7 +703,7 @@ function wId(id){ return id + '.w'; }
 var el = function(id){ return document.getElementById(id); };
 function esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 // a short notice at the bottom of the screen
-var VERSION = '11.12.834', toastT = null;
+var VERSION = '11.12.840', toastT = null;
 function toast(t){ var b = el('toast'); b.textContent = t; b.hidden = false; b.classList.remove('out'); clearTimeout(toastT); toastT = setTimeout(function(){ b.classList.add('out'); setTimeout(function(){ b.hidden = true; }, 400); }, 3200); }
 function msg(t, ok){ var m = el('msg'); m.hidden = !t; m.className = 'msg ' + (ok ? 'ok' : 'err'); m.textContent = t || ''; }
 function lsGet(k){ try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
@@ -1130,17 +1130,19 @@ function weldPlates(item, done){
     if (head == null){ if (L.cols.some(function(c){ return L.txt(r, c) === '✓'; })) head = r; continue; }
     var code = t0.trim(); if (!bpDesc(code)) continue;
     var qc = L.cols.filter(function(c){ return /^qty$/i.test(L.txt(head, c)); })[0], mc = L.cols.filter(function(c){ return /method/i.test(L.txt(head, c)); })[0], ck = L.cols.filter(function(c){ return L.chk[r + ':' + c]; })[0];
-    var key = code.replace(/-(L|R)$/i, ''), q = +L.txt(r, qc) || 0, m = String(L.txt(r, mc) || '').trim();
+    // left and right ends are welded the same, and so are end corners and inside corners
+    var key = /^(EC|IC)-Cen$/i.test(code) ? 'Corner-Cen' : code.replace(/-(L|R)$/i, ''), q = +L.txt(r, qc) || 0, m = String(L.txt(r, mc) || '').trim();
     if (/^weld-on plate$/i.test(m) && /-Cen$/i.test(key)) m = 'WELD-ON Centered';
-    if (!byKey[key]){ byKey[key] = { key: key, code: code, sides: [], qty: 0, method: m, ticked: true }; list.push(byKey[key]); }
-    var it = byKey[key]; it.qty += q; if (/-(L|R)$/i.test(code)) it.sides.push(code.slice(-1).toUpperCase());
+    if (!byKey[key]){ byKey[key] = { key: key, code: code, sides: [], corners: [], qty: 0, method: m, ticked: true }; list.push(byKey[key]); }
+    var it = byKey[key]; it.qty += q; if (/-(L|R)$/i.test(code)) it.sides.push(code.slice(-1).toUpperCase()); if (key === 'Corner-Cen') it.corners.push(code.slice(0, 2).toUpperCase());
     if (ck != null && !done[pre + 'c' + r + ':' + ck]) it.ticked = false;
   }
   if (!list.length) return '';
   var h = '<tr class="subhdr"><td>Base plate</td><td>Quantity</td><td class="c">Jim</td><td>How it’s welded</td></tr>';
   list.forEach(function(it, i){
     var name = bpName(it.key), both = it.sides.length > 1, size = bpDesc(it.code).replace(/ · .*$/, '');
-    var sub = size + (it.sides.length ? ' · ' + (both ? 'left and right ends, welded the same' : (it.sides[0] === 'L' ? 'left end' : 'right end')) : '');
+    var sub = size + (it.sides.length ? ' · ' + (both ? 'left and right ends, welded the same' : (it.sides[0] === 'L' ? 'left end' : 'right end')) : '') +
+      (it.corners.length ? ' · ' + (it.corners.length > 1 ? 'end corners and inside corners, welded the same' : (it.corners[0] === 'EC' ? 'end corners' : 'inside corners')) : '');
     var how = String(it.method).replace(/^weld-on\s*/i, 'Weld-on, ').replace(/rev offset/i, 'reverse offset').replace(/, (\w)/, function(a, b){ return ', ' + b.toLowerCase(); });
     h += '<tr class="data' + (it.ticked ? ' rowdone' : '') + '"><td class="bp"><span class="bpw">' + bpIcon(it.code) + '<span>' + esc(name) + '<small class="bpd">' + esc(sub) + '</small></span></span></td>' +
       '<td class="num c">' + it.qty + '</td><td class="chk ro' + (it.ticked ? ' on' : '') + '"><span class="box">✓</span></td><td>' + esc(how) + '</td></tr>';
@@ -1317,7 +1319,7 @@ function renderSheet(book, item, done){
     L.rows.forEach(function(r){ L.cols.forEach(function(c){ if (r >= m.r1 && r <= m.r2 && c >= m.c1 && c <= m.c2 && !(r === m.r1 && c === m.c1)) skip[r + ':' + c] = 1; }); });
   });
   var plateRows = '';
-  var h = (WELD && isTop() && /^(CUT SHEET|POST SHEET)$/.test(sh.name) ? '<div class="bpnote"><b>Top mount · weld-on base plates</b><span class="bpkey">4x4 plates for 2x2 posts. Offset: the post sits at the outer end and the plate reaches in under the rail. Reverse offset: the plate sticks out past the end. End corners turn right with the run, inside corners turn left.</span>' + (sh.name === 'POST SHEET' ? 'Left and right ends are welded the same, so they’re listed together with the total quantity. The Cut sheet tab shows which plate goes on each rail end.' : 'The Left post and Right post columns show which base plate goes on each end of the rail.') + '</div>' : '') + '<table class="sheet">';
+  var h = (WELD && isTop() && /^(CUT SHEET|POST SHEET)$/.test(sh.name) ? '<div class="bpnote"><b>Top mount · weld-on base plates</b><span class="bpkey">4x4 plates for 2x2 posts. Offset: the post sits at the outer end and the plate reaches in under the rail. Reverse offset: the plate sticks out past the end. End corners turn right with the run, inside corners turn left.</span>' + (sh.name === 'POST SHEET' ? 'Left and right ends are welded the same, and so are end corners and inside corners, so they’re listed together with the total quantity. The Cut sheet tab shows which plate goes on each rail end.' : 'The Left post and Right post columns show which base plate goes on each end of the rail.') + '</div>' : '') + '<table class="sheet">';
   var isCut = sh.name === 'CUT SHEET' && cur && Object.keys(cur.units || {}).length, lastUnit = null;
   var hiSheet = /^(COVER|POST SHEET)$/.test(sh.name);
   // Cut Sheet: a black line between the float lengths (Left / Right) and the posts (L Post …), so the two groups read apart
