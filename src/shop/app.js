@@ -733,7 +733,7 @@ function renderSheet(book, item, done){
     L.rows.forEach(function(r){ L.cols.forEach(function(c){ if (r >= m.r1 && r <= m.r2 && c >= m.c1 && c <= m.c2 && !(r === m.r1 && c === m.c1)) skip[r + ':' + c] = 1; }); });
   });
   var scr = SCREEN_RE.test(sh.name) && L.hdr != null;
-  var h = (scr ? screenHead(item) : '') + (item.virt && item.kinds ? screenDiagram(item.kinds) : '') + (WELD && isTop() && /^(CUT SHEET|POST SHEET)$/.test(sh.name) ? '<div class="bpnote"><b>Top mount · weld-on base plates</b><span class="bpkey"><i>Cen</i> centred on the plate · <i>Off</i> offset: post at the outer end, plate reaches in under the rail · <i>Rev</i> reverse offset: plate sticks out past the end · <i>L / R</i> left / right end of the rail · <i>EC</i> corner turns right with the run, <i>IC</i> turns left · 4x4 plates for 2x2 posts</span>' + (sh.name === 'POST SHEET' ? 'Post lengths are in section 1. The plates to weld, and how many of each, are under Base plates. The Cuts tab shows which plate goes on each rail end.' : 'The L Post and R Post columns show which base plate goes on each end of the rail. The Posts tab has the post lengths and the plate totals.') + '</div>' : '') + '<table class="sheet">';
+  var h = (scr ? screenHead(item) : '') + (WELD && isTop() && /^(CUT SHEET|POST SHEET)$/.test(sh.name) ? '<div class="bpnote"><b>Top mount · weld-on base plates</b><span class="bpkey"><i>Cen</i> centred on the plate · <i>Off</i> offset: post at the outer end, plate reaches in under the rail · <i>Rev</i> reverse offset: plate sticks out past the end · <i>L / R</i> left / right end of the rail · <i>EC</i> corner turns right with the run, <i>IC</i> turns left · 4x4 plates for 2x2 posts</span>' + (sh.name === 'POST SHEET' ? 'Post lengths are in section 1. The plates to weld, and how many of each, are under Base plates. The Cuts tab shows which plate goes on each rail end.' : 'The L Post and R Post columns show which base plate goes on each end of the rail. The Posts tab has the post lengths and the plate totals.') + '</div>' : '') + '<table class="sheet">';
   var isCut = sh.name === 'CUT SHEET' && cur && Object.keys(cur.units || {}).length, lastUnit = null;
   var hiSheet = /^(COVER|POST SHEET)$/.test(sh.name);
   // Cut Sheet: a black line between the float lengths (Left / Right) and the posts (L Post …), so the two groups read apart
@@ -843,7 +843,9 @@ function renderSheet(book, item, done){
     h += '<tr class="unitbar laysec"><td colspan="' + NC + '"><button type="button" class="laybtn" data-act="laysall" aria-expanded="' + on + '"><span class="lb' + (on ? ' on' : '') + '">' + (on ? '✓' : '') + '</span>Show unit layouts (' + unitsInOrder.length + ')</button></td></tr>';
     if (on) unitsInOrder.forEach(function(un){ h += layoutRow(un, NC); });
   }
-  return h + '</table>';
+  // privacy screens: the Post A / B / C drawing sits under the cut list (and under the post list)
+  var kinds = scr || item.virt ? cur && cur.items.filter(function(x){ return SCREEN_RE.test(x.sh.name); }).map(function(x){ return x.sh.name; }) : null;
+  return h + '</table>' + (kinds && kinds.length ? '<div class="scrbelow">' + screenDiagram(scr ? [sh.name] : kinds) + '</div>' : '');
 }
 
 // ---------- a job ----------
