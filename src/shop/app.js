@@ -462,7 +462,7 @@ function screenify(L, sd){
 function screenDiagram(kinds){
   var one = function(rw){
     var W = 360, dk = 226, top = 34, ink = '#1F1B17', ch = '#E8590C', o = '';
-    var xA = rw ? 64 : null, wallR = 318, wallL = rw ? null : 26;
+    var xA = rw ? 140 : null, wallR = 318, wallL = rw ? null : 26;   // rail to wall: drawn narrower, closer to a real screen's shape
     // the top rail and Post C run right to the wall (their clips screw to it); Post B stands about 2 1/2" off the wall
     var G = 16, wfR = wallR, wfL = rw ? null : wallL + 14, xr = wfR - 5, xl = rw ? null : wfL + 5;
     var xB = wfR - G - 12, xBL = rw ? null : wfL + G, x0 = rw ? xA + 12 : xl;
@@ -473,7 +473,7 @@ function screenDiagram(kinds){
     if (!rw) o += '<rect x="' + (wallL - 12) + '" y="10" width="26" height="' + (dk - 10) + '" fill="url(#hatch)" stroke="#9A9087"/>' + note(wallL + 1, 8, 'WALL', 'middle');
     // the railing runs at right angles to the screen, so here it's seen end-on: its top rail and a post, tight to Post A
     if (rw) o += '<rect x="' + (xA - 20) + '" y="110" width="20" height="10" rx="2" fill="#B9AFA4" stroke="#8C8279"/><rect x="' + (xA - 14) + '" y="120" width="8" height="' + (dk - 120) + '" fill="#CFC6BB" stroke="#9A9087"/>' +
-      note(4, 90, 'RAILING') + note(4, 102, '(end view)');   // about 42" on the 72" screen
+      note(xA - 64, 90, 'RAILING') + note(xA - 64, 102, '(end view)');   // about 42" on the 72" screen
     // top rail over the uprights, Post C up off the deck (clearance underneath), Post B standing on C, Post A down to the deck
     var tr = 9, yC = dk - 28, xL = rw ? xA : xl;
     o += '<rect x="' + xL + '" y="' + top + '" width="' + (xr - xL) + '" height="' + tr + '" rx="2" fill="#8C8279"/>';
