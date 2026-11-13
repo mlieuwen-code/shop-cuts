@@ -724,7 +724,7 @@ function wId(id){ return id + '.w'; }
 var el = function(id){ return document.getElementById(id); };
 function esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 // a short notice at the bottom of the screen
-var VERSION = '11.13.1207', toastT = null;
+var VERSION = '11.13.1214', toastT = null;
 function toast(t){ var b = el('toast'); b.textContent = t; b.hidden = false; b.classList.remove('out'); clearTimeout(toastT); toastT = setTimeout(function(){ b.classList.add('out'); setTimeout(function(){ b.hidden = true; }, 400); }, 3200); }
 function msg(t, ok){ var m = el('msg'); m.hidden = !t; m.className = 'msg ' + (ok ? 'ok' : 'err'); m.textContent = t || ''; }
 function lsGet(k){ try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
@@ -1168,7 +1168,7 @@ function screenDiagram(kinds){
   var one = function(rw){
     var W = 360, dk = 226, top = 34, ink = '#1F1B17', ch = '#E8590C', o = '';
     var xA = rw ? 64 : null, wallR = 318, wallL = rw ? null : 26;
-    var x0 = rw ? xA + 12 : wallL + 14, x1 = wallR;               // Post C runs from Post A (or the far wall) to the wall
+    var G = 16, x0 = rw ? xA + 12 : wallL + 14 + G, x1 = wallR - G;   // Post C runs from Post A (or the far wall) to the wall, about 2 1/2" off it
     var lbl = function(x, y, t){ return '<circle cx="' + x + '" cy="' + y + '" r="13" fill="' + ink + '"/><text x="' + x + '" y="' + (y + 5) + '" text-anchor="middle" font-size="15" font-weight="900" fill="#fff">' + t + '</text>'; };
     var note = function(x, y, t, a){ return '<text x="' + x + '" y="' + y + '" font-size="11" font-weight="700" fill="#6B6157"' + (a ? ' text-anchor="' + a + '"' : '') + '>' + t + '</text>'; };
     o += '<rect x="0" y="' + dk + '" width="' + W + '" height="10" fill="#D9D0C3"/>' + note(8, dk + 22, 'DECK');
@@ -1186,11 +1186,14 @@ function screenDiagram(kinds){
     else o += '<rect x="' + x0 + '" y="' + (top + tr) + '" width="12" height="' + (yC - top - tr) + '" fill="' + ink + '"/>';
     o += '<g stroke="#6B6157" stroke-width="1.2"><line x1="' + ((x0 + x1) / 2 - 40) + '" y1="' + (yC + 14) + '" x2="' + ((x0 + x1) / 2 - 40) + '" y2="' + (dk - 1) + '"/><line x1="' + ((x0 + x1) / 2 - 45) + '" y1="' + (yC + 14) + '" x2="' + ((x0 + x1) / 2 - 35) + '" y2="' + (yC + 14) + '"/><line x1="' + ((x0 + x1) / 2 - 45) + '" y1="' + (dk - 1) + '" x2="' + ((x0 + x1) / 2 - 35) + '" y2="' + (dk - 1) + '"/></g>' + note((x0 + x1) / 2 - 32, dk - 4, 'CLEARANCE');
     // screen foot: a clip slid into the end of Post C and screwed to the wall (one at each wall on wall-to-wall)
-    var foot = function(xw, dir){ var fc = '#2F5D50', x = dir > 0 ? xw - 26 : xw;
-      return '<rect x="' + x + '" y="' + (yC + 3) + '" width="26" height="6" fill="#2F5D50" fill-opacity=".35" stroke="' + fc + '" stroke-width="1.5" stroke-dasharray="3 2"/>' +
-        '<rect x="' + (dir > 0 ? xw - 5 : xw) + '" y="' + (yC - 10) + '" width="5" height="34" fill="' + fc + '"/>' +
-        '<circle cx="' + (xw + dir * 3) + '" cy="' + (yC - 4) + '" r="2.4" fill="' + fc + '"/><circle cx="' + (xw + dir * 3) + '" cy="' + (yC + 18) + '" r="2.4" fill="' + fc + '"/>'; };
-    o += foot(x1, 1); if (!rw) o += foot(x0, -1);
+    // the clip sits inside the end of C, crosses the 2 1/2" gap and screws to the wall face
+    var foot = function(cEnd, wf, dir){ var fc = '#2F5D50', a = Math.min(cEnd - dir * 14, wf), w = Math.abs(wf - (cEnd - dir * 14));
+      return '<rect x="' + a + '" y="' + (yC + 3) + '" width="' + w + '" height="6" fill="#2F5D50" fill-opacity=".45" stroke="' + fc + '" stroke-width="1.5"/>' +
+        '<rect x="' + (dir > 0 ? wf - 5 : wf) + '" y="' + (yC - 10) + '" width="5" height="34" fill="' + fc + '"/>' +
+        '<circle cx="' + (wf - dir * 2.5) + '" cy="' + (yC - 4) + '" r="2.2" fill="#fff"/><circle cx="' + (wf - dir * 2.5) + '" cy="' + (yC + 18) + '" r="2.2" fill="#fff"/>'; };
+    // the 2 1/2" gap to the wall, marked at the top
+    var gap = function(a, b){ var y = 162; return '<g stroke="#6B6157" stroke-width="1.2"><line x1="' + a + '" y1="' + y + '" x2="' + b + '" y2="' + y + '"/><line x1="' + a + '" y1="' + (y - 4) + '" x2="' + a + '" y2="' + (y + 4) + '"/><line x1="' + b + '" y1="' + (y - 4) + '" x2="' + b + '" y2="' + (y + 4) + '"/></g><text x="' + ((a + b) / 2) + '" y="' + (y - 6) + '" text-anchor="middle" font-size="10" font-weight="800" fill="#6B6157">2½"</text>'; };
+    o += foot(x1, wallR, 1) + gap(x1, wallR); if (!rw) o += foot(x0, wallL + 14, -1) + gap(wallL + 14, x0);
     var fl = function(x){ return '<circle cx="' + x + '" cy="' + (yC + 22) + '" r="9" fill="#2F5D50"/><text x="' + x + '" y="' + (yC + 26) + '" text-anchor="middle" font-size="11" font-weight="900" fill="#fff">F</text>'; };
     o += fl(x1 - 16); if (!rw) o += fl(x0 + 16);
     var gx0 = rw ? xA + 12 : x0 + 12, gx1 = xB, mid = 120;
