@@ -468,7 +468,9 @@ function screenDiagram(kinds){
     var xB = wfR - G - 12, xBL = rw ? null : wfL + G, x0 = rw ? xA + 12 : xl;
     var lbl = function(x, y, t){ return '<circle cx="' + x + '" cy="' + y + '" r="13" fill="' + ink + '"/><text x="' + x + '" y="' + (y + 5) + '" text-anchor="middle" font-size="15" font-weight="900" fill="#fff">' + t + '</text>'; };
     var note = function(x, y, t, a){ return '<text x="' + x + '" y="' + y + '" font-size="11" font-weight="700" fill="#6B6157"' + (a ? ' text-anchor="' + a + '"' : '') + '>' + t + '</text>'; };
-    o += '<rect x="0" y="' + dk + '" width="' + W + '" height="10" fill="#D9D0C3"/>' + note(8, dk + 22, 'DECK');
+    // the deck stops at its edge, where the railing stands (rail to wall); wall to wall it runs between the walls
+    var dx0 = rw ? xA - 22 : wallL - 12, dx1 = wallR + 26;
+    o += '<rect x="' + dx0 + '" y="' + dk + '" width="' + (dx1 - dx0) + '" height="10" fill="#D9D0C3"/>' + note(dx0 + 4, dk + 22, 'DECK');
     o += '<rect x="' + wallR + '" y="10" width="26" height="' + (dk - 10) + '" fill="url(#hatch)" stroke="#9A9087"/>' + note(wallR + 13, 8, 'WALL', 'middle');
     if (!rw) o += '<rect x="' + (wallL - 12) + '" y="10" width="26" height="' + (dk - 10) + '" fill="url(#hatch)" stroke="#9A9087"/>' + note(wallL + 1, 8, 'WALL', 'middle');
     // the railing runs at right angles to the screen, so here it's seen end-on: its top rail and a post, tight to Post A
@@ -510,7 +512,7 @@ function screenDiagram(kinds){
     o += lbl(xB + 6, 72, 'B') + lbl(cx + 40, yC + 6, 'C');   // C label sits on the post
     if (!rw) o += lbl(xBL + 6, 72, 'B');
     return '<figure class="scrfig"><svg viewBox="0 0 360 250" role="img" aria-label="' + (rw ? 'Rail to wall' : 'Wall to wall') + ' privacy screen: which piece is Post A, B and C"><defs><pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="#EFE9E1"/><line x1="0" y1="0" x2="0" y2="6" stroke="#B9AFA4" stroke-width="2"/></pattern></defs>' + o + '</svg>' +
-      '<figcaption><b>' + (rw ? 'Rail to wall' : 'Wall to wall') + '</b>' + (rw ? '<span><i>A</i> upright at the deck edge, against the railing</span>' : '') + '<span><i>B</i> upright standing on Post C' + (rw ? ' at the wall' : ', one at each wall') + '</span><span><i>C</i> along the bottom, up off the deck; the bottom channel fastens to it</span><span><i>&#8593;</i>top rail runs over the uprights; top rail and Post C run right to the wall, Post B stands 2½" off it</span><span><i style="background:#2F5D50">T</i>top rail sleeve clip: in the end of the top rail; its 2" plate goes down, one screw from the side, so no screws above the rail</span><span><i style="background:#2F5D50">F</i>screen foot: in the end of Post C; its 2" plate goes up, one screw from the side, so no screws below' + (rw ? '' : ' (both walls)') + '</span></figcaption></figure>';
+      '<figcaption><b>' + (rw ? 'Rail to wall' : 'Wall to wall') + '</b>' + (rw ? '<span><i>A</i> upright at the deck edge, against the railing</span>' : '') + '<span><i>B</i> upright standing on Post C' + (rw ? ' at the wall' : ', one at each wall') + '</span><span><i>C</i> along the bottom, up off the deck; the bottom channel fastens to it</span><span><i>&#8593;</i>top rail runs over the uprights; top rail and Post C run right to the wall, Post B stands 2½" off it</span><span><i style="background:#2F5D50">T</i>top rail sleeve clip</span><span><i style="background:#2F5D50">F</i>screen foot</span></figcaption></figure>';
   };
   return '<div class="scrfigs">' + (kinds.indexOf('Rail to Wall') >= 0 ? one(true) : '') + (kinds.indexOf('Wall to Wall') >= 0 ? one(false) : '') + '</div>';
 }
