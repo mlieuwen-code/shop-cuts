@@ -725,7 +725,7 @@ function wId(id){ return id + '.w'; }
 var el = function(id){ return document.getElementById(id); };
 function esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 // a short notice at the bottom of the screen
-var VERSION = '11.13.1231', toastT = null;
+var VERSION = '11.13.1237', toastT = null;
 function toast(t){ var b = el('toast'); b.textContent = t; b.hidden = false; b.classList.remove('out'); clearTimeout(toastT); toastT = setTimeout(function(){ b.classList.add('out'); setTimeout(function(){ b.hidden = true; }, 400); }, 3200); }
 function msg(t, ok){ var m = el('msg'); m.hidden = !t; m.className = 'msg ' + (ok ? 'ok' : 'err'); m.textContent = t || ''; }
 function lsGet(k){ try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
@@ -1162,6 +1162,9 @@ function screenify(L, sd){
     }
     box(amt + 0.5, c, amt, h);
   });
+  // assembly: one "Assembled" box per screen at the end of the row (Assembly complete is tied to these)
+  var va = Math.max.apply(null, cols) + 0.9; L.cols.push(va); L.vchk[va] = 1; L.vhead = L.vhead || {}; L.vhead[va] = 'Assembled'; L.div[va] = 1;
+  units.forEach(function(r){ L.chk[r + ':' + va] = { left: cols[0], head: 'Assembled' }; });
 }
 // privacy screen drawing for the Posts tab: which piece is Post A, B and C
 // A = upright at the deck edge against the railing · C = the horizontal post along the bottom (the bottom channel fastens to it) · B = upright standing on C at the wall
@@ -1324,13 +1327,19 @@ function tickKind(key){
   if (!it || rest.charAt(0) !== 'c') return 'cut';
   var k = rest.slice(1), ck = it.L.chk[k];
   if (sn === 'CUT SHEET') return ck && /rail tag/i.test(ck.head) ? 'asm' : 'cut';
+  if (SCREEN_RE.test(sn)) return ck && ck.head === 'Assembled' ? 'asm' : 'cut';
   if (sn === 'POST SHEET'){ var sc = sheetSections(it).filter(function(s){ return s.keys.indexOf(key) >= 0; })[0]; return sc && /^(block|bracket)/i.test(sc.label) ? 'asm' : 'cut'; }
   return 'cut';
 }
 function stamp(kind){ var a = kind === 'asm' ? (cur.tla = cur.tla || []) : (cur.tl = cur.tl || []); a.push(Date.now()); }
 // Cut Sheet keys by column: Top rail + Channel boxes (cutting) and Rail tag boxes (assembly)
+function screenItems(){ return cur ? cur.items.filter(function(x){ return SCREEN_RE.test(x.sh.name) || x.virt; }) : []; }
 function cutKeys(kind){
-  var it = cutItem(); if (!it) return [];
+  var it = cutItem();
+  if (!it){
+    var out = []; screenItems().forEach(function(si){ Object.keys(si.L.chk).forEach(function(k){ var asm = si.L.chk[k].head === 'Assembled'; if (asm === (kind === 'asm')) out.push(si.sh.name + '|c' + k); }); });
+    return out;
+  }
   return Object.keys(it.L.chk).filter(function(k){ var h = it.L.chk[k].head; return kind === 'asm' ? /rail tag/i.test(h) : /top rail|channel/i.test(h); }).map(function(k){ return it.sh.name + '|c' + k; });
 }
 // welding: one box per rail tag on the Cut Sheet, kept by tag ('W|201.1') in the weld record
@@ -1516,7 +1525,7 @@ function renderSheet(book, item, done){
       // top mount: a centred plate's method reads WELD-ON Centered (the cut sheet says just "WELD-ON plate" for Mid-Cen)
       if (sh.name === 'POST SHEET' && isTop() && /^weld-on plate$/i.test(t.trim()) && /^(Mid|EC|IC|Joint|E)-Cen(-[LR])?$/i.test(L.txt(r, L.cols[0]).trim())) t = 'WELD-ON Centered';
       var attr = sp ? (sp.rs > 1 ? ' rowspan="' + sp.rs + '"' : '') + (sp.cs > 1 ? ' colspan="' + sp.cs + '"' : '') : '';
-      if (L.vchk && L.vchk[c] && !L.chk[k]){ h += r === L.hdr ? '<td class="c b vhd">✓</td>' : '<td></td>'; return; }
+      if (L.vchk && L.vchk[c] && !L.chk[k]){ h += r === L.hdr ? '<td class="c b vhd' + (L.div && L.div[c] ? ' divl' : '') + '">' + esc((L.vhead && L.vhead[c]) || '✓') + '</td>' : '<td></td>'; return; }
       if (L.chk[k]){ var key = pre + 'c' + k; h += '<td class="chk' + (done[key] ? ' on' : '') + (WELD ? ' ro' : '') + '" data-key="' + esc(key) + '"' + attr + '><span class="box" role="checkbox" aria-checked="' + !!done[key] + '" aria-label="Done">✓</span></td>'; return; }
       var cls = [];
       // Cover and Post Sheet: post height and block height stand out (label + the value beside it)
@@ -1848,14 +1857,16 @@ function stageCard(st, all, rec){
 }
 function renderFin(){
   var box = el('fin'), ci = cutItem(), it = cur.items[cur.tab];
-  if (!WELD && (!ci || it !== ci)){ box.hidden = true; return; }   // the weld tablet shows its sign-off under every tab
+  var onIt = ci ? it === ci : !!(it && (SCREEN_RE.test(it.sh.name) || it.virt));   // screen jobs: under the Screens and Posts tabs
+  if (!WELD && !onIt){ box.hidden = true; return; }   // the weld tablet shows its sign-off under every tab
   var h = '', when = function(rec){ var at = new Date(rec.at); return esc(rec.by) + ' · ' + esc(at.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })) + ', ' + esc(at.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })); };
   if (WELD){
     var allW = weldAll();
     if (cur.w.fin || (allW && asmOK())) h = stageCard(WSTAGE, allW, cur.w.fin);
     else if (allW) h = '<div class="fin"><div class="fh"><span class="fbox"></span><div><b>Still in the shop</b><span>Welding complete can be signed off here once Assembly complete is signed off in Shop Cuts.</span></div></div></div>';
   } else {
-    STAGES.forEach(function(st){ var all = allDone(cutKeys(st.kind)); if (all || cur[st.k]) h += stageCard(st, all, cur[st.k]); });
+    var SCR_ASK = { fin: ['Every top rail, channel and post is ticked. Who finished cutting?', 'Some cut boxes were unticked after cutting was signed off.'], asm: ['Every screen is ticked as assembled. Who finished assembly?', 'Some screens were unticked after assembly was signed off.'] };
+    STAGES.forEach(function(st){ if (!ci) st = Object.assign({}, st, { ask: SCR_ASK[st.k][0], un: SCR_ASK[st.k][1] }); var all = allDone(cutKeys(st.kind)); if (all || cur[st.k]) h += stageCard(st, all, cur[st.k]); });
     // welding is the last stage and is signed off on the weld tablet; here it only shows where the job is at
     if (cur.w.fin) h += '<div class="fin complete"><div class="fh"><span class="fbox on">✓</span><div><b>Welding complete</b><span>' + when(cur.w.fin) + '</span></div></div></div>';
     else if (cur.asm){ var wn = weldKeys().length, wd = Math.min(wn, Object.keys(cur.w.done).length); h += '<div class="fin"><div class="fh"><span class="fbox"></span><div><b>At welding</b><span>' + (wd ? wd + ' of ' + wn + ' rails welded. ' : '') + 'The job is on the weld tablet now. It moves to Completed when Welding complete is signed off there.</span></div></div></div>'; }
