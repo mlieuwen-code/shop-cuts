@@ -724,7 +724,7 @@ function wId(id){ return id + '.w'; }
 var el = function(id){ return document.getElementById(id); };
 function esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 // a short notice at the bottom of the screen
-var VERSION = '11.13.1214', toastT = null;
+var VERSION = '11.13.1216', toastT = null;
 function toast(t){ var b = el('toast'); b.textContent = t; b.hidden = false; b.classList.remove('out'); clearTimeout(toastT); toastT = setTimeout(function(){ b.classList.add('out'); setTimeout(function(){ b.hidden = true; }, 400); }, 3200); }
 function msg(t, ok){ var m = el('msg'); m.hidden = !t; m.className = 'msg ' + (ok ? 'ok' : 'err'); m.textContent = t || ''; }
 function lsGet(k){ try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
@@ -1168,7 +1168,9 @@ function screenDiagram(kinds){
   var one = function(rw){
     var W = 360, dk = 226, top = 34, ink = '#1F1B17', ch = '#E8590C', o = '';
     var xA = rw ? 64 : null, wallR = 318, wallL = rw ? null : 26;
-    var G = 16, x0 = rw ? xA + 12 : wallL + 14 + G, x1 = wallR - G;   // Post C runs from Post A (or the far wall) to the wall, about 2 1/2" off it
+    // the top rail and Post C run right to the wall (their clips screw to it); Post B stands about 2 1/2" off the wall
+    var G = 16, wfR = wallR, wfL = rw ? null : wallL + 14, xr = wfR - 5, xl = rw ? null : wfL + 5;
+    var xB = wfR - G - 12, xBL = rw ? null : wfL + G, x0 = rw ? xA + 12 : xl;
     var lbl = function(x, y, t){ return '<circle cx="' + x + '" cy="' + y + '" r="13" fill="' + ink + '"/><text x="' + x + '" y="' + (y + 5) + '" text-anchor="middle" font-size="15" font-weight="900" fill="#fff">' + t + '</text>'; };
     var note = function(x, y, t, a){ return '<text x="' + x + '" y="' + y + '" font-size="11" font-weight="700" fill="#6B6157"' + (a ? ' text-anchor="' + a + '"' : '') + '>' + t + '</text>'; };
     o += '<rect x="0" y="' + dk + '" width="' + W + '" height="10" fill="#D9D0C3"/>' + note(8, dk + 22, 'DECK');
@@ -1177,39 +1179,41 @@ function screenDiagram(kinds){
     // the railing runs at right angles to the screen, so here it's seen end-on: its top rail and a post, tight to Post A
     if (rw) o += '<rect x="' + (xA - 20) + '" y="126" width="20" height="10" rx="2" fill="#B9AFA4" stroke="#8C8279"/><rect x="' + (xA - 14) + '" y="136" width="8" height="' + (dk - 136) + '" fill="#CFC6BB" stroke="#9A9087"/>' +
       note(4, 106, 'RAILING') + note(4, 118, '(end view)');
-    // top rail over both uprights; Post C held up off the deck (clearance underneath), Post B standing on C at the wall, Post A down to the deck
-    var tr = 9, yC = dk - 28, xB = x1 - 12, xL = rw ? xA : x0;
-    o += '<rect x="' + xL + '" y="' + top + '" width="' + (x1 - xL) + '" height="' + tr + '" rx="2" fill="#8C8279"/>';
-    o += '<rect x="' + x0 + '" y="' + yC + '" width="' + (x1 - x0) + '" height="12" fill="' + ink + '"/>';
+    // top rail over the uprights, Post C up off the deck (clearance underneath), Post B standing on C, Post A down to the deck
+    var tr = 9, yC = dk - 28, xL = rw ? xA : xl;
+    o += '<rect x="' + xL + '" y="' + top + '" width="' + (xr - xL) + '" height="' + tr + '" rx="2" fill="#8C8279"/>';
+    o += '<rect x="' + x0 + '" y="' + yC + '" width="' + (xr - x0) + '" height="12" fill="' + ink + '"/>';
     o += '<rect x="' + xB + '" y="' + (top + tr) + '" width="12" height="' + (yC - top - tr) + '" fill="' + ink + '"/>';
     if (rw) o += '<rect x="' + xA + '" y="' + (top + tr) + '" width="12" height="' + (dk - top - tr) + '" fill="' + ink + '"/>';
-    else o += '<rect x="' + x0 + '" y="' + (top + tr) + '" width="12" height="' + (yC - top - tr) + '" fill="' + ink + '"/>';
-    o += '<g stroke="#6B6157" stroke-width="1.2"><line x1="' + ((x0 + x1) / 2 - 40) + '" y1="' + (yC + 14) + '" x2="' + ((x0 + x1) / 2 - 40) + '" y2="' + (dk - 1) + '"/><line x1="' + ((x0 + x1) / 2 - 45) + '" y1="' + (yC + 14) + '" x2="' + ((x0 + x1) / 2 - 35) + '" y2="' + (yC + 14) + '"/><line x1="' + ((x0 + x1) / 2 - 45) + '" y1="' + (dk - 1) + '" x2="' + ((x0 + x1) / 2 - 35) + '" y2="' + (dk - 1) + '"/></g>' + note((x0 + x1) / 2 - 32, dk - 4, 'CLEARANCE');
-    // screen foot: a clip slid into the end of Post C and screwed to the wall (one at each wall on wall-to-wall)
-    // the clip sits inside the end of C, crosses the 2 1/2" gap and screws to the wall face
-    var foot = function(cEnd, wf, dir){ var fc = '#2F5D50', a = Math.min(cEnd - dir * 14, wf), w = Math.abs(wf - (cEnd - dir * 14));
-      return '<rect x="' + a + '" y="' + (yC + 3) + '" width="' + w + '" height="6" fill="#2F5D50" fill-opacity=".45" stroke="' + fc + '" stroke-width="1.5"/>' +
-        '<rect x="' + (dir > 0 ? wf - 5 : wf) + '" y="' + (yC - 10) + '" width="5" height="34" fill="' + fc + '"/>' +
-        '<circle cx="' + (wf - dir * 2.5) + '" cy="' + (yC - 4) + '" r="2.2" fill="#fff"/><circle cx="' + (wf - dir * 2.5) + '" cy="' + (yC + 18) + '" r="2.2" fill="#fff"/>'; };
-    // the 2 1/2" gap to the wall, marked at the top
+    else o += '<rect x="' + xBL + '" y="' + (top + tr) + '" width="12" height="' + (yC - top - tr) + '" fill="' + ink + '"/>';
+    var mx = (x0 + xr) / 2;
+    o += '<g stroke="#6B6157" stroke-width="1.2"><line x1="' + (mx - 40) + '" y1="' + (yC + 14) + '" x2="' + (mx - 40) + '" y2="' + (dk - 1) + '"/><line x1="' + (mx - 45) + '" y1="' + (yC + 14) + '" x2="' + (mx - 35) + '" y2="' + (yC + 14) + '"/><line x1="' + (mx - 45) + '" y1="' + (dk - 1) + '" x2="' + (mx - 35) + '" y2="' + (dk - 1) + '"/></g>' + note(mx - 32, dk - 4, 'CLEARANCE');
+    // clips: a tongue inside the end of the rail or Post C, and a plate screwed to the wall face.
+    // top rail sleeve clip: plate goes DOWN (no screws above the rail) · screen foot: plate goes UP (no screws below)
+    var clip = function(y, h, py, ph, s1, s2, wf, dir){ var fc = '#2F5D50', end = wf - dir * 5, a = dir > 0 ? end - 14 : end;
+      return '<rect x="' + a + '" y="' + y + '" width="14" height="' + h + '" fill="#2F5D50" fill-opacity=".55" stroke="' + fc + '" stroke-width="1.2"/>' +
+        '<rect x="' + (dir > 0 ? wf - 5 : wf) + '" y="' + py + '" width="5" height="' + ph + '" fill="' + fc + '"/>' +
+        '<circle cx="' + (wf - dir * 2.5) + '" cy="' + s1 + '" r="2.2" fill="#fff"/><circle cx="' + (wf - dir * 2.5) + '" cy="' + s2 + '" r="2.2" fill="#fff"/>'; };
+    var clips = function(wf, dir){ return clip(top + 2, 5, top, 46, top + 22, top + 36, wf, dir) + clip(yC + 3, 6, yC - 34, 46, yC - 28, yC - 14, wf, dir); };
+    // the 2 1/2" from Post B to the wall
     var gap = function(a, b){ var y = 162; return '<g stroke="#6B6157" stroke-width="1.2"><line x1="' + a + '" y1="' + y + '" x2="' + b + '" y2="' + y + '"/><line x1="' + a + '" y1="' + (y - 4) + '" x2="' + a + '" y2="' + (y + 4) + '"/><line x1="' + b + '" y1="' + (y - 4) + '" x2="' + b + '" y2="' + (y + 4) + '"/></g><text x="' + ((a + b) / 2) + '" y="' + (y - 6) + '" text-anchor="middle" font-size="10" font-weight="800" fill="#6B6157">2½"</text>'; };
-    o += foot(x1, wallR, 1) + gap(x1, wallR); if (!rw) o += foot(x0, wallL + 14, -1) + gap(wallL + 14, x0);
-    var fl = function(x){ return '<circle cx="' + x + '" cy="' + (yC + 22) + '" r="9" fill="#2F5D50"/><text x="' + x + '" y="' + (yC + 26) + '" text-anchor="middle" font-size="11" font-weight="900" fill="#fff">F</text>'; };
-    o += fl(x1 - 16); if (!rw) o += fl(x0 + 16);
-    var gx0 = rw ? xA + 12 : x0 + 12, gx1 = xB, mid = 120;
+    o += clips(wfR, 1) + gap(xB + 12, wfR); if (!rw) o += clips(wfL, -1) + gap(wfL, xBL);
+    var fl = function(x, y, t){ return '<circle cx="' + x + '" cy="' + y + '" r="9" fill="#2F5D50"/><text x="' + x + '" y="' + (y + 4) + '" text-anchor="middle" font-size="11" font-weight="900" fill="#fff">' + t + '</text>'; };
+    var gx0 = rw ? xA + 12 : xBL + 12, gx1 = xB, mid = 120;
     o += '<rect x="' + gx0 + '" y="' + (top + tr + 2) + '" width="' + (gx1 - gx0) + '" height="' + (mid - top - tr - 4) + '" fill="#CFE3EE" stroke="#9DBBCB"/>';
     o += '<rect x="' + gx0 + '" y="' + mid + '" width="' + (gx1 - gx0) + '" height="9" fill="' + ch + '"/>';                              // double channel
     o += '<rect x="' + gx0 + '" y="' + (mid + 11) + '" width="' + (gx1 - gx0) + '" height="' + (yC - mid - 20) + '" fill="#CFE3EE" stroke="#9DBBCB"/>';
     o += '<rect x="' + gx0 + '" y="' + (yC - 8) + '" width="' + (gx1 - gx0) + '" height="8" fill="' + ch + '"/>';                         // bottom channel
+    o += fl(xB - 12, top + 22, 'T') + fl(xB - 2, yC + 22, 'F'); if (!rw) o += fl(xBL + 24, top + 22, 'T') + fl(xBL + 14, yC + 22, 'F');
     var cx = (gx0 + gx1) / 2;
     o += '<text x="' + cx + '" y="' + (top - 5) + '" text-anchor="middle" font-size="11" font-weight="800" fill="#6B6157">TOP RAIL</text>';
     o += '<text x="' + cx + '" y="' + (mid - 4) + '" text-anchor="middle" font-size="11" font-weight="800" fill="' + ch + '">DOUBLE CHANNEL</text>';
     o += '<text x="' + cx + '" y="' + (yC - 12) + '" text-anchor="middle" font-size="11" font-weight="800" fill="' + ch + '">BOTTOM CHANNEL</text>';
     if (rw) o += lbl(xA + 6, 72, 'A');
     o += lbl(xB + 6, 72, 'B') + lbl(cx + 40, yC + 6, 'C');   // C label sits on the post
-    if (!rw) o += lbl(x0 + 6, 72, 'B');
+    if (!rw) o += lbl(xBL + 6, 72, 'B');
     return '<figure class="scrfig"><svg viewBox="0 0 360 250" role="img" aria-label="' + (rw ? 'Rail to wall' : 'Wall to wall') + ' privacy screen: which piece is Post A, B and C"><defs><pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="#EFE9E1"/><line x1="0" y1="0" x2="0" y2="6" stroke="#B9AFA4" stroke-width="2"/></pattern></defs>' + o + '</svg>' +
-      '<figcaption><b>' + (rw ? 'Rail to wall' : 'Wall to wall') + '</b>' + (rw ? '<span><i>A</i> upright at the deck edge, against the railing</span>' : '') + '<span><i>B</i> upright standing on Post C' + (rw ? ' at the wall' : ', one at each wall') + '</span><span><i>C</i> along the bottom, up off the deck; the bottom channel fastens to it</span><span><i>&#8593;</i>top rail runs over the uprights</span><span><i style="background:#2F5D50">F</i>screen foot: clip slid into the end of Post C and screwed to the wall' + (rw ? '' : ' (both ends)') + '</span></figcaption></figure>';
+      '<figcaption><b>' + (rw ? 'Rail to wall' : 'Wall to wall') + '</b>' + (rw ? '<span><i>A</i> upright at the deck edge, against the railing</span>' : '') + '<span><i>B</i> upright standing on Post C' + (rw ? ' at the wall' : ', one at each wall') + '</span><span><i>C</i> along the bottom, up off the deck; the bottom channel fastens to it</span><span><i>&#8593;</i>top rail runs over the uprights; top rail and Post C run right to the wall, Post B stands 2½" off it</span><span><i style="background:#2F5D50">T</i>top rail sleeve clip: in the end of the top rail, plate goes down the wall, so no screws above the rail</span><span><i style="background:#2F5D50">F</i>screen foot: in the end of Post C, plate goes up the wall, so no screws below' + (rw ? '' : ' (both walls)') + '</span></figcaption></figure>';
   };
   return '<div class="scrfigs">' + (kinds.indexOf('Rail to Wall') >= 0 ? one(true) : '') + (kinds.indexOf('Wall to Wall') >= 0 ? one(false) : '') + '</div>';
 }
