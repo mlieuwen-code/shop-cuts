@@ -718,7 +718,7 @@ function wId(id){ return id + '.w'; }
 var el = function(id){ return document.getElementById(id); };
 function esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 // a short notice at the bottom of the screen
-var VERSION = '11.13.1144', toastT = null;
+var VERSION = '11.13.1148', toastT = null;
 function toast(t){ var b = el('toast'); b.textContent = t; b.hidden = false; b.classList.remove('out'); clearTimeout(toastT); toastT = setTimeout(function(){ b.classList.add('out'); setTimeout(function(){ b.hidden = true; }, 400); }, 3200); }
 function msg(t, ok){ var m = el('msg'); m.hidden = !t; m.className = 'msg ' + (ok ? 'ok' : 'err'); m.textContent = t || ''; }
 function lsGet(k){ try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
@@ -1080,6 +1080,7 @@ function shopSheets(book){
     return parseSheet(book, sh).then(function(sd){ if (d.always || (d.has && d.has(sd)) || (sh.state === 'visible' && !(d.has === screenUnits))) return { sh: sh, sd: sd, label: d.label, view: d.view }; return null; });
   })).then(function(a){
     list = a.filter(Boolean);
+    var sp = screenPosts(list); if (sp) list.push(sp);
     // any other tab that's been un-hidden for this job and has a print area
     var extra = book.sheets.filter(function(s){ return s.state === 'visible' && s.pa && !SKIP.test(s.name) && !SHOP.some(function(d){ return d.n === s.name; }); });
     return Promise.all(extra.map(function(sh){ return parseSheet(book, sh).then(function(sd){ return { sh: sh, sd: sd, label: sh.name.charAt(0) + sh.name.slice(1).toLowerCase() }; }); })).then(function(b){ return list.concat(b); });
@@ -1124,7 +1125,49 @@ function layout(book, item){
   var hdr = null;
   rows.some(function(r){ if (cols.some(function(c){ return txt(r, c) === '✓'; })) { hdr = r; return true; } return false; });
   if (hdr == null){ var firstTap = rows.filter(function(r){ return rowTap[r]; })[0]; if (firstTap != null){ var i = rows.indexOf(firstTap); for (var q = i - 1; q >= 0; q--) if (cols.filter(function(c){ return txt(rows[q], c) !== ''; }).length >= 2){ hdr = rows[q]; break; } } }
-  return { a: a, rows: rows, cols: cols, chk: chk, rowTap: rowTap, txt: txt, hdr: hdr };
+  var L = { a: a, rows: rows, cols: cols, chk: chk, rowTap: rowTap, txt: txt, hdr: hdr };
+  if (SCREEN_RE.test(sh.name) && hdr != null) screenify(L);
+  return L;
+}
+// privacy screen sheets: a ✓ box after each Top Rail / Channels amount (posts are ticked on the Posts tab), and a divider before each part
+function screenify(L){
+  L.rowTap = {}; L.div = {}; L.vchk = {};
+  var units = L.rows.filter(function(r){ var v = L.txt(r, L.cols[0]); return r > L.hdr && v !== '' && !isNaN(+v); });
+  var cols = L.cols.slice();
+  cols.forEach(function(c, i){
+    var h = L.txt(L.hdr, c); if (!/^(top rail|post [a-z]|channels?)$/i.test(h)) return;
+    L.div[c] = 1;
+    if (/^post/i.test(h)) return;
+    var amt = /^(amt|qty)$/i.test(L.txt(L.hdr, cols[i + 1] || -1)) ? cols[i + 1] : c, v = amt + 0.5;
+    L.cols.splice(L.cols.indexOf(amt) + 1, 0, v); L.vchk[v] = 1;
+    units.forEach(function(r){ if (L.txt(r, c) !== '') L.chk[r + ':' + v] = { left: amt, left2: c, head: h }; });
+  });
+}
+// privacy screens: one Posts tab for the whole job, every post length with how many and which units, like the Post Sheet
+function screenPosts(list){
+  var rows = [], fake = { cells: {}, hr: {}, hc: {}, w: {}, merges: [], maxR: 0, maxC: 5 }, put = function(r, c, v){ fake.cells[r + ':' + c] = { v: v }; };
+  list.forEach(function(it){
+    if (!SCREEN_RE.test(it.sh.name)) return;
+    var sd = it.sd, H = 6, typ = it.sh.name === 'Rail to Wall' ? 'R–W' : 'W–W';
+    for (var c = 1; c <= (sd.maxC || 30); c++){
+      var h = String(cellVal(sd, H, c) || '').trim(); if (!/^post [a-z]$/i.test(h)) continue;
+      for (var r = H + 1; r <= (sd.maxR || 60); r++){
+        var u = cellVal(sd, r, 1), len = cellVal(sd, r, c), n = +cellVal(sd, r, c + 1) || 1;
+        if (u == null || u === '' || isNaN(+u) || len == null || len === '' || !(+len > 0)) continue;
+        var key = h + '|' + (+len), row = rows.filter(function(x){ return x.key === key; })[0];
+        if (!row){ row = { key: key, post: h.replace(/^post/i, 'Post'), len: +len, qty: 0, units: [] }; rows.push(row); }
+        var ul = String(u) + (list.filter(function(x){ return SCREEN_RE.test(x.sh.name); }).length > 1 ? ' ' + typ : '');
+        row.qty += n; if (row.units.indexOf(ul) < 0) row.units.push(ul);
+      }
+    }
+  });
+  if (!rows.length) return null;
+  rows.sort(function(a, b){ return a.post < b.post ? -1 : a.post > b.post ? 1 : b.len - a.len; });
+  ['Post', 'Qty', 'Length', '✓', 'For units'].forEach(function(t, i){ put(1, i + 1, t); });
+  var map = {}; rows.forEach(function(x, i){ map[x.key] = i + 2; });
+  rows.forEach(function(x, i){ put(i + 2, 1, x.post); put(i + 2, 2, String(x.qty)); put(i + 2, 3, fmt16(x.len)); put(i + 2, 5, x.units.join(', ')); });
+  fake.maxR = rows.length + 1;
+  return { sh: { name: 'SCREEN POSTS', pa: "'SCREEN POSTS'!$A$1:$E$" + fake.maxR, state: 'visible' }, sd: fake, label: 'Posts', virt: 1, map: map };
 }
 function itemKeys(item){ var L = item.L; return Object.keys(L.chk).map(function(k){ return 'c' + k; }).concat(Object.keys(L.rowTap).map(function(r){ return 'r' + r; })); }
 // measurements: big whole numbers with a small stacked fraction, like reading a tape
@@ -1374,11 +1417,11 @@ function renderSheet(book, item, done){
       if (un && un !== lastUnit){ h += layoutRow(un, NC); lastUnit = un; }
     }
     var rc = L.cols.filter(function(c){ return L.chk[r + ':' + c]; });
-    var main = rc.filter(function(c){ return /top rail|channel/i.test(L.chk[r + ':' + c].head); });
+    var main = L.vchk ? [] : rc.filter(function(c){ return /top rail|channel/i.test(L.chk[r + ':' + c].head); });
     var need = (main.length ? main : rc).map(function(c){ return pre + 'c' + r + ':' + c; });
     var rowDone = (need.length && need.every(function(k){ return done[k]; })) || (L.rowTap[r] && done[pre + 'r' + r]);
     if (WELD && sh.name === 'CUT SHEET') rowDone = !!(wmap[r] && cur.w.done[wmap[r]]);
-    var tick = {}; rc.forEach(function(c){ if (done[pre + 'c' + r + ':' + c]) tick[L.chk[r + ':' + c].left] = 1; });
+    var tick = {}; rc.forEach(function(c){ var ck = L.chk[r + ':' + c]; if (done[pre + 'c' + r + ':' + c]){ tick[ck.left] = 1; if (ck.left2 != null) tick[ck.left2] = 1; } });
     var trc = [rowDone ? 'rowdone' : '', L.rowTap[r] ? 'tap' : '', need.length || L.rowTap[r] ? 'data' : '', r === L.hdr ? 'hdr' : (L.cols.some(function(c){ return L.txt(r, c) === '✓'; }) ? 'subhdr' : ''), /^\d+\s*[·.\-]\s*[A-Za-z]/.test(L.txt(r, L.cols[0])) ? 'sechead' : (L.hdr != null && r < L.hdr ? 'info' : '')].filter(Boolean).join(' ');
     var big = !!(need.length || L.rowTap[r]);
     if (stickHead[r]) h += '<tr class="stickrow"><td colspan="' + NC + '">' + stickHead[r] + '</td></tr>';
@@ -1393,6 +1436,7 @@ function renderSheet(book, item, done){
       // top mount: a centred plate's method reads WELD-ON Centered (the cut sheet says just "WELD-ON plate" for Mid-Cen)
       if (sh.name === 'POST SHEET' && isTop() && /^weld-on plate$/i.test(t.trim()) && /^(Mid|EC|IC|Joint|E)-Cen(-[LR])?$/i.test(L.txt(r, L.cols[0]).trim())) t = 'WELD-ON Centered';
       var attr = sp ? (sp.rs > 1 ? ' rowspan="' + sp.rs + '"' : '') + (sp.cs > 1 ? ' colspan="' + sp.cs + '"' : '') : '';
+      if (L.vchk && L.vchk[c] && !L.chk[k]){ h += r === L.hdr ? '<td class="c b vhd">✓</td>' : '<td></td>'; return; }
       if (L.chk[k]){ var key = pre + 'c' + k; h += '<td class="chk' + (done[key] ? ' on' : '') + (WELD ? ' ro' : '') + '" data-key="' + esc(key) + '"' + attr + '><span class="box" role="checkbox" aria-checked="' + !!done[key] + '" aria-label="Done">✓</span></td>'; return; }
       var cls = [];
       // Cover and Post Sheet: post height and block height stand out (label + the value beside it)
@@ -1407,6 +1451,9 @@ function renderSheet(book, item, done){
       }
       if (tick[c]) cls.push('cut');
       if (divC != null && c === divC && r >= L.hdr) cls.push('divl');
+      if (L.div && L.div[c] && r >= L.hdr) cls.push('divl');
+      if (L.div && L.div[c] && r > L.hdr && /^post/i.test(L.txt(L.hdr, c)) && cur){ var vp = cur.items.filter(function(x){ return x.virt; })[0], pr = vp && vp.map[L.txt(L.hdr, c) + '|' + (+(cell && cell.v))]; if (pr && done['SCREEN POSTS|c' + pr + ':4']) cls.push('cut'); }
+      if (item.virt && r === L.hdr) cls.push('b', 'c');
       if (c === L.cols[0] && L.hdr != null && r > L.hdr && floatTag[t.trim()]) cls.push('floatrail');
       if (((bpC[c] && r > L.hdr) || (r > bpFrom && r < bpTo && c === L.cols[0] && !L.cols.some(function(cc){ return L.txt(r, cc) === '✓'; }))) && bpDesc(t)) cls.push('bp');
       if (f && f.b) cls.push('b');
