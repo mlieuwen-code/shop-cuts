@@ -457,6 +457,43 @@ function screenify(L, sd){
     box(amt + 0.5, c, amt, h);
   });
 }
+// privacy screen drawing for the Posts tab: which piece is Post A, B and C
+// A = upright at the deck edge against the railing · C = the horizontal post along the bottom (the bottom channel fastens to it) · B = upright standing on C at the wall
+function screenDiagram(kinds){
+  var one = function(rw){
+    var W = 360, dk = 226, top = 34, ink = '#1F1B17', ch = '#E8590C', o = '';
+    var xA = rw ? 64 : null, wallR = 318, wallL = rw ? null : 26;
+    var x0 = rw ? xA + 12 : wallL + 14, x1 = wallR;               // Post C runs from Post A (or the far wall) to the wall
+    var lbl = function(x, y, t){ return '<circle cx="' + x + '" cy="' + y + '" r="13" fill="' + ink + '"/><text x="' + x + '" y="' + (y + 5) + '" text-anchor="middle" font-size="15" font-weight="900" fill="#fff">' + t + '</text>'; };
+    var note = function(x, y, t, a){ return '<text x="' + x + '" y="' + y + '" font-size="11" font-weight="700" fill="#6B6157"' + (a ? ' text-anchor="' + a + '"' : '') + '>' + t + '</text>'; };
+    o += '<rect x="0" y="' + dk + '" width="' + W + '" height="10" fill="#D9D0C3"/>' + note(8, dk + 22, 'DECK');
+    o += '<rect x="' + wallR + '" y="10" width="26" height="' + (dk - 10) + '" fill="url(#hatch)" stroke="#9A9087"/>' + note(wallR + 13, 8, 'WALL', 'middle');
+    if (!rw) o += '<rect x="' + (wallL - 12) + '" y="10" width="26" height="' + (dk - 10) + '" fill="url(#hatch)" stroke="#9A9087"/>' + note(wallL + 1, 8, 'WALL', 'middle');
+    if (rw) o += '<g stroke="#9A9087" stroke-width="3"><line x1="10" y1="132" x2="' + xA + '" y2="132"/><line x1="16" y1="132" x2="16" y2="' + dk + '"/><line x1="40" y1="132" x2="40" y2="' + dk + '"/></g>' + note(10, 124, 'RAILING');
+    // Post C along the bottom, Post B up the wall side, Post A at the railing
+    var yC = dk - 12, xB = x1 - 12;
+    o += '<rect x="' + x0 + '" y="' + yC + '" width="' + (x1 - x0) + '" height="12" fill="' + ink + '"/>';
+    o += '<rect x="' + xB + '" y="' + (top + 6) + '" width="12" height="' + (yC - top - 6) + '" fill="' + ink + '"/>';
+    if (rw) o += '<rect x="' + xA + '" y="' + top + '" width="12" height="' + (dk - top) + '" fill="' + ink + '"/>';
+    else o += '<rect x="' + x0 + '" y="' + (top + 6) + '" width="12" height="' + (yC - top - 6) + '" fill="' + ink + '"/>';
+    var gx0 = rw ? xA + 12 : x0 + 12, gx1 = xB, mid = 120;
+    o += '<rect x="' + gx0 + '" y="' + top + '" width="' + (gx1 - gx0) + '" height="7" fill="#8C8279"/>';                               // top rail
+    o += '<rect x="' + gx0 + '" y="' + (top + 9) + '" width="' + (gx1 - gx0) + '" height="' + (mid - top - 11) + '" fill="#CFE3EE" stroke="#9DBBCB"/>';
+    o += '<rect x="' + gx0 + '" y="' + mid + '" width="' + (gx1 - gx0) + '" height="9" fill="' + ch + '"/>';                              // double channel
+    o += '<rect x="' + gx0 + '" y="' + (mid + 11) + '" width="' + (gx1 - gx0) + '" height="' + (yC - mid - 20) + '" fill="#CFE3EE" stroke="#9DBBCB"/>';
+    o += '<rect x="' + gx0 + '" y="' + (yC - 8) + '" width="' + (gx1 - gx0) + '" height="8" fill="' + ch + '"/>';                         // bottom channel
+    var cx = (gx0 + gx1) / 2;
+    o += '<text x="' + cx + '" y="' + (top - 5) + '" text-anchor="middle" font-size="11" font-weight="800" fill="#6B6157">TOP RAIL</text>';
+    o += '<text x="' + cx + '" y="' + (mid - 4) + '" text-anchor="middle" font-size="11" font-weight="800" fill="' + ch + '">DOUBLE CHANNEL</text>';
+    o += '<text x="' + cx + '" y="' + (yC - 12) + '" text-anchor="middle" font-size="11" font-weight="800" fill="' + ch + '">BOTTOM CHANNEL</text>';
+    if (rw) o += lbl(xA + 6, 72, 'A');
+    o += lbl(xB + 6, 72, 'B') + lbl(cx + 70, yC + 6, 'C');
+    if (!rw) o += lbl(x0 + 6, 72, 'B');
+    return '<figure class="scrfig"><svg viewBox="0 0 360 250" role="img" aria-label="' + (rw ? 'Rail to wall' : 'Wall to wall') + ' privacy screen: which piece is Post A, B and C"><defs><pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="#EFE9E1"/><line x1="0" y1="0" x2="0" y2="6" stroke="#B9AFA4" stroke-width="2"/></pattern></defs>' + o + '</svg>' +
+      '<figcaption><b>' + (rw ? 'Rail to wall' : 'Wall to wall') + '</b>' + (rw ? '<span><i>A</i> upright at the deck edge, against the railing</span>' : '') + '<span><i>B</i> upright standing on Post C' + (rw ? ' at the wall' : ', one at each wall') + '</span><span><i>C</i> along the bottom; the bottom channel fastens to it</span></figcaption></figure>';
+  };
+  return '<div class="scrfigs">' + (kinds.indexOf('Rail to Wall') >= 0 ? one(true) : '') + (kinds.indexOf('Wall to Wall') >= 0 ? one(false) : '') + '</div>';
+}
 // privacy screens: one Posts tab for the whole job, every post length with how many and which units, like the Post Sheet
 function screenPosts(list){
   var rows = [], fake = { cells: {}, hr: {}, hc: {}, w: {}, merges: [], maxR: 0, maxC: 5 }, put = function(r, c, v){ fake.cells[r + ':' + c] = { v: v }; };
@@ -481,7 +518,8 @@ function screenPosts(list){
   var map = {}; rows.forEach(function(x, i){ map[x.key] = i + 2; });
   rows.forEach(function(x, i){ put(i + 2, 1, x.post); put(i + 2, 2, String(x.qty)); put(i + 2, 3, fmt16(x.len)); put(i + 2, 5, x.units.join(', ')); });
   fake.maxR = rows.length + 1;
-  return { sh: { name: 'SCREEN POSTS', pa: "'SCREEN POSTS'!$A$1:$E$" + fake.maxR, state: 'visible' }, sd: fake, label: 'Posts', virt: 1, map: map };
+  var kinds = list.filter(function(x){ return SCREEN_RE.test(x.sh.name); }).map(function(x){ return x.sh.name; });
+  return { kinds: kinds, sh: { name: 'SCREEN POSTS', pa: "'SCREEN POSTS'!$A$1:$E$" + fake.maxR, state: 'visible' }, sd: fake, label: 'Posts', virt: 1, map: map };
 }
 function itemKeys(item){ var L = item.L; return Object.keys(L.chk).map(function(k){ return 'c' + k; }).concat(Object.keys(L.rowTap).map(function(r){ return 'r' + r; })); }
 // measurements: big whole numbers with a small stacked fraction, like reading a tape
@@ -675,7 +713,7 @@ function renderSheet(book, item, done){
     L.rows.forEach(function(r){ L.cols.forEach(function(c){ if (r >= m.r1 && r <= m.r2 && c >= m.c1 && c <= m.c2 && !(r === m.r1 && c === m.c1)) skip[r + ':' + c] = 1; }); });
   });
   var scr = SCREEN_RE.test(sh.name) && L.hdr != null;
-  var h = (scr ? screenHead(item) : '') + (WELD && isTop() && /^(CUT SHEET|POST SHEET)$/.test(sh.name) ? '<div class="bpnote"><b>Top mount · weld-on base plates</b><span class="bpkey"><i>Cen</i> centred on the plate · <i>Off</i> offset: post at the outer end, plate reaches in under the rail · <i>Rev</i> reverse offset: plate sticks out past the end · <i>L / R</i> left / right end of the rail · <i>EC</i> corner turns right with the run, <i>IC</i> turns left · 4x4 plates for 2x2 posts</span>' + (sh.name === 'POST SHEET' ? 'Post lengths are in section 1. The plates to weld, and how many of each, are under Base plates. The Cuts tab shows which plate goes on each rail end.' : 'The L Post and R Post columns show which base plate goes on each end of the rail. The Posts tab has the post lengths and the plate totals.') + '</div>' : '') + '<table class="sheet">';
+  var h = (scr ? screenHead(item) : '') + (item.virt && item.kinds ? screenDiagram(item.kinds) : '') + (WELD && isTop() && /^(CUT SHEET|POST SHEET)$/.test(sh.name) ? '<div class="bpnote"><b>Top mount · weld-on base plates</b><span class="bpkey"><i>Cen</i> centred on the plate · <i>Off</i> offset: post at the outer end, plate reaches in under the rail · <i>Rev</i> reverse offset: plate sticks out past the end · <i>L / R</i> left / right end of the rail · <i>EC</i> corner turns right with the run, <i>IC</i> turns left · 4x4 plates for 2x2 posts</span>' + (sh.name === 'POST SHEET' ? 'Post lengths are in section 1. The plates to weld, and how many of each, are under Base plates. The Cuts tab shows which plate goes on each rail end.' : 'The L Post and R Post columns show which base plate goes on each end of the rail. The Posts tab has the post lengths and the plate totals.') + '</div>' : '') + '<table class="sheet">';
   var isCut = sh.name === 'CUT SHEET' && cur && Object.keys(cur.units || {}).length, lastUnit = null;
   var hiSheet = /^(COVER|POST SHEET)$/.test(sh.name);
   // Cut Sheet: a black line between the float lengths (Left / Right) and the posts (L Post …), so the two groups read apart
