@@ -472,8 +472,8 @@ function screenDiagram(kinds){
     o += '<rect x="' + wallR + '" y="10" width="26" height="' + (dk - 10) + '" fill="url(#hatch)" stroke="#9A9087"/>' + note(wallR + 13, 8, 'WALL', 'middle');
     if (!rw) o += '<rect x="' + (wallL - 12) + '" y="10" width="26" height="' + (dk - 10) + '" fill="url(#hatch)" stroke="#9A9087"/>' + note(wallL + 1, 8, 'WALL', 'middle');
     // the railing runs at right angles to the screen, so here it's seen end-on: its top rail and a post, tight to Post A
-    if (rw) o += '<rect x="' + (xA - 20) + '" y="126" width="20" height="10" rx="2" fill="#B9AFA4" stroke="#8C8279"/><rect x="' + (xA - 14) + '" y="136" width="8" height="' + (dk - 136) + '" fill="#CFC6BB" stroke="#9A9087"/>' +
-      note(4, 106, 'RAILING') + note(4, 118, '(end view)');
+    if (rw) o += '<rect x="' + (xA - 20) + '" y="110" width="20" height="10" rx="2" fill="#B9AFA4" stroke="#8C8279"/><rect x="' + (xA - 14) + '" y="120" width="8" height="' + (dk - 120) + '" fill="#CFC6BB" stroke="#9A9087"/>' +
+      note(4, 90, 'RAILING') + note(4, 102, '(end view)');   // about 42" on the 72" screen
     // top rail over the uprights, Post C up off the deck (clearance underneath), Post B standing on C, Post A down to the deck
     var tr = 9, yC = dk - 28, xL = rw ? xA : xl;
     o += '<rect x="' + xL + '" y="' + top + '" width="' + (xr - xL) + '" height="' + tr + '" rx="2" fill="#8C8279"/>';
