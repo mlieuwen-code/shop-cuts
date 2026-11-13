@@ -427,21 +427,34 @@ function layout(book, item){
   rows.some(function(r){ if (cols.some(function(c){ return txt(r, c) === '✓'; })) { hdr = r; return true; } return false; });
   if (hdr == null){ var firstTap = rows.filter(function(r){ return rowTap[r]; })[0]; if (firstTap != null){ var i = rows.indexOf(firstTap); for (var q = i - 1; q >= 0; q--) if (cols.filter(function(c){ return txt(rows[q], c) !== ''; }).length >= 2){ hdr = rows[q]; break; } } }
   var L = { a: a, rows: rows, cols: cols, chk: chk, rowTap: rowTap, txt: txt, hdr: hdr };
-  if (SCREEN_RE.test(sh.name) && hdr != null) screenify(L);
+  if (SCREEN_RE.test(sh.name) && hdr != null) screenify(L, sd);
   return L;
 }
-// privacy screen sheets: a ✓ box after each Top Rail / Channels amount (posts are ticked on the Posts tab), and a divider before each part
-function screenify(L){
+// privacy screen sheets: posts are cut from the Posts tab, so they're left off here. Each screen needs a bottom channel
+// and a double channel (between the two glass panes), the same length and count as the sheet's Channels; each gets its own ✓ box.
+function screenify(L, sd){
   L.rowTap = {}; L.div = {}; L.vchk = {};
   var units = L.rows.filter(function(r){ var v = L.txt(r, L.cols[0]); return r > L.hdr && v !== '' && !isNaN(+v); });
-  var cols = L.cols.slice();
-  cols.forEach(function(c, i){
-    var h = L.txt(L.hdr, c); if (!/^(top rail|post [a-z]|channels?)$/i.test(h)) return;
+  var cols = L.cols.slice(), next = function(c){ return cols[cols.indexOf(c) + 1]; }, isAmt = function(c){ return c != null && /^(amt|qty)$/i.test(L.txt(L.hdr, c)); };
+  var put = function(key, cell){ if (cell) sd.cells[key] = cell; };
+  cols.forEach(function(c){
+    var h = L.txt(L.hdr, c); if (!/^(top rail|post [a-z]|channels?|bottom channel)$/i.test(h)) return;   // (Bottom channel: already split on an earlier pass)
+    var amt = isAmt(next(c)) ? next(c) : c;
+    if (/^post/i.test(h)){ L.cols = L.cols.filter(function(x){ return x !== c && x !== amt; }); return; }
     L.div[c] = 1;
-    if (/^post/i.test(h)) return;
-    var amt = /^(amt|qty)$/i.test(L.txt(L.hdr, cols[i + 1] || -1)) ? cols[i + 1] : c, v = amt + 0.5;
-    L.cols.splice(L.cols.indexOf(amt) + 1, 0, v); L.vchk[v] = 1;
-    units.forEach(function(r){ if (L.txt(r, c) !== '') L.chk[r + ':' + v] = { left: amt, left2: c, head: h }; });
+    var box = function(v, valC, amtC, head){ L.cols.splice(L.cols.indexOf(amtC) + 1, 0, v); L.vchk[v] = 1; units.forEach(function(r){ if (L.txt(r, valC) !== '') L.chk[r + ':' + v] = { left: amtC, left2: valC, head: head }; }); };
+    if (/^(channel|bottom channel)/i.test(h)){
+      var hc = sd.cells[L.hdr + ':' + c];
+      put(L.hdr + ':' + c, Object.assign({}, hc, { v: 'Bottom channel' }));
+      var dv = amt + 0.6, da = amt + 0.7;
+      put(L.hdr + ':' + dv, Object.assign({}, hc, { v: 'Double channel' })); put(L.hdr + ':' + da, sd.cells[L.hdr + ':' + amt]);
+      units.forEach(function(r){ put(r + ':' + dv, sd.cells[r + ':' + c]); put(r + ':' + da, sd.cells[r + ':' + amt]); });
+      box(amt + 0.5, c, amt, 'Bottom channel');
+      L.cols.splice(L.cols.indexOf(amt + 0.5) + 1, 0, dv, da); L.div[dv] = 1;
+      box(amt + 0.8, dv, da, 'Double channel');
+      return;
+    }
+    box(amt + 0.5, c, amt, h);
   });
 }
 // privacy screens: one Posts tab for the whole job, every post length with how many and which units, like the Post Sheet
@@ -753,7 +766,6 @@ function renderSheet(book, item, done){
       if (tick[c]) cls.push('cut');
       if (divC != null && c === divC && r >= L.hdr) cls.push('divl');
       if (L.div && L.div[c] && r >= L.hdr) cls.push('divl');
-      if (L.div && L.div[c] && r > L.hdr && /^post/i.test(L.txt(L.hdr, c)) && cur){ var vp = cur.items.filter(function(x){ return x.virt; })[0], pr = vp && vp.map[L.txt(L.hdr, c) + '|' + (+(cell && cell.v))]; if (pr && done['SCREEN POSTS|c' + pr + ':4']) cls.push('cut'); }
       if (item.virt && r === L.hdr) cls.push('b', 'c');
       if (c === L.cols[0] && L.hdr != null && r > L.hdr && floatTag[t.trim()]) cls.push('floatrail');
       if (((bpC[c] && r > L.hdr) || (r > bpFrom && r < bpTo && c === L.cols[0] && !L.cols.some(function(cc){ return L.txt(r, cc) === '✓'; }))) && bpDesc(t)) cls.push('bp');
