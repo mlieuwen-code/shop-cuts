@@ -141,6 +141,14 @@ tr.tap{cursor:pointer}
 table.sheet tr.stickrow td{background:#2B2620;color:#fff;font-weight:800;font-size:17px;padding:9px 12px;border-color:#2B2620}
 table.sheet tr.stickrow .sk{display:inline-block;background:#E8590C;border-radius:8px;padding:2px 10px;margin-right:10px;font-weight:900}
 table.sheet tr.stickrow .sk.warn{background:#9C0006}
+.mgrh4{font-size:17px;font-weight:900;color:var(--muted);margin:14px 2px 6px;text-transform:uppercase;letter-spacing:.04em}
+.pnum.on2{background:var(--tint2);color:var(--deep)}
+.scrhead{display:flex;flex-wrap:wrap;gap:10px 28px;align-items:center;justify-content:space-between;background:var(--tint);border-radius:18px;padding:14px 18px;margin-bottom:12px}
+.scrinfo{display:flex;flex-wrap:wrap;gap:8px 26px;font-size:20px;font-weight:800}
+.scrinfo i,.scrparts i{display:block;font-style:normal;font-size:13px;font-weight:900;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.scrparts{display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px 18px;font-size:17px;font-weight:700}
+.scrparts i{width:100%}
+.scrparts .sp b{font-size:22px;font-weight:900;margin-right:6px}
 .mgrnote{color:var(--muted);font-weight:700;margin:0 0 14px}
 .mgrwrap{overflow-x:auto}
 table.mgr{width:100%;border-collapse:collapse;background:var(--card);border-radius:18px;overflow:hidden;font-size:18px}
@@ -273,6 +281,13 @@ table.sheet td.bp svg.bpi.tall{height:70px}
     <button type="button" class="pclear" id="prioClear" hidden>Clear all priorities</button>
     <h3 class="mgrh mgrh2">Not prioritized</h3>
     <div class="prio" id="prioRest"></div>
+    <h3 class="mgrh mgrh3">Job order</h3>
+    <p class="mgrnote" id="ordNote"></p>
+    <h4 class="mgrh4">In progress</h4>
+    <div class="prio" id="ordProg"></div>
+    <h4 class="mgrh4">Not started</h4>
+    <div class="prio" id="ordRest"></div>
+    <button type="button" class="pclear" id="ordClear" hidden>Back to automatic order</button>
     <h3 class="mgrh mgrh3">Fab times</h3>
     <p class="mgrnote">Time between ticks, with breaks over 25 minutes left out (overnight, weekends, lunch). It starts at the first tick, so the first cut's own time isn't counted.</p>
     <div class="mgrwrap"><table class="mgr"><thead><tr><th>Job</th><th>Cut by</th><th>Cutting time</th><th>Assembled by</th><th>Assembly time</th><th>Welded by</th><th>Dates</th></tr></thead><tbody id="mgrBody"></tbody></table></div>
@@ -703,7 +718,7 @@ function wId(id){ return id + '.w'; }
 var el = function(id){ return document.getElementById(id); };
 function esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 // a short notice at the bottom of the screen
-var VERSION = '11.12.823', toastT = null;
+var VERSION = '11.13.1144', toastT = null;
 function toast(t){ var b = el('toast'); b.textContent = t; b.hidden = false; b.classList.remove('out'); clearTimeout(toastT); toastT = setTimeout(function(){ b.classList.add('out'); setTimeout(function(){ b.hidden = true; }, 400); }, 3200); }
 function msg(t, ok){ var m = el('msg'); m.hidden = !t; m.className = 'msg ' + (ok ? 'ok' : 'err'); m.textContent = t || ''; }
 function lsGet(k){ try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
@@ -755,6 +770,20 @@ function api(action, extra){
 var jobs = [], doneJobs = null, DONE_DAYS = 50;
 // priority order set from the manager screen (file ids, most urgent first); other jobs follow, newest first
 var prio = lsGet('shop-prio') || [];
+// the office's own order for the other jobs (manager screen); used inside In progress and Not started, ahead of the automatic order
+var jorder = lsGet('shop-order') || [];
+function orderRank(id){ var i = jorder.indexOf(id); return i < 0 ? Infinity : i; }
+function byOrder(fallback){ return function(a, b){ var ra = orderRank(jobs[a].id), rb = orderRank(jobs[b].id); return ra !== rb ? (ra < rb ? -1 : 1) : fallback(a, b); }; }
+function jobPct(k){ var s = lsGet(SUM + jobs[k].id), p = s && s.total ? s.done / s.total : 0; return s && (s.done > 0 || s.fin) ? p : -1; }
+// the job list's groups, same on the tablet and in the manager screen
+function listGroups(){
+  var ks = jobs.map(function(f, k){ return k; }), pct = ks.map(jobPct);
+  var atw = ks.filter(function(k){ var s = lsGet(SUM + jobs[k].id); return !!(s && s.asm); });
+  var pri = ks.filter(function(k){ return atw.indexOf(k) < 0 && prioRank(jobs[k].id) < Infinity; });
+  var prog = ks.filter(function(k){ return atw.indexOf(k) < 0 && pri.indexOf(k) < 0 && pct[k] >= 0; }).sort(byOrder(function(a, b){ return pct[b] - pct[a] || a - b; }));
+  var rest = ks.filter(function(k){ return atw.indexOf(k) < 0 && pri.indexOf(k) < 0 && prog.indexOf(k) < 0; }).sort(byOrder(function(a, b){ return a - b; }));
+  return { pri: pri, prog: prog, rest: rest, atw: atw };
+}
 function prioRank(id){ var i = prio.indexOf(id); return i < 0 ? Infinity : i; }
 function applyPrio(){ jobs.sort(function(a, b){ var ra = prioRank(a.id), rb = prioRank(b.id); return ra !== rb ? (ra < rb ? -1 : 1) : b.updated - a.updated; }); }
 // newer backend actions first; if Apps Script hasn't been redeployed yet, fall back to the old ones
@@ -824,15 +853,11 @@ function renderList(cached){
         (on ? ' · <span class="offline">✓ on tablet</span>' : '') + '</span></span>' + (tag ? '<span class="cnt' + (/^\d/.test(tag) ? '' : ' warn') + '">' + (/^(\d+) (.+)$/.test(tag) ? '<b>' + tag.replace(/ .*/, '') + '</b>' + esc(tag.replace(/^\d+ /, '')) : esc(tag)) + '</span>' : '') + '</button>';
     });
     // Priority card (office's rush order), then In progress (most done first), then the rest, newest first
-    var ks = jobs.map(function(f, k){ return k; });
     // signed off Assembly: the shop is finished with it, so it drops to its own card at the bottom until the welder completes it
-    var atw = ks.filter(function(k){ var s = lsGet(SUM + jobs[k].id); return !!(s && s.asm); });
-    var pri = ks.filter(function(k){ return atw.indexOf(k) < 0 && prioRank(jobs[k].id) < Infinity; });
-    var prog = ks.filter(function(k){ return atw.indexOf(k) < 0 && pri.indexOf(k) < 0 && pct[k] >= 0; }).sort(function(a, b){ return pct[b] - pct[a] || a - b; });
-    var rest = ks.filter(function(k){ return atw.indexOf(k) < 0 && pri.indexOf(k) < 0 && prog.indexOf(k) < 0; });
+    var G = listGroups(), atw = G.atw, pri = G.pri, prog = G.prog, rest = G.rest, ordered = jorder.length > 0;
     var pick = function(arr){ return arr.map(function(k){ return cards[k]; }).join(''); };
     box.innerHTML = (pri.length ? '<div class="prcard"><div class="prhead"><span class="prflame" aria-hidden="true">⚡</span>Priority<span>· rush these first, in this order</span></div>' + pick(pri) + '</div>' : '') +
-      (prog.length ? '<div class="prcard ipcard"><div class="prhead"><span class="prflame" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" style="vertical-align:-4px"><circle cx="12" cy="12" r="9.5" fill="none" stroke="currentColor" stroke-width="3"/><path d="M12 5.5A6.5 6.5 0 0 1 18.5 12H12z" fill="currentColor"/></svg></span>In progress<span>· most done first</span></div>' + pick(prog) + '</div>' : '') +
+      (prog.length ? '<div class="prcard ipcard"><div class="prhead"><span class="prflame" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" style="vertical-align:-4px"><circle cx="12" cy="12" r="9.5" fill="none" stroke="currentColor" stroke-width="3"/><path d="M12 5.5A6.5 6.5 0 0 1 18.5 12H12z" fill="currentColor"/></svg></span>In progress<span>· ' + (ordered ? 'in the office\'s order' : 'most done first') + '</span></div>' + pick(prog) + '</div>' : '') +
       (rest.length && (pri.length || prog.length) ? '<div class="prrest">Not started</div>' : '') + pick(rest) +
       (atw.length ? '<div class="prcard wcard"><div class="prhead"><span class="prflame" aria-hidden="true">' + SPARK + '</span>At welding<span>· cut and assembled, waiting on the welder</span></div>' + pick(atw) + '</div>' : '') + done;
   });
@@ -915,7 +940,7 @@ var listFresh = false;   // once the backend has answered, the copy saved on the
 function loadList(){
   kvGet('list').then(function(l){ kvGet('donelist').then(function(d){ if (listFresh) return; if (d && !doneJobs) doneJobs = d; if (l && !jobs.length){ jobs = l; renderList(true); } }); });
   apiNew('fablist2', 'fablist', {}).then(function(r){
-    listFresh = true; jobs = r.files || []; doneJobs = r.done || null; if (Array.isArray(r.prio)){ prio = r.prio; lsSet('shop-prio', prio); } applyPrio(); kvSet('list', jobs); if (doneJobs) kvSet('donelist', doneJobs);
+    listFresh = true; jobs = r.files || []; doneJobs = r.done || null; if (Array.isArray(r.prio)){ prio = r.prio; lsSet('shop-prio', prio); } if (Array.isArray(r.order)){ jorder = r.order; lsSet('shop-order', jorder); } applyPrio(); kvSet('list', jobs); if (doneJobs) kvSet('donelist', doneJobs);
     renderList(false); if (!el('mgr').hidden) renderMgr(); msg(''); prefetch(); pullAll(); flushPending();
     if (refreshAsked){ refreshAsked = false; toast('✓ Up to date · version ' + VERSION); }
     // forget files that are neither in Ready to Fab nor completed in the last 50 days
@@ -1033,15 +1058,26 @@ var SHOP = [
   { n: 'CUT SHEET', label: 'Cuts', always: 1 },
   { n: 'CUSTOM POST CUT', label: 'Custom posts', has: function(sd){ return cellVal(sd, 8, 1) != null && cellVal(sd, 8, 1) !== ''; } },
   { n: 'SLEEVES', label: 'Angles', has: function(sd){ var a = String(cellVal(sd, 4, 1) || ''); return a !== '' && !/^no angled/i.test(a); } },
-  { n: 'Rail to Wall', label: 'Screens R–W', has: function(sd){ return cellVal(sd, 7, 1) != null && cellVal(sd, 7, 1) !== ''; } },
-  { n: 'Wall to Wall', label: 'Screens W–W', has: function(sd){ return cellVal(sd, 7, 1) != null && cellVal(sd, 7, 1) !== ''; } }
+  { n: 'Rail to Wall', label: 'Screens · Rail to Wall', has: screenUnits },
+  { n: 'Wall to Wall', label: 'Screens · Wall to Wall', has: screenUnits }
 ];
+// privacy screens: a tab only when column A lists at least one unit number (row 7 down)
+function screenUnits(sd){ for (var r = 7; r <= (sd.maxR || 60); r++){ var v = cellVal(sd, r, 1); if (v !== null && v !== '' && !isNaN(+v) && +v > 0) return true; } return false; }
+var SCREEN_RE = /^(Rail|Wall) to Wall$/;
+// the screen sheet's top block (job, colour, top rail, small parts) as one tidy line instead of the spreadsheet grid
+function screenHead(item){
+  var sd = item.sd, v = function(r, c){ var x = cellVal(sd, r, c); return x == null ? '' : String(x).trim(); };
+  var parts = [[3, 4, 5], [3, 6, 7], [3, 8, 9]].map(function(a){ var n = v(a[0], a[2]); return v(a[0], a[1]) ? '<span class="sp"><b>' + esc(n === '' ? '0' : n) + '</b>' + esc(v(a[0], a[1])) + '</span>' : ''; }).join('');
+  return '<div class="scrhead"><div class="scrinfo">' + (v(3, 2) ? '<span><i>Colour</i>' + esc(v(3, 2)) + '</span>' : '') + (v(4, 2) ? '<span><i>Top rail</i>' + esc(v(4, 2)) + '</span>' : '') +
+    '<span><i>Type</i>' + (item.sh.name === 'Rail to Wall' ? 'Rail to wall' : 'Wall to wall') + '</span></div>' +
+    (parts ? '<div class="scrparts"><i>Small parts for the job</i>' + parts + '</div>' : '') + '</div>';
+}
 var SKIP = /^(INPUT|Inputs|GLASS ORDER.*|GLASS CALC|COST .*|CUSTOM POSTS|SPEC_.*|ENGINE.*|STICK CALC|LISTS|Lists|PAINT|PRICES|Paint .*|W-W Glass|R-W Glass|Sheet\d+)$/;
 function shopSheets(book){
   var list = [];
   return Promise.all(SHOP.map(function(d){
     var sh = book.sheets.filter(function(s){ return s.name === d.n; })[0]; if (!sh) return null;
-    return parseSheet(book, sh).then(function(sd){ if (d.always || sh.state === 'visible' || (d.has && d.has(sd))) return { sh: sh, sd: sd, label: d.label, view: d.view }; return null; });
+    return parseSheet(book, sh).then(function(sd){ if (d.always || (d.has && d.has(sd)) || (sh.state === 'visible' && !(d.has === screenUnits))) return { sh: sh, sd: sd, label: d.label, view: d.view }; return null; });
   })).then(function(a){
     list = a.filter(Boolean);
     // any other tab that's been un-hidden for this job and has a print area
@@ -1281,7 +1317,8 @@ function renderSheet(book, item, done){
     span[m.r1 + ':' + m.c1] = { rs: rs, cs: cs };
     L.rows.forEach(function(r){ L.cols.forEach(function(c){ if (r >= m.r1 && r <= m.r2 && c >= m.c1 && c <= m.c2 && !(r === m.r1 && c === m.c1)) skip[r + ':' + c] = 1; }); });
   });
-  var h = (WELD && isTop() && /^(CUT SHEET|POST SHEET)$/.test(sh.name) ? '<div class="bpnote"><b>Top mount · weld-on base plates</b><span class="bpkey"><i>Cen</i> centred on the plate · <i>Off</i> offset: post at the outer end, plate reaches in under the rail · <i>Rev</i> reverse offset: plate sticks out past the end · <i>L / R</i> left / right end of the rail · <i>EC</i> corner turns right with the run, <i>IC</i> turns left · 4x4 plates for 2x2 posts</span>' + (sh.name === 'POST SHEET' ? 'Post lengths are in section 1. The plates to weld, and how many of each, are under Base plates. The Cuts tab shows which plate goes on each rail end.' : 'The L Post and R Post columns show which base plate goes on each end of the rail. The Posts tab has the post lengths and the plate totals.') + '</div>' : '') + '<table class="sheet">';
+  var scr = SCREEN_RE.test(sh.name) && L.hdr != null;
+  var h = (scr ? screenHead(item) : '') + (WELD && isTop() && /^(CUT SHEET|POST SHEET)$/.test(sh.name) ? '<div class="bpnote"><b>Top mount · weld-on base plates</b><span class="bpkey"><i>Cen</i> centred on the plate · <i>Off</i> offset: post at the outer end, plate reaches in under the rail · <i>Rev</i> reverse offset: plate sticks out past the end · <i>L / R</i> left / right end of the rail · <i>EC</i> corner turns right with the run, <i>IC</i> turns left · 4x4 plates for 2x2 posts</span>' + (sh.name === 'POST SHEET' ? 'Post lengths are in section 1. The plates to weld, and how many of each, are under Base plates. The Cuts tab shows which plate goes on each rail end.' : 'The L Post and R Post columns show which base plate goes on each end of the rail. The Posts tab has the post lengths and the plate totals.') + '</div>' : '') + '<table class="sheet">';
   var isCut = sh.name === 'CUT SHEET' && cur && Object.keys(cur.units || {}).length, lastUnit = null;
   var hiSheet = /^(COVER|POST SHEET)$/.test(sh.name);
   // Cut Sheet: a black line between the float lengths (Left / Right) and the posts (L Post …), so the two groups read apart
@@ -1331,6 +1368,7 @@ function renderSheet(book, item, done){
     }
   }
   order.forEach(function(r){
+    if (scr && r < L.hdr) return;   // privacy screens: the top block is shown as the summary above the table
     if (isCut && !sorted && L.hdr != null && r > L.hdr){
       var tg = L.txt(r, L.cols[0]), un = /^\S+\.\d+$/.test(tg) ? unitOf(tg) : null;
       if (un && un !== lastUnit){ h += layoutRow(un, NC); lastUnit = un; }
@@ -1829,6 +1867,7 @@ function renderMgr(){
 }
 // ---------- job priority (manager screen, works on a computer too) ----------
 function renderPrio(){
+  if (el('ordProg')) setTimeout(renderOrder, 0);
   var ids = {}; jobs.forEach(function(f){ ids[f.id] = f; });
   var on = prio.filter(function(id){ return ids[id]; }), rest = jobs.filter(function(f){ return on.indexOf(f.id) < 0; }).slice().sort(function(a, b){ return b.updated - a.updated; });
   var nm = function(f){ return esc(f.name.replace(/\.xls[xm]$/i, '')); };
@@ -1845,6 +1884,36 @@ function renderPrio(){
   el('prioClear').hidden = !on.length;
   return on;
 }
+function renderOrder(){
+  var G = listGroups(), nm = function(f){ return esc(f.name.replace(/\.xls[xm]$/i, '')); };
+  var block = function(arr, g){ return arr.length ? arr.map(function(k, i){ var f = jobs[k], p = jobPct(k);
+    return '<div class="prow"><span class="pnum on2">' + (i + 1) + '</span><span class="pname">' + nm(f) + '</span><span class="pday">' + (p >= 0 ? Math.round(p * 100) + '%' : 'saved ' + esc(new Date(f.updated).toLocaleDateString([], { month: 'short', day: 'numeric' }))) + '</span>' +
+      '<button type="button" class="pbtn" data-oa="top" data-og="' + g + '" data-oi="' + i + '"' + (i ? '' : ' disabled') + ' aria-label="Move to the top">⤒</button>' +
+      '<button type="button" class="pbtn" data-oa="up" data-og="' + g + '" data-oi="' + i + '"' + (i ? '' : ' disabled') + ' aria-label="Move up">▲</button>' +
+      '<button type="button" class="pbtn" data-oa="down" data-og="' + g + '" data-oi="' + i + '"' + (i < arr.length - 1 ? '' : ' disabled') + ' aria-label="Move down">▼</button></div>'; }).join('') : '<div class="pempty">None right now.</div>'; };
+  el('ordProg').innerHTML = block(G.prog, 'prog'); el('ordRest').innerHTML = block(G.rest, 'rest');
+  el('ordClear').hidden = !jorder.length;
+  el('ordNote').textContent = jorder.length ? 'Your order is in use. New jobs go to the bottom of their group.' : 'Automatic right now: In progress by most done, Not started by newest. Move any job to set your own order.';
+  return G;
+}
+var orderSaving = 0;
+function saveOrder(next){
+  var before = jorder; jorder = next; lsSet('shop-order', jorder); renderOrder();
+  var n = ++orderSaving;
+  api('orderset', { order: next }).then(function(){ if (n === orderSaving) toast(next.length ? '✓ Job order saved · the tablets show it within a minute' : '✓ Back to automatic order'); }, function(e){
+    if (n !== orderSaving) return;
+    jorder = before; lsSet('shop-order', jorder); renderOrder();
+    toast(e && /unknown request/i.test(e.message || '') ? 'Not saved: Apps Script needs the new version deployed first.' : 'Not saved: no signal. Try again.');
+  });
+}
+el('mgr').addEventListener('click', function(e){
+  if (e.target.closest('#ordClear')) return saveOrder([]);
+  var b = e.target.closest('[data-oa]'); if (!b) return;
+  var G = renderOrder(), g = b.getAttribute('data-og'), arr = G[g].slice(), i = +b.getAttribute('data-oi'), a = b.getAttribute('data-oa');
+  var j = a === 'top' ? 0 : a === 'up' ? i - 1 : i + 1; if (j < 0 || j >= arr.length || j === i) return;
+  var x = arr.splice(i, 1)[0]; arr.splice(j, 0, x); G[g] = arr;
+  saveOrder(G.prog.concat(G.rest).map(function(k){ return jobs[k].id; }));
+});
 var prioSaving = 0;
 function savePrio(next){
   var before = prio; prio = next; lsSet('shop-prio', prio); applyPrio(); renderPrio();
