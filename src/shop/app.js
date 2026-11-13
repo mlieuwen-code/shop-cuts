@@ -470,15 +470,16 @@ function screenDiagram(kinds){
     o += '<rect x="' + wallR + '" y="10" width="26" height="' + (dk - 10) + '" fill="url(#hatch)" stroke="#9A9087"/>' + note(wallR + 13, 8, 'WALL', 'middle');
     if (!rw) o += '<rect x="' + (wallL - 12) + '" y="10" width="26" height="' + (dk - 10) + '" fill="url(#hatch)" stroke="#9A9087"/>' + note(wallL + 1, 8, 'WALL', 'middle');
     if (rw) o += '<g stroke="#9A9087" stroke-width="3"><line x1="10" y1="132" x2="' + xA + '" y2="132"/><line x1="16" y1="132" x2="16" y2="' + dk + '"/><line x1="40" y1="132" x2="40" y2="' + dk + '"/></g>' + note(10, 124, 'RAILING');
-    // Post C along the bottom, Post B up the wall side, Post A at the railing
-    var yC = dk - 12, xB = x1 - 12;
+    // top rail over both uprights; Post C held up off the deck (clearance underneath), Post B standing on C at the wall, Post A down to the deck
+    var tr = 9, yC = dk - 28, xB = x1 - 12, xL = rw ? xA : x0;
+    o += '<rect x="' + xL + '" y="' + top + '" width="' + (x1 - xL) + '" height="' + tr + '" rx="2" fill="#8C8279"/>';
     o += '<rect x="' + x0 + '" y="' + yC + '" width="' + (x1 - x0) + '" height="12" fill="' + ink + '"/>';
-    o += '<rect x="' + xB + '" y="' + (top + 6) + '" width="12" height="' + (yC - top - 6) + '" fill="' + ink + '"/>';
-    if (rw) o += '<rect x="' + xA + '" y="' + top + '" width="12" height="' + (dk - top) + '" fill="' + ink + '"/>';
-    else o += '<rect x="' + x0 + '" y="' + (top + 6) + '" width="12" height="' + (yC - top - 6) + '" fill="' + ink + '"/>';
+    o += '<rect x="' + xB + '" y="' + (top + tr) + '" width="12" height="' + (yC - top - tr) + '" fill="' + ink + '"/>';
+    if (rw) o += '<rect x="' + xA + '" y="' + (top + tr) + '" width="12" height="' + (dk - top - tr) + '" fill="' + ink + '"/>';
+    else o += '<rect x="' + x0 + '" y="' + (top + tr) + '" width="12" height="' + (yC - top - tr) + '" fill="' + ink + '"/>';
+    o += '<g stroke="#6B6157" stroke-width="1.2"><line x1="' + ((x0 + x1) / 2 - 40) + '" y1="' + (yC + 14) + '" x2="' + ((x0 + x1) / 2 - 40) + '" y2="' + (dk - 1) + '"/><line x1="' + ((x0 + x1) / 2 - 45) + '" y1="' + (yC + 14) + '" x2="' + ((x0 + x1) / 2 - 35) + '" y2="' + (yC + 14) + '"/><line x1="' + ((x0 + x1) / 2 - 45) + '" y1="' + (dk - 1) + '" x2="' + ((x0 + x1) / 2 - 35) + '" y2="' + (dk - 1) + '"/></g>' + note((x0 + x1) / 2 - 32, dk - 4, 'CLEARANCE');
     var gx0 = rw ? xA + 12 : x0 + 12, gx1 = xB, mid = 120;
-    o += '<rect x="' + gx0 + '" y="' + top + '" width="' + (gx1 - gx0) + '" height="7" fill="#8C8279"/>';                               // top rail
-    o += '<rect x="' + gx0 + '" y="' + (top + 9) + '" width="' + (gx1 - gx0) + '" height="' + (mid - top - 11) + '" fill="#CFE3EE" stroke="#9DBBCB"/>';
+    o += '<rect x="' + gx0 + '" y="' + (top + tr + 2) + '" width="' + (gx1 - gx0) + '" height="' + (mid - top - tr - 4) + '" fill="#CFE3EE" stroke="#9DBBCB"/>';
     o += '<rect x="' + gx0 + '" y="' + mid + '" width="' + (gx1 - gx0) + '" height="9" fill="' + ch + '"/>';                              // double channel
     o += '<rect x="' + gx0 + '" y="' + (mid + 11) + '" width="' + (gx1 - gx0) + '" height="' + (yC - mid - 20) + '" fill="#CFE3EE" stroke="#9DBBCB"/>';
     o += '<rect x="' + gx0 + '" y="' + (yC - 8) + '" width="' + (gx1 - gx0) + '" height="8" fill="' + ch + '"/>';                         // bottom channel
@@ -487,10 +488,10 @@ function screenDiagram(kinds){
     o += '<text x="' + cx + '" y="' + (mid - 4) + '" text-anchor="middle" font-size="11" font-weight="800" fill="' + ch + '">DOUBLE CHANNEL</text>';
     o += '<text x="' + cx + '" y="' + (yC - 12) + '" text-anchor="middle" font-size="11" font-weight="800" fill="' + ch + '">BOTTOM CHANNEL</text>';
     if (rw) o += lbl(xA + 6, 72, 'A');
-    o += lbl(xB + 6, 72, 'B') + lbl(cx + 70, yC + 6, 'C');
+    o += lbl(xB + 6, 72, 'B') + lbl(cx + 70, yC + 6, 'C');   // C label sits on the post
     if (!rw) o += lbl(x0 + 6, 72, 'B');
     return '<figure class="scrfig"><svg viewBox="0 0 360 250" role="img" aria-label="' + (rw ? 'Rail to wall' : 'Wall to wall') + ' privacy screen: which piece is Post A, B and C"><defs><pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="#EFE9E1"/><line x1="0" y1="0" x2="0" y2="6" stroke="#B9AFA4" stroke-width="2"/></pattern></defs>' + o + '</svg>' +
-      '<figcaption><b>' + (rw ? 'Rail to wall' : 'Wall to wall') + '</b>' + (rw ? '<span><i>A</i> upright at the deck edge, against the railing</span>' : '') + '<span><i>B</i> upright standing on Post C' + (rw ? ' at the wall' : ', one at each wall') + '</span><span><i>C</i> along the bottom; the bottom channel fastens to it</span></figcaption></figure>';
+      '<figcaption><b>' + (rw ? 'Rail to wall' : 'Wall to wall') + '</b>' + (rw ? '<span><i>A</i> upright at the deck edge, against the railing</span>' : '') + '<span><i>B</i> upright standing on Post C' + (rw ? ' at the wall' : ', one at each wall') + '</span><span><i>C</i> along the bottom, up off the deck; the bottom channel fastens to it</span><span><i>&#8593;</i>top rail runs over the uprights</span></figcaption></figure>';
   };
   return '<div class="scrfigs">' + (kinds.indexOf('Rail to Wall') >= 0 ? one(true) : '') + (kinds.indexOf('Wall to Wall') >= 0 ? one(false) : '') + '</div>';
 }
