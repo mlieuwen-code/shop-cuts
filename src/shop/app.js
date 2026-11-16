@@ -365,12 +365,12 @@ var SHOP = [
 // privacy screens: a tab only when column A lists at least one unit number (row 7 down)
 function screenUnits(sd){ for (var r = 7; r <= (sd.maxR || 60); r++){ var v = cellVal(sd, r, 1); if (v !== null && v !== '' && !isNaN(+v) && +v > 0) return true; } return false; }
 var SCREEN_RE = /^(Rail|Wall) to Wall$/;
-// short screens: Post A is one wider post (the sheet shows "4x2 Post" where a length would be)
+// short screens: only a Post B is cut, in a wider size (the sheet shows "4x2 Post" in the Post A column)
 function screenWide(sd){
   var pa = 0, seen = {}; for (var c = 1; c <= (sd.maxC || 30); c++) if (/^post a$/i.test(String(cellVal(sd, 6, c) || '').trim())) pa = c;
   if (!pa) return '';
   for (var r = 7; r <= (sd.maxR || 60); r++){ var m = String(cellVal(sd, r, pa) || '').match(/(\d+)\s*x\s*(\d+)/); if (m) seen[m[1] + 'x' + m[2]] = 1; }
-  var k = Object.keys(seen); return k.length ? '<span><i>Post A</i>' + esc(k.join(' / ')) + ' wide post</span>' : '';
+  var k = Object.keys(seen); return k.length ? '<span><i>Post B</i>' + esc(k.join(' / ')) + ' wide · no Post A</span>' : '';
 }
 // the screen sheet's top block (job, colour, top rail, small parts) as one tidy line instead of the spreadsheet grid
 function screenHead(item){
@@ -539,13 +539,13 @@ function screenPosts(list){
       for (var r = H + 1; r <= (sd.maxR || 60); r++){
         var u = cellVal(sd, r, 1), len = cellVal(sd, r, c), n = +cellVal(sd, r, c + 1) || 1, label = h.replace(/^post/i, 'Post');
         if (u == null || u === '' || isNaN(+u) || len == null || len === '') continue;
-        // short screens: the sheet puts a post size ("4x2 Post") in Post A instead of a length. That one wider post replaces
-        // Post A; it's cut the same height Post A would be (screen height - 2), which is Post B + 5
-        var wide = /^post a$/i.test(h) && String(len).match(/(\d+)\s*x\s*(\d+)/i);
-        if (wide){
-          var pb = 0; for (var c2 = 1; c2 <= (sd.maxC || 30); c2++) if (/^post b$/i.test(String(cellVal(sd, H, c2) || '').trim())) pb = +cellVal(sd, r, c2) || 0;
-          if (!pb) continue;
-          len = pb + 5; n = 1; label = 'Post A · ' + wide[1] + 'x' + wide[2] + ' wide';
+        // short rail-to-wall screens (no channels, 2 top rails): the sheet puts a post size ("4x2 Post") in Post A. No Post A is cut;
+        // the one post cut is Post B, in that wider size
+        if (/^post a$/i.test(h) && /\d+\s*x\s*\d+/.test(String(len))) continue;
+        if (/^post b$/i.test(h)){
+          for (var c2 = 1; c2 <= (sd.maxC || 30); c2++) if (/^post a$/i.test(String(cellVal(sd, H, c2) || '').trim())){
+            var wide = String(cellVal(sd, r, c2) || '').match(/(\d+)\s*x\s*(\d+)/); if (wide) label = 'Post B · ' + wide[1] + 'x' + wide[2] + ' wide';
+          }
         }
         if (!(+len > 0)) continue;
         var key = label + '|' + (+len), row = rows.filter(function(x){ return x.key === key; })[0];
