@@ -74,7 +74,7 @@ node -e "new Function(require('fs').readFileSync('out/shop-app/index.html','utf8
 The Apps Script project is **"Cut Sheets App"**, shared with the field app:
 - Editor: https://script.google.com/home/projects/1AbaEatjFPb9Epa-4g1TvSspui0R6jPZnXDgwkzNd5dGx1MIomERh9HRN/edit
 - Web app deployment ID: `AKfycbzfJwNBkDvCyr3_mzOfKA5q_bELUvgF2WyBoN8fEH86KNsbvvuhpJL575SkwAcsx3zj0A` (in `build_shop.py` as `WEBAPP`). It's on **version 7**.
-- It runs as matt@ridgewayaluminum.com, with access set to Anyone; requests are guarded by the crew PIN **4417**.
+- It runs as matt@ridgewayaluminum.com, with access set to Anyone; requests are guarded by the crew PIN (Matt has it; not written here because this repo is public).
 
 Files in the project:
 - `Code.gs` belongs mostly to the field app.
@@ -142,7 +142,7 @@ Key pieces of `app.js`:
   - Section boxes: 1 Post cutting, 2 Blocking, 3 Bracketing.
   - Post and block heights are highlighted.
   - A custom block height (anything not 38 5/16) triggers the pop-up "Mount the blocks at this height".
-- **Manager screen:** hold the logo for 2 s or tap it 5 times quickly, then enter PIN **5742**. It holds:
+- **Manager screen:** hold the logo for 2 s or tap it 5 times quickly, then enter the manager PIN (checked by the Crew Job Board backend's `checkPin`; the PIN lives in that script's Script Properties as `ADMIN_PIN`). It holds:
   - the Job priority editor (also usable from a computer browser);
   - Fab times: who cut and who assembled each job, and the cutting and assembly time, counting only active time (gaps over 25 min are left out).
 - **localStorage keys:**
