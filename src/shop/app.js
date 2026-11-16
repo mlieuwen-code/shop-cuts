@@ -365,12 +365,19 @@ var SHOP = [
 // privacy screens: a tab only when column A lists at least one unit number (row 7 down)
 function screenUnits(sd){ for (var r = 7; r <= (sd.maxR || 60); r++){ var v = cellVal(sd, r, 1); if (v !== null && v !== '' && !isNaN(+v) && +v > 0) return true; } return false; }
 var SCREEN_RE = /^(Rail|Wall) to Wall$/;
+// short screens: Post A is one wider post (the sheet shows "4x2 Post" where a length would be)
+function screenWide(sd){
+  var pa = 0, seen = {}; for (var c = 1; c <= (sd.maxC || 30); c++) if (/^post a$/i.test(String(cellVal(sd, 6, c) || '').trim())) pa = c;
+  if (!pa) return '';
+  for (var r = 7; r <= (sd.maxR || 60); r++){ var m = String(cellVal(sd, r, pa) || '').match(/(\d+)\s*x\s*(\d+)/); if (m) seen[m[1] + 'x' + m[2]] = 1; }
+  var k = Object.keys(seen); return k.length ? '<span><i>Post A</i>' + esc(k.join(' / ')) + ' wide post</span>' : '';
+}
 // the screen sheet's top block (job, colour, top rail, small parts) as one tidy line instead of the spreadsheet grid
 function screenHead(item){
   var sd = item.sd, v = function(r, c){ var x = cellVal(sd, r, c); return x == null ? '' : String(x).trim(); };
   var parts = [[3, 4, 5], [3, 6, 7], [3, 8, 9]].map(function(a){ var n = v(a[0], a[2]); return v(a[0], a[1]) ? '<span class="sp"><b>' + esc(n === '' ? '0' : n) + '</b>' + esc(v(a[0], a[1])) + '</span>' : ''; }).join('');
   return '<div class="scrhead"><div class="scrinfo">' + (v(3, 2) ? '<span><i>Colour</i>' + esc(v(3, 2)) + '</span>' : '') + (v(4, 2) ? '<span><i>Top rail</i>' + esc(v(4, 2)) + '</span>' : '') +
-    '<span><i>Type</i>' + (item.sh.name === 'Rail to Wall' ? 'Rail to wall' : 'Wall to wall') + '</span></div>' +
+    '<span><i>Type</i>' + (item.sh.name === 'Rail to Wall' ? 'Rail to wall' : 'Wall to wall') + '</span>' + screenWide(sd) + '</div>' +
     (parts ? '<div class="scrparts"><i>Small parts for the job</i>' + parts + '</div>' : '') + '</div>';
 }
 var SKIP = /^(INPUT|Inputs|GLASS ORDER.*|GLASS CALC|COST .*|CUSTOM POSTS|SPEC_.*|ENGINE.*|STICK CALC|LISTS|Lists|PAINT|PRICES|Paint .*|W-W Glass|R-W Glass|Sheet\d+)$/;
@@ -444,6 +451,7 @@ function screenify(L, sd){
     L.div[c] = 1;
     var box = function(v, valC, amtC, head){ L.cols.splice(L.cols.indexOf(amtC) + 1, 0, v); L.vchk[v] = 1; units.forEach(function(r){ if (L.txt(r, valC) !== '') L.chk[r + ':' + v] = { left: amtC, left2: valC, head: head }; }); };
     if (/^(channel|bottom channel)/i.test(h)){
+      if (!units.some(function(r){ return L.txt(r, c) !== ''; })){ L.cols = L.cols.filter(function(x){ return x !== c && x !== amt; }); delete L.div[c]; return; }
       var hc = sd.cells[L.hdr + ':' + c];
       put(L.hdr + ':' + c, Object.assign({}, hc, { v: 'Bottom channel' }));
       var dv = amt + 0.6, da = amt + 0.7;
@@ -529,20 +537,37 @@ function screenPosts(list){
     for (var c = 1; c <= (sd.maxC || 30); c++){
       var h = String(cellVal(sd, H, c) || '').trim(); if (!/^post [a-z]$/i.test(h)) continue;
       for (var r = H + 1; r <= (sd.maxR || 60); r++){
-        var u = cellVal(sd, r, 1), len = cellVal(sd, r, c), n = +cellVal(sd, r, c + 1) || 1;
-        if (u == null || u === '' || isNaN(+u) || len == null || len === '' || !(+len > 0)) continue;
-        var key = h + '|' + (+len), row = rows.filter(function(x){ return x.key === key; })[0];
-        if (!row){ row = { key: key, post: h.replace(/^post/i, 'Post'), len: +len, qty: 0, units: [] }; rows.push(row); }
+        var u = cellVal(sd, r, 1), len = cellVal(sd, r, c), n = +cellVal(sd, r, c + 1) || 1, label = h.replace(/^post/i, 'Post');
+        if (u == null || u === '' || isNaN(+u) || len == null || len === '') continue;
+        // short screens: the sheet puts a post size ("4x2 Post") in Post A instead of a length. That one wider post replaces
+        // Post A; it's cut the same height Post A would be (screen height - 2), which is Post B + 5
+        var wide = /^post a$/i.test(h) && String(len).match(/(\d+)\s*x\s*(\d+)/i);
+        if (wide){
+          var pb = 0; for (var c2 = 1; c2 <= (sd.maxC || 30); c2++) if (/^post b$/i.test(String(cellVal(sd, H, c2) || '').trim())) pb = +cellVal(sd, r, c2) || 0;
+          if (!pb) continue;
+          len = pb + 5; n = 1; label = 'Post A · ' + wide[1] + 'x' + wide[2] + ' wide';
+        }
+        if (!(+len > 0)) continue;
+        var key = label + '|' + (+len), row = rows.filter(function(x){ return x.key === key; })[0];
+        if (!row){ row = { key: key, post: label, len: +len, qty: 0, units: [] }; rows.push(row); }
         var ul = String(u) + (list.filter(function(x){ return SCREEN_RE.test(x.sh.name); }).length > 1 ? ' ' + typ : '');
         row.qty += n; if (row.units.indexOf(ul) < 0) row.units.push(ul);
       }
     }
   });
   if (!rows.length) return null;
+  var many = list.filter(function(x){ return SCREEN_RE.test(x.sh.name); }).length > 1, all = {};
+  list.forEach(function(it){ if (!SCREEN_RE.test(it.sh.name)) return; var t = it.sh.name === 'Rail to Wall' ? 'R–W' : 'W–W', a = [];
+    for (var r = 7; r <= (it.sd.maxR || 60); r++){ var u = cellVal(it.sd, r, 1); if (u !== null && u !== '' && !isNaN(+u) && +u > 0) a.push(String(u) + (many ? ' ' + t : '')); } all[t] = a; });
+  rows.forEach(function(x){
+    var parts = []; Object.keys(all).forEach(function(t){ var a = all[t], mine = x.units.filter(function(u){ return a.indexOf(u) >= 0; });
+      if (!mine.length) return; parts.push(mine.length === a.length && a.length > 1 ? 'All ' + (many ? t + ' ' : '') + 'units (' + a.length + ')' : mine.join(', ')); });
+    x.unitText = parts.join(' · ');
+  });
   rows.sort(function(a, b){ return a.post < b.post ? -1 : a.post > b.post ? 1 : b.len - a.len; });
   ['Post', 'Qty', 'Length', '✓', 'For units'].forEach(function(t, i){ put(1, i + 1, t); });
   var map = {}; rows.forEach(function(x, i){ map[x.key] = i + 2; });
-  rows.forEach(function(x, i){ put(i + 2, 1, x.post); put(i + 2, 2, String(x.qty)); put(i + 2, 3, fmt16(x.len)); put(i + 2, 5, x.units.join(', ')); });
+  rows.forEach(function(x, i){ put(i + 2, 1, x.post); put(i + 2, 2, String(x.qty)); put(i + 2, 3, fmt16(x.len)); put(i + 2, 5, x.unitText || x.units.join(', ')); });
   fake.maxR = rows.length + 1;
   var kinds = list.filter(function(x){ return SCREEN_RE.test(x.sh.name); }).map(function(x){ return x.sh.name; });
   return { kinds: kinds, sh: { name: 'SCREEN POSTS', pa: "'SCREEN POSTS'!$A$1:$E$" + fake.maxR, state: 'visible' }, sd: fake, label: 'Posts', virt: 1, map: map };
@@ -1272,12 +1297,7 @@ function confirmBox(text, then){
 }
 
 // ---------- fab time: worked out from when boxes were ticked; only shown in the manager view ----------
-// The manager PIN is checked by the Crew Job Board backend (kept in its Script Properties), so it isn't in this public code.
-var MGR_API = 'https://script.google.com/macros/s/AKfycbydlE5l182hcs9PaOOMDPzRwoBIiyzwkDopbVJihlxNc3EHLLZeaEkeKofZ7PnaWnXH/exec';
-function checkMgrPin(pin){
-  return fetch(MGR_API, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action: 'checkPin', pin: pin }) })
-    .then(function(r){ return r.json(); }).then(function(r){ return !!(r && r.ok); });
-}
+var MGR_PIN = '5742';   // manager PIN for the fab-times view (change it here)
 var GAP = 25 * 60000;   // a gap longer than this between ticks is a break, overnight or weekend, and isn't counted
 function fabTime(p, kind){
   var asm = kind === 'asm', tl = asm ? unpackTl(p.tlap) : progTl(p), ts = tl.slice(), so = asm ? p.asm : p.fin; if (so) ts.push(so.at);
@@ -1386,7 +1406,7 @@ function openMgr(){
     var m = el('modal'), inp = el('modalInput');
     el('modalText').textContent = 'Manager PIN'; inp.hidden = false; inp.value = ''; m.hidden = false; setTimeout(function(){ inp.focus(); }, 150);
     el('modalNo').onclick = function(){ m.hidden = true; inp.hidden = true; };
-    el('modalYes').onclick = function(){ var pv = inp.value.trim(); m.hidden = true; inp.hidden = true; if (!pv) return; msg('Checking PIN…', true); checkMgrPin(pv).then(function(ok){ if (ok){ msg('', true); openMgr(); } else msg('Wrong PIN.'); }).catch(function(){ msg('Couldn’t check the PIN — no signal?'); }); };
+    el('modalYes').onclick = function(){ var ok = inp.value.trim() === MGR_PIN; m.hidden = true; inp.hidden = true; if (ok) openMgr(); else msg('Wrong PIN.'); };
     inp.onkeydown = function(e){ if (e.key === 'Enter') el('modalYes').click(); };
   }
   function down(){ clearTimeout(t); t = setTimeout(askMgr, 2000); }
