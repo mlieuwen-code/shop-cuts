@@ -2003,7 +2003,12 @@ function confirmBox(text, then){
 }
 
 // ---------- fab time: worked out from when boxes were ticked; only shown in the manager view ----------
-var MGR_PIN = '5742';   // manager PIN for the fab-times view (change it here)
+// The manager PIN is checked by the Crew Job Board backend (kept in its Script Properties), so it isn't in this public code.
+var MGR_API = 'https://script.google.com/macros/s/AKfycbydlE5l182hcs9PaOOMDPzRwoBIiyzwkDopbVJihlxNc3EHLLZeaEkeKofZ7PnaWnXH/exec';
+function checkMgrPin(pin){
+  return fetch(MGR_API, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action: 'checkPin', pin: pin }) })
+    .then(function(r){ return r.json(); }).then(function(r){ return !!(r && r.ok); });
+}
 var GAP = 25 * 60000;   // a gap longer than this between ticks is a break, overnight or weekend, and isn't counted
 function fabTime(p, kind){
   var asm = kind === 'asm', tl = asm ? unpackTl(p.tlap) : progTl(p), ts = tl.slice(), so = asm ? p.asm : p.fin; if (so) ts.push(so.at);
@@ -2112,7 +2117,7 @@ function openMgr(){
     var m = el('modal'), inp = el('modalInput');
     el('modalText').textContent = 'Manager PIN'; inp.hidden = false; inp.value = ''; m.hidden = false; setTimeout(function(){ inp.focus(); }, 150);
     el('modalNo').onclick = function(){ m.hidden = true; inp.hidden = true; };
-    el('modalYes').onclick = function(){ var ok = inp.value.trim() === MGR_PIN; m.hidden = true; inp.hidden = true; if (ok) openMgr(); else msg('Wrong PIN.'); };
+    el('modalYes').onclick = function(){ var pv = inp.value.trim(); m.hidden = true; inp.hidden = true; if (!pv) return; msg('Checking PIN…', true); checkMgrPin(pv).then(function(ok){ if (ok){ msg('', true); openMgr(); } else msg('Wrong PIN.'); }).catch(function(){ msg('Couldn’t check the PIN — no signal?'); }); };
     inp.onkeydown = function(e){ if (e.key === 'Enter') el('modalYes').click(); };
   }
   function down(){ clearTimeout(t); t = setTimeout(askMgr, 2000); }
