@@ -206,6 +206,11 @@ table.sheet td.hival.hicustom{background:#9C0006!important;color:#fff!important;
 #logo svg{pointer-events:none}
 .ver{color:var(--muted);font-size:13px;font-weight:700;text-align:center;margin:28px 0 8px;opacity:.8}
 .toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:60;background:#1F1B17;color:#fff;font-size:19px;font-weight:800;padding:16px 26px;border-radius:999px;box-shadow:0 8px 24px rgba(0,0,0,.25);transition:opacity .35s,transform .35s;white-space:nowrap}
+.updbar{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:61;display:flex;align-items:center;gap:12px;background:#E8590C;color:#fff;border:0;font-size:19px;font-weight:800;padding:16px 26px;border-radius:999px;box-shadow:0 8px 24px rgba(0,0,0,.3);white-space:nowrap;cursor:pointer}
+.updbar[hidden]{display:none}
+.updbar .ud{font-size:14px;animation:udp 1.4s ease-in-out infinite}
+.updbar .ut{background:rgba(255,255,255,.22);border-radius:999px;padding:6px 14px;font-size:16px}
+@keyframes udp{50%{opacity:.25}}
 .toast.out{opacity:0;transform:translate(-50%,12px)}
 .signoff{color:#8A4B00;font-weight:900;background:#FFE8A3;border-radius:8px;padding:2px 8px}
 table.sheet td.divl{border-left:3px solid #1F1B17!important}
@@ -322,6 +327,7 @@ table.sheet td.bp svg.bpi.tall{height:70px}
   </div>
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+<button type="button" class="updbar" id="updbar" hidden><span class="ud">●</span><b>Update ready</b><span class="ut">Tap to update</span></button>
 <script>/*!
 
 JSZip v3.10.1 - A JavaScript class for generating and reading zip files
@@ -725,7 +731,7 @@ function wId(id){ return id + '.w'; }
 var el = function(id){ return document.getElementById(id); };
 function esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 // a short notice at the bottom of the screen
-var VERSION = '11.16.942', toastT = null;
+var VERSION = '11.16.943', toastT = null;
 function toast(t){ var b = el('toast'); b.textContent = t; b.hidden = false; b.classList.remove('out'); clearTimeout(toastT); toastT = setTimeout(function(){ b.classList.add('out'); setTimeout(function(){ b.hidden = true; }, 400); }, 3200); }
 function msg(t, ok){ var m = el('msg'); m.hidden = !t; m.className = 'msg ' + (ok ? 'ok' : 'err'); m.textContent = t || ''; }
 function lsGet(k){ try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
@@ -942,7 +948,7 @@ function prefetch(){
   })();
 }
 el('ver').textContent = (WELD ? 'Shop Welds' : 'Shop Cuts') + ' · version ' + VERSION;
-var refreshAsked = false;
+var refreshAsked = false, updAsked = false;
 var listFresh = false;   // once the backend has answered, the copy saved on the tablet never overwrites it
 function loadList(){
   kvGet('list').then(function(l){ kvGet('donelist').then(function(d){ if (listFresh) return; if (d && !doneJobs) doneJobs = d; if (l && !jobs.length){ jobs = l; renderList(true); } }); });
@@ -962,7 +968,7 @@ function loadList(){
 el('jobs').addEventListener('click', function(e){ if (e.target.closest('[data-act="donetoggle"]')){ lsSet(UI + 'done-open', lsGet(UI + 'done-open') === 1 ? 0 : 1); return renderList(false); } var b = e.target.closest('[data-k]'); if (b) return openJob(jobs[+b.getAttribute('data-k')]); var wj = e.target.closest('[data-w]'); if (wj) return openJob(shownW[+wj.getAttribute('data-w')]); var d = e.target.closest('[data-d]'); if (d) openJob(shownDone[+d.getAttribute('data-d')]); });
 // Refresh list: also checks for a newer version of the app (if one arrives, the app reloads and says so)
 el('reload').onclick = function(){
-  refreshAsked = true; loadList();
+  refreshAsked = true; updAsked = true; loadList();
   if (navigator.serviceWorker && navigator.serviceWorker.getRegistration) navigator.serviceWorker.getRegistration().then(function(reg){ if (reg) reg.update().catch(function(){}); });
 };
 
@@ -2155,12 +2161,21 @@ if (WELD){
 })();
 try { if (sessionStorage.getItem('shop-updated')){ sessionStorage.removeItem('shop-updated'); setTimeout(function(){ toast('✓ Updated to version ' + VERSION); }, 600); } } catch (e) {}
 if ('serviceWorker' in navigator) window.addEventListener('load', function(){
-  // updates: check whenever the app comes back to the front; when a new version takes over, reload once to show it
+  // updates: checked when the app comes back to the front and every few minutes while it's open (a tablet that never leaves
+  // the app still hears about it). A new version doesn't interrupt the work: an "Update ready" bar shows, and a tap loads it.
+  // Tapping Refresh list loads it straight away.
   var had = !!navigator.serviceWorker.controller, reloaded = false;
+  var go = function(){ if (reloaded) return; reloaded = true; try { sessionStorage.setItem('shop-updated', '1'); } catch (e) {} location.reload(); };
   navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(function(reg){
     document.addEventListener('visibilitychange', function(){ if (!document.hidden) reg.update().catch(function(){}); });
+    setInterval(function(){ if (!document.hidden && navigator.onLine !== false) reg.update().catch(function(){}); }, 3 * 60000);
   }).catch(function(){});
-  navigator.serviceWorker.addEventListener('controllerchange', function(){ if (had && !reloaded){ reloaded = true; try { sessionStorage.setItem('shop-updated', '1'); } catch (e) {} location.reload(); } });
+  navigator.serviceWorker.addEventListener('controllerchange', function(){
+    if (!had || reloaded) return;
+    if (updAsked) return go();
+    var b = el('updbar'); if (!b) return go();
+    b.hidden = false; b.onclick = go;
+  });
 });
 window.__shop = { parseBook: parseBook, shopSheets: shopSheets, layout: layout, renderSheet: renderSheet, show: show, printArea: printArea };
 })();

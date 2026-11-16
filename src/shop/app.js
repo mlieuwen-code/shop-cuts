@@ -236,7 +236,7 @@ function prefetch(){
   })();
 }
 el('ver').textContent = (WELD ? 'Shop Welds' : 'Shop Cuts') + ' · version ' + VERSION;
-var refreshAsked = false;
+var refreshAsked = false, updAsked = false;
 var listFresh = false;   // once the backend has answered, the copy saved on the tablet never overwrites it
 function loadList(){
   kvGet('list').then(function(l){ kvGet('donelist').then(function(d){ if (listFresh) return; if (d && !doneJobs) doneJobs = d; if (l && !jobs.length){ jobs = l; renderList(true); } }); });
@@ -256,7 +256,7 @@ function loadList(){
 el('jobs').addEventListener('click', function(e){ if (e.target.closest('[data-act="donetoggle"]')){ lsSet(UI + 'done-open', lsGet(UI + 'done-open') === 1 ? 0 : 1); return renderList(false); } var b = e.target.closest('[data-k]'); if (b) return openJob(jobs[+b.getAttribute('data-k')]); var wj = e.target.closest('[data-w]'); if (wj) return openJob(shownW[+wj.getAttribute('data-w')]); var d = e.target.closest('[data-d]'); if (d) openJob(shownDone[+d.getAttribute('data-d')]); });
 // Refresh list: also checks for a newer version of the app (if one arrives, the app reloads and says so)
 el('reload').onclick = function(){
-  refreshAsked = true; loadList();
+  refreshAsked = true; updAsked = true; loadList();
   if (navigator.serviceWorker && navigator.serviceWorker.getRegistration) navigator.serviceWorker.getRegistration().then(function(reg){ if (reg) reg.update().catch(function(){}); });
 };
 
@@ -1449,12 +1449,21 @@ if (WELD){
 })();
 try { if (sessionStorage.getItem('shop-updated')){ sessionStorage.removeItem('shop-updated'); setTimeout(function(){ toast('✓ Updated to version ' + VERSION); }, 600); } } catch (e) {}
 if ('serviceWorker' in navigator) window.addEventListener('load', function(){
-  // updates: check whenever the app comes back to the front; when a new version takes over, reload once to show it
+  // updates: checked when the app comes back to the front and every few minutes while it's open (a tablet that never leaves
+  // the app still hears about it). A new version doesn't interrupt the work: an "Update ready" bar shows, and a tap loads it.
+  // Tapping Refresh list loads it straight away.
   var had = !!navigator.serviceWorker.controller, reloaded = false;
+  var go = function(){ if (reloaded) return; reloaded = true; try { sessionStorage.setItem('shop-updated', '1'); } catch (e) {} location.reload(); };
   navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(function(reg){
     document.addEventListener('visibilitychange', function(){ if (!document.hidden) reg.update().catch(function(){}); });
+    setInterval(function(){ if (!document.hidden && navigator.onLine !== false) reg.update().catch(function(){}); }, 3 * 60000);
   }).catch(function(){});
-  navigator.serviceWorker.addEventListener('controllerchange', function(){ if (had && !reloaded){ reloaded = true; try { sessionStorage.setItem('shop-updated', '1'); } catch (e) {} location.reload(); } });
+  navigator.serviceWorker.addEventListener('controllerchange', function(){
+    if (!had || reloaded) return;
+    if (updAsked) return go();
+    var b = el('updbar'); if (!b) return go();
+    b.hidden = false; b.onclick = go;
+  });
 });
 window.__shop = { parseBook: parseBook, shopSheets: shopSheets, layout: layout, renderSheet: renderSheet, show: show, printArea: printArea };
 })();
