@@ -449,9 +449,11 @@ function fencePosts(book, item){
   for (var r = H + 1; r <= (sd.maxR || 0); r++){
     if (+v(r, col['is post']) !== 1) continue;
     // a step post (Tran): standard blocks on the high side, the step added on the low side (helper columns low side / low top / low bot)
-    var ls = String(v(r, col['low side'])).trim();
+    // two sheet layouts: 'low side / low top / low bot', or 'other top / other bot' (the next opening's side of the post, i.e. the right)
+    var ls = String(v(r, col['low side'])).trim(), lt = ls ? v(r, col['low top']) : '', lb = ls ? v(r, col['low bot']) : '';
+    if (!ls && col['other top'] != null && (String(v(r, col['other top'])).trim() !== '' || String(v(r, col['other bot'])).trim() !== '')){ ls = 'Right'; lt = v(r, col['other top']); lb = v(r, col['other bot']); }
     posts.push({ type: String(v(r, col.type)).trim(), cut: +v(r, col.cut) || 0, top: v(r, col['top blk']), bot: v(r, col['bot blk']), other: ls ? '' : String(v(r, col['other side'])).trim(),
-      ls: ls, lt: ls ? v(r, col['low top']) : '', lb: ls ? v(r, col['low bot']) : '' });
+      ls: ls, lt: lt, lb: lb });
   }
   if (!posts.length) return null;
   var len = function(x){ return x === '' || x == null ? '' : typeof x === 'number' ? fmt16(x) : String(x); };
@@ -468,7 +470,7 @@ function fencePosts(book, item){
   [['Job', /^job:?$/i], ['Colour', /^colou?r:?$/i], ['Mount', /^mount:?$/i], ['Post', /^post wall:?$/i]].forEach(function(a){ var x = fenceLabel(sd, a[1]); if (String(x).trim() !== '') info(a[0], x); });
   var ph = same(function(p){ return p.cut; });
   var stdH = fenceLabel(sd, /^std post ht:?$/i);
-  info('Post height', ph != null ? len(+ph) : stdH !== '' ? len(+stdH) + (posts.some(function(p){ return /^tran/i.test(p.type); }) ? ' · step posts taller' : '') : 'see Post cutting');
+  info('Post height', ph != null ? len(+ph) : stdH !== '' ? len(+stdH) + ' standard · see Post cutting' : 'see Post cutting');
   var tb = same(function(p){ return p.top; }), bb = same(function(p){ return p.bot; });
   info('Top channel block', tb != null ? len(posts[0].top) : 'see Blocking', 'hilab');
   info('Bottom channel block', bb != null ? len(posts[0].bot) : 'see Blocking', 'hilab');
@@ -479,7 +481,7 @@ function fencePosts(book, item){
   cuts.forEach(function(g, i){ R++; var z = i % 2 ? YEL : ''; put(1, fenceType(g.p.type), { c: 1, b: 1, css: z }); put(2, String(g.n), { c: 1, b: 1, css: z }); put(3, '', { css: z }); put(4, len(g.p.cut), { c: 1, b: 1, css: z }); });
   R++;
   R++; put(1, '2 · Blocking');
-  R++; ['Category', 'Qty', '✓', hasLow ? 'Top channel (high side)' : 'Top channel', hasLow ? 'Bottom channel (high side)' : 'Bottom channel'].concat(hasLow ? ['Low side', 'Top channel (low)', 'Bottom channel (low)'] : []).concat(hasOther ? ['Other side'] : []).forEach(function(t, i){ put(i + 1, t, { c: 1 }); });
+  R++; ['Category', 'Qty', '✓', 'Top channel', 'Bottom channel'].concat(hasLow ? ['Step side', 'Step top channel', 'Step bottom channel'] : []).concat(hasOther ? ['Other side'] : []).forEach(function(t, i){ put(i + 1, t, { c: 1 }); });
   blks.forEach(function(g, i){ R++; var z = i % 2 ? YEL : '', c = 6, lo = g.p.ls ? ' hival' : '';
     put(1, fenceType(g.p.type), { c: 1, b: 1, css: z }); put(2, String(g.n), { c: 1, b: 1, css: z }); put(3, '', { css: z }); put(4, len(g.p.top), { c: 1, b: 1, css: z }); put(5, len(g.p.bot), { c: 1, b: 1, css: z });
     if (hasLow){ put(c++, g.p.ls || '', { c: 1, b: 1, css: z }); put(c++, len(g.p.lt), { c: 1, b: 1, css: z, cls: lo.trim() }); put(c++, len(g.p.lb), { c: 1, b: 1, css: z, cls: lo.trim() }); }
