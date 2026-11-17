@@ -164,12 +164,19 @@ function renderList(cached){
     // signed off Assembly: the shop is finished with it, so it drops to its own card at the bottom until the welder completes it
     var G = listGroups(), atw = G.atw, pri = G.pri, prog = G.prog, rest = G.rest, ordered = jorder.length > 0;
     var pick = function(arr){ return arr.map(function(k){ return cards[k]; }).join(''); };
-    var rmc = remakes.map(function(rm, i){
-      var f = remakeJob(rm), s = lsGet(SUM + f.id), p = s && s.total ? s.done / s.total : 0;
-      return '<button type="button" class="job rmjob" data-rm="' + i + '">' + ring(p) + '<span class="t"><b><span class="rmtag">' + esc(rm.tags.join(', ')) + '</span>' + esc(rm.name.replace(/\.xls[xm]$/i, '')) + '</b>' +
+    var rmCard = function(rm, i){
+      var f = remakeJob(rm), s = lsGet(SUM + f.id), p = s && s.total ? s.done / s.total : 0, pr = prioRank(f.id);
+      return '<button type="button" class="job rmjob" data-rm="' + i + '">' + ring(p) + '<span class="t"><b>' + (pr < Infinity ? '<span class="pri">#' + (pr + 1) + '</span>' : '') + '<span class="rmtag">' + esc(rm.tags.join(', ')) + '</span>' + esc(rm.name.replace(/\.xls[xm]$/i, '')) + '</b>' +
         '<span class="s">' + (s && s.total ? s.done + ' of ' + s.total + ' ticked' : 'Not started') + (rm.note ? ' · <span class="rmnote">' + esc(rm.note) + '</span>' : '') + '</span></span></button>';
+    };
+    var rmc = remakes.map(function(rm, i){ return prioRank('rm' + rm.id) < Infinity ? '' : rmCard(rm, i); }).join('');
+    // the Priority card in the office's order: jobs and remakes mixed
+    var priHtml = prio.map(function(id){
+      for (var i = 0; i < remakes.length; i++) if ('rm' + remakes[i].id === id) return rmCard(remakes[i], i);
+      for (var j = 0; j < pri.length; j++) if (jobs[pri[j]].id === id) return cards[pri[j]];
+      return '';
     }).join('');
-    box.innerHTML = (rmc ? '<div class="prcard rmcard"><div class="prhead"><span class="prflame" aria-hidden="true">↻</span>Remakes<span>· just these rails, cut and assemble</span></div>' + rmc + '</div>' : '') + (pri.length ? '<div class="prcard"><div class="prhead"><span class="prflame" aria-hidden="true">⚡</span>Priority<span>· rush these first, in this order</span></div>' + pick(pri) + '</div>' : '') +
+    box.innerHTML = (rmc ? '<div class="prcard rmcard"><div class="prhead"><span class="prflame" aria-hidden="true">↻</span>Remakes<span>· just these rails, cut and assemble</span></div>' + rmc + '</div>' : '') + (priHtml ? '<div class="prcard"><div class="prhead"><span class="prflame" aria-hidden="true">⚡</span>Priority<span>· rush these first, in this order</span></div>' + priHtml + '</div>' : '') +
       (prog.length ? '<div class="prcard ipcard"><div class="prhead"><span class="prflame" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" style="vertical-align:-4px"><circle cx="12" cy="12" r="9.5" fill="none" stroke="currentColor" stroke-width="3"/><path d="M12 5.5A6.5 6.5 0 0 1 18.5 12H12z" fill="currentColor"/></svg></span>In progress' + (ordered ? '' : '<span>· most done first</span>') + '</div>' + pick(prog) + '</div>' : '') +
       (rest.length && (pri.length || prog.length) ? '<div class="prrest">Not started</div>' : '') + pick(rest) +
       (atw.length ? '<div class="prcard wcard"><div class="prhead"><span class="prflame" aria-hidden="true">' + SPARK + '</span>At welding<span>· cut and assembled, waiting on the welder</span></div>' + pick(atw) + '</div>' : '') + done;
@@ -603,6 +610,7 @@ function remakeDone(rm){
   remakes = next; lsSet('shop-remakes', remakes);
   toast('✓ Remake ' + rm.tags.join(', ') + ' done');
   api('remakeset', { remakes: next }).catch(function(){});
+  if (prio.indexOf('rm' + rm.id) >= 0){ prio = prio.filter(function(id){ return id !== 'rm' + rm.id; }); lsSet('shop-prio', prio); api('prioset', { prio: prio }).catch(function(){}); }
 }
 function unitOf(tag){ return String(tag == null ? '' : tag).trim().replace(/\.\d+$/, ''); }
 function readUnits(sd){
@@ -1366,8 +1374,9 @@ function renderPrio(){
   if (el('ordProg')) setTimeout(renderOrder, 0);
   if (el('rmList')) setTimeout(renderRemakes, 0);
   var ids = {}; jobs.forEach(function(f){ ids[f.id] = f; });
-  var on = prio.filter(function(id){ return ids[id]; }), rest = jobs.filter(function(f){ return on.indexOf(f.id) < 0; }).slice().sort(function(a, b){ return b.updated - a.updated; });
-  var nm = function(f){ return esc(f.name.replace(/\.xls[xm]$/i, '')); };
+  var rms = remakes.map(function(rm){ var f = { id: 'rm' + rm.id, name: rm.name, updated: rm.at || 0, rm: rm }; ids[f.id] = f; return f; });
+  var on = prio.filter(function(id){ return ids[id]; }), rest = rms.concat(jobs.slice().sort(function(a, b){ return b.updated - a.updated; })).filter(function(f){ return on.indexOf(f.id) < 0; });
+  var nm = function(f){ var n = esc(f.name.replace(/\.xls[xm]$/i, '')); return f.rm ? '<span class="rmtag">↻ ' + esc(f.rm.tags.join(', ')) + '</span>' + n : n; };
   el('prioOn').innerHTML = on.length ? on.map(function(id, i){
     return '<div class="prow"><span class="pnum">' + (i + 1) + '</span><span class="pname">' + nm(ids[id]) + '</span>' +
       '<button type="button" class="pbtn" data-pa="up" data-pi="' + i + '"' + (i ? '' : ' disabled') + ' aria-label="Move up">▲</button>' +
@@ -1375,9 +1384,9 @@ function renderPrio(){
       '<button type="button" class="pbtn px" data-pa="off" data-pi="' + i + '" aria-label="Take off the priority list">✕</button></div>';
   }).join('') : '<div class="pempty">No priorities set, so the tablets show the newest job first. Add jobs below.</div>';
   el('prioRest').innerHTML = rest.length ? rest.map(function(f){
-    return '<div class="prow rest"><span class="pname">' + nm(f) + '</span><span class="pday">saved ' + esc(new Date(f.updated).toLocaleDateString([], { month: 'short', day: 'numeric' })) + '</span>' +
+    return '<div class="prow rest"><span class="pname">' + nm(f) + '</span><span class="pday">' + (f.rm ? 'remake' : 'saved ' + esc(new Date(f.updated).toLocaleDateString([], { month: 'short', day: 'numeric' }))) + '</span>' +
       '<button type="button" class="pbtn padd" data-pa="add" data-id="' + esc(f.id) + '">+ Add</button></div>';
-  }).join('') : '<div class="pempty">Every job in Ready to Fab is on the list.</div>';
+  }).join('') : '<div class="pempty">Every job and remake is on the list.</div>';
   el('prioClear').hidden = !on.length;
   return on;
 }
@@ -1426,7 +1435,7 @@ function renderRemakes(){
   sel.value = was;
 }
 function saveRemakes(next, ok){
-  var before = remakes; remakes = next; lsSet('shop-remakes', remakes); renderRemakes();
+  var before = remakes; remakes = next; lsSet('shop-remakes', remakes); renderPrio();
   return api('remakeset', { remakes: next }).then(function(){ toast(ok); }, function(e){
     remakes = before; lsSet('shop-remakes', remakes); renderRemakes();
     toast(e && /unknown request/i.test(e.message || '') ? 'Not saved: Apps Script needs the new version deployed first.' : 'Not saved: no signal. Try again.');
@@ -1457,7 +1466,7 @@ el('mgr').addEventListener('change', function(e){
 });
 el('mgr').addEventListener('click', function(e){
   var x = e.target.closest('[data-rmx]');
-  if (x){ var rm = remakes[+x.getAttribute('data-rmx')]; return confirmBox('Take remake ' + rm.tags.join(', ') + ' off the tablets?', function(){ saveRemakes(remakes.filter(function(r){ return r.id !== rm.id; }), '✓ Remake taken off'); }); }
+  if (x){ var rm = remakes[+x.getAttribute('data-rmx')]; return confirmBox('Take remake ' + rm.tags.join(', ') + ' off the tablets?', function(){ saveRemakes(remakes.filter(function(r){ return r.id !== rm.id; }), '✓ Remake taken off'); if (prio.indexOf('rm' + rm.id) >= 0) savePrio(prio.filter(function(id){ return id !== 'rm' + rm.id; })); }); }
   if (e.target.closest('#rmSend') && rmTagsFor){
     var tags = [].map.call(el('rmTags').querySelectorAll('input:checked'), function(i){ return i.value; }); if (!tags.length) return;
     var rm = { id: Date.now().toString(36), file: rmTagsFor.id, name: rmTagsFor.name, tags: tags, note: el('rmNote').value.trim().slice(0, 200), at: Date.now() };
