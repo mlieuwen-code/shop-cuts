@@ -375,6 +375,9 @@ table.sheet.laytab{margin-bottom:10px}
 .weldnote .wn-ok{flex:0 0 auto;min-height:56px;min-width:120px;border:0;border-radius:14px;background:#fff;color:#8A3205;font-size:19px;font-weight:900}
 @keyframes wnIn{from{transform:translateY(-30px);opacity:0}to{transform:none;opacity:1}}
 @media (max-width:640px){.weldnote .wn-in{flex-direction:column;align-items:stretch}.weldnote .wn-t{font-size:18px}}
+.pushbtn{margin-right:8px;background:#FFF3E6;border-color:#E8590C;color:#8A3205;font-weight:900}
+.pushbtn.on{background:#EEF6EC;border-color:#2E6B2A;color:#1F4D1C}
+@media (max-width:640px){.pushbtn{font-size:14px;padding-left:10px;padding-right:10px}}
 </style>
 </head><body>
 
@@ -389,6 +392,7 @@ table.sheet.laytab{margin-bottom:10px}
 <path d="M196 262 l40 40 l84 -92" fill="none" stroke="#FFFDF9" stroke-width="32" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
       <div><div class="eyebrow">Ridgeway Aluminum</div><b>Shop Cuts</b></div>
       <span style="flex:1"></span>
+      <button type="button" class="btn pushbtn" id="pushBtn" hidden></button>
       <button type="button" class="btn" id="reload">Refresh list</button>
     </div>
     <div class="hello"><h1>Ready to fab</h1><p>Pick a job. Tick things off as they’re cut.</p></div>
@@ -899,7 +903,7 @@ function wId(id){ return id + '.w'; }
 var el = function(id){ return document.getElementById(id); };
 function esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 // a short notice at the bottom of the screen
-var VERSION = '11.17.1518', toastT = null;
+var VERSION = '11.17.1532', toastT = null;
 function toast(t){ var b = el('toast'); b.textContent = t; b.hidden = false; b.classList.remove('out'); clearTimeout(toastT); toastT = setTimeout(function(){ b.classList.add('out'); setTimeout(function(){ b.hidden = true; }, 400); }, 3200); }
 function msg(t, ok){ var m = el('msg'); m.hidden = !t; m.className = 'msg ' + (ok ? 'ok' : 'err'); m.textContent = t || ''; }
 function lsGet(k){ try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
@@ -2633,6 +2637,51 @@ function noteBeep(){
 // browsers only let a page make sound after a tap, so the first tap anywhere gets the sound ready
 document.addEventListener('pointerdown', function(){ try { audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); if (audioCtx.state === 'suspended') audioCtx.resume(); } catch (e) {} }, { once: true, capture: true });
 el('weldNote').addEventListener('click', function(){ noteMsgs = []; el('weldNote').hidden = true; });
+
+// ---------- Alerts: push notifications on Ian's tablet, even with Shop Welds closed ----------
+var WP_PUB = 'BGfucHXMDwibX65-WqRBVeJiksPYCKjTcJdZTe-YwkZ3SiygQyQlCew440JQLxpNu08JADSW68PAQLFYtHyTGcM';
+function wpOk(){ return WELD && !isPreview() && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window; }
+function wpKey(){ var s = WP_PUB.replace(/-/g, '+').replace(/_/g, '/'), raw = atob(s + '==='.slice((s.length + 3) % 4)), a = new Uint8Array(raw.length); for (var i = 0; i < raw.length; i++) a[i] = raw.charCodeAt(i); return a; }
+function wpTell(reg, since){ var w = reg.active || navigator.serviceWorker.controller; if (w) w.postMessage({ wpConf: { api: API_URL, pin: getPin(), since: since || 0 } }); }
+function wpBtn(state){
+  var b = el('pushBtn'); if (!b) return;
+  b.hidden = false; b.className = 'btn pushbtn' + (state === 'on' ? ' on' : '');
+  var sm = window.innerWidth < 640;
+  b.textContent = state === 'on' ? '🔔 Alerts on' : state === 'blocked' ? (sm ? '🔕 Blocked' : '🔕 Alerts blocked') : (sm ? '🔔 Alerts' : '🔔 Turn on alerts');
+  b.setAttribute('data-st', state);
+}
+function wpCheck(){
+  if (!wpOk()) return;
+  navigator.serviceWorker.ready.then(function(reg){
+    return reg.pushManager.getSubscription().then(function(sub){
+      if (Notification.permission === 'denied') return wpBtn('blocked');
+      if (!sub || Notification.permission !== 'granted') return wpBtn('off');
+      wpBtn('on'); wpTell(reg, 0);
+      // remind the backend about this tablet now and then (it drops tablets the push service says are gone)
+      var last = lsGet('weld-push-at') || 0;
+      if (Date.now() - last > 864e5 && getPin()) api('weldpushsub', { sub: sub.toJSON(), who: 'Shop Welds' }).then(function(){ lsSet('weld-push-at', Date.now()); }).catch(function(){});
+    });
+  }).catch(function(){});
+}
+function wpTurnOn(){
+  Notification.requestPermission().then(function(p){
+    if (p !== 'granted'){ wpBtn(p === 'denied' ? 'blocked' : 'off'); throw { message: p === 'denied' ? 'Notifications are blocked for Shop Welds' : 'Notifications weren’t allowed' }; }
+    return navigator.serviceWorker.ready;
+  }).then(function(reg){
+    return reg.pushManager.getSubscription().then(function(old){ return old || reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: wpKey() }); }).then(function(sub){
+      var since = Date.now() - 2000;
+      wpTell(reg, since);
+      return api('weldpushsub', { sub: sub.toJSON(), who: 'Shop Welds' }).then(function(){ lsSet('weld-push-at', Date.now()); return api('weldpushtest'); });
+    });
+  }).then(function(){ wpBtn('on'); toast('🔔 Alerts on · a test notification is on its way'); }, function(e){ toast('Couldn’t turn on alerts' + (e && e.message ? ': ' + e.message : '')); });
+}
+if (el('pushBtn')) el('pushBtn').onclick = function(){
+  var st = this.getAttribute('data-st');
+  if (st === 'on') return confirmBox('Alerts are on for this tablet. Send a test notification?', function(){ api('weldpushtest').then(function(){ toast('Test notification sent'); }, function(){ toast('No signal, try again'); }); });
+  if (st === 'blocked') return confirmBox('Notifications are blocked for Shop Welds on this tablet. To fix it: open the tablet’s Settings › Apps › Shop Welds › Notifications and turn them on, then come back and tap this again.', function(){ wpCheck(); });
+  wpTurnOn();
+};
+wpCheck();
 
 // ---------- start ----------
 if (WELD){
