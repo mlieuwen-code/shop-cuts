@@ -761,7 +761,7 @@ function wId(id){ return id + '.w'; }
 var el = function(id){ return document.getElementById(id); };
 function esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 // a short notice at the bottom of the screen
-var VERSION = '11.17.315', toastT = null;
+var VERSION = '11.17.318', toastT = null;
 function toast(t){ var b = el('toast'); b.textContent = t; b.hidden = false; b.classList.remove('out'); clearTimeout(toastT); toastT = setTimeout(function(){ b.classList.add('out'); setTimeout(function(){ b.hidden = true; }, 400); }, 3200); }
 function msg(t, ok){ var m = el('msg'); m.hidden = !t; m.className = 'msg ' + (ok ? 'ok' : 'err'); m.textContent = t || ''; }
 function lsGet(k){ try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
@@ -1425,10 +1425,10 @@ function screenDiagram(kinds){
         '<line x1="' + sx + '" y1="' + sy + '" x2="' + (wf + 9) + '" y2="' + sy + '" stroke="' + ink + '" stroke-width="1.6"/><rect x="' + (sx - 1.5) + '" y="' + (sy - 3) + '" width="3" height="6" fill="' + ink + '"/>'; };
     o += clip(top + 2, 5, top, tr + 6, top + tr + 3) + clip(yC + 2, 5, yC - 6, tr + 6, yC - 3);
     var gy = 162, ga = xB + BW, gb = wallR;
-    o += '<g stroke="#6B6157" stroke-width="1.2"><line x1="' + ga + '" y1="' + gy + '" x2="' + gb + '" y2="' + gy + '"/><line x1="' + ga + '" y1="' + (gy - 4) + '" x2="' + ga + '" y2="' + (gy + 4) + '"/><line x1="' + gb + '" y1="' + (gy - 4) + '" x2="' + gb + '" y2="' + (gy + 4) + '"/></g><text x="' + ((ga + gb) / 2) + '" y="' + (gy - 6) + '" text-anchor="middle" font-size="10" font-weight="800" fill="#6B6157">2½"</text>';
+    o += '<g stroke="#6B6157" stroke-width="1.2"><line x1="' + ga + '" y1="' + gy + '" x2="' + gb + '" y2="' + gy + '"/><line x1="' + ga + '" y1="' + (gy - 4) + '" x2="' + ga + '" y2="' + (gy + 4) + '"/><line x1="' + gb + '" y1="' + (gy - 4) + '" x2="' + gb + '" y2="' + (gy + 4) + '"/></g><text x="' + (xB - 8) + '" y="' + (gy + 4) + '" text-anchor="end" font-size="10" font-weight="800" fill="#6B6157">2½" to wall</text>';
     o += fl(xB - 14, top + 24, 'T') + fl(xB - 14, yC - 14, 'T');
-    o += note((xB + wallR) / 2, top - 5, 'TOP RAIL', 'middle') + note(xB - 30, yC - 5, 'TOP RAIL', 'end') + note(xB - 30, yC + 7, '(BOTTOM)', 'end');
-    o += lbl(xB + BW / 2, 92, 'B');
+    o += note(wallR - 2, top - 5, 'TOP RAIL', 'end') + note(xB - 30, yC - 5, 'TOP RAIL', 'end') + note(xB - 30, yC + 7, '(BOTTOM)', 'end');
+    o += '<text x="' + (xB - 8) + '" y="' + 96 + '" text-anchor="end" font-size="22" font-weight="900" fill="' + ink + '">B</text>';
     return '<figure class="scrfig"><svg viewBox="0 0 360 250" role="img" aria-label="Short rail to wall privacy screen: one wide Post B between two top rails"><defs><pattern id="hatch2" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="#EFE9E1"/><line x1="0" y1="0" x2="0" y2="6" stroke="#B9AFA4" stroke-width="2"/></pattern></defs>' + o.replace(/url\(#hatch\)/g, 'url(#hatch2)') + '</svg>' +
       '<figcaption><b>Short rail to wall</b><span><i>B</i>one post (' + esc(size || '6x2') + ' on this job), up against the railing, between the two top rails</span><span><i>&#8593;</i>two top rails from Post B to the wall: one along the top, one along the bottom up off the deck, both on clips at the wall</span><span><i>&#8212;</i>for a very small gap between the railing and the wall: no Post A, no Post C, no channels</span><span><i style="background:#2F5D50">T</i>top rail sleeve clip</span></figcaption></figure>';
   };
