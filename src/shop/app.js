@@ -73,6 +73,13 @@ var jobs = [], doneJobs = null, DONE_DAYS = 50;
 var prio = lsGet('shop-prio') || [];
 // the office's own order for the other jobs (manager screen); used inside In progress and Not started, ahead of the automatic order
 var jorder = lsGet('shop-order') || [];
+// remakes sent from the manager screen: one or more rails of a job, shown on their own with their own ticks
+// { id, file, name, tags: ['404.1', …], note, at }. Ticks are saved under 'rm' + id, so the original job's ticks are never touched.
+var remakes = lsGet('shop-remakes') || [];
+function remakeJob(rm){
+  var src = jobs.concat(doneJobs || []).filter(function(f){ return f.id === rm.file; })[0];
+  return { id: 'rm' + rm.id, src: rm.file, name: rm.name, updated: src ? src.updated : 0, remake: rm };
+}
 function orderRank(id){ var i = jorder.indexOf(id); return i < 0 ? Infinity : i; }
 function byOrder(fallback){ return function(a, b){ var ra = orderRank(jobs[a].id), rb = orderRank(jobs[b].id); return ra !== rb ? (ra < rb ? -1 : 1) : fallback(a, b); }; }
 function jobPct(k){ var s = lsGet(SUM + jobs[k].id), p = s && s.total ? s.done / s.total : 0; return s && (s.done > 0 || s.fin) ? p : -1; }
@@ -157,7 +164,12 @@ function renderList(cached){
     // signed off Assembly: the shop is finished with it, so it drops to its own card at the bottom until the welder completes it
     var G = listGroups(), atw = G.atw, pri = G.pri, prog = G.prog, rest = G.rest, ordered = jorder.length > 0;
     var pick = function(arr){ return arr.map(function(k){ return cards[k]; }).join(''); };
-    box.innerHTML = (pri.length ? '<div class="prcard"><div class="prhead"><span class="prflame" aria-hidden="true">⚡</span>Priority<span>· rush these first, in this order</span></div>' + pick(pri) + '</div>' : '') +
+    var rmc = remakes.map(function(rm, i){
+      var f = remakeJob(rm), s = lsGet(SUM + f.id), p = s && s.total ? s.done / s.total : 0;
+      return '<button type="button" class="job rmjob" data-rm="' + i + '">' + ring(p) + '<span class="t"><b><span class="rmtag">' + esc(rm.tags.join(', ')) + '</span>' + esc(rm.name.replace(/\.xls[xm]$/i, '')) + '</b>' +
+        '<span class="s">' + (s && s.total ? s.done + ' of ' + s.total + ' ticked' : 'Not started') + (rm.note ? ' · <span class="rmnote">' + esc(rm.note) + '</span>' : '') + '</span></span></button>';
+    }).join('');
+    box.innerHTML = (rmc ? '<div class="prcard rmcard"><div class="prhead"><span class="prflame" aria-hidden="true">↻</span>Remakes<span>· just these rails, cut and assemble</span></div>' + rmc + '</div>' : '') + (pri.length ? '<div class="prcard"><div class="prhead"><span class="prflame" aria-hidden="true">⚡</span>Priority<span>· rush these first, in this order</span></div>' + pick(pri) + '</div>' : '') +
       (prog.length ? '<div class="prcard ipcard"><div class="prhead"><span class="prflame" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" style="vertical-align:-4px"><circle cx="12" cy="12" r="9.5" fill="none" stroke="currentColor" stroke-width="3"/><path d="M12 5.5A6.5 6.5 0 0 1 18.5 12H12z" fill="currentColor"/></svg></span>In progress' + (ordered ? '' : '<span>· most done first</span>') + '</div>' + pick(prog) + '</div>' : '') +
       (rest.length && (pri.length || prog.length) ? '<div class="prrest">Not started</div>' : '') + pick(rest) +
       (atw.length ? '<div class="prcard wcard"><div class="prhead"><span class="prflame" aria-hidden="true">' + SPARK + '</span>At welding<span>· cut and assembled, waiting on the welder</span></div>' + pick(atw) + '</div>' : '') + done;
@@ -241,7 +253,7 @@ var listFresh = false;   // once the backend has answered, the copy saved on the
 function loadList(){
   kvGet('list').then(function(l){ kvGet('donelist').then(function(d){ if (listFresh) return; if (d && !doneJobs) doneJobs = d; if (l && !jobs.length){ jobs = l; renderList(true); } }); });
   apiNew('fablist2', 'fablist', {}).then(function(r){
-    listFresh = true; jobs = r.files || []; doneJobs = r.done || null; if (Array.isArray(r.prio)){ prio = r.prio; lsSet('shop-prio', prio); } if (Array.isArray(r.order)){ jorder = r.order; lsSet('shop-order', jorder); } applyPrio(); kvSet('list', jobs); if (doneJobs) kvSet('donelist', doneJobs);
+    listFresh = true; jobs = r.files || []; doneJobs = r.done || null; if (Array.isArray(r.prio)){ prio = r.prio; lsSet('shop-prio', prio); } if (Array.isArray(r.order)){ jorder = r.order; lsSet('shop-order', jorder); } if (Array.isArray(r.remakes)){ remakes = r.remakes; lsSet('shop-remakes', remakes); } applyPrio(); kvSet('list', jobs); if (doneJobs) kvSet('donelist', doneJobs);
     renderList(false); if (!el('mgr').hidden) renderMgr(); msg(''); prefetch(); pullAll(); flushPending();
     if (refreshAsked){ refreshAsked = false; toast('✓ Up to date · version ' + VERSION); }
     // forget files that are neither in Ready to Fab nor completed in the last 50 days
@@ -253,7 +265,7 @@ function loadList(){
     else renderList(true);
   });
 }
-el('jobs').addEventListener('click', function(e){ if (e.target.closest('[data-act="donetoggle"]')){ lsSet(UI + 'done-open', lsGet(UI + 'done-open') === 1 ? 0 : 1); return renderList(false); } var b = e.target.closest('[data-k]'); if (b) return openJob(jobs[+b.getAttribute('data-k')]); var wj = e.target.closest('[data-w]'); if (wj) return openJob(shownW[+wj.getAttribute('data-w')]); var d = e.target.closest('[data-d]'); if (d) openJob(shownDone[+d.getAttribute('data-d')]); });
+el('jobs').addEventListener('click', function(e){ if (e.target.closest('[data-act="donetoggle"]')){ lsSet(UI + 'done-open', lsGet(UI + 'done-open') === 1 ? 0 : 1); return renderList(false); } var rb = e.target.closest('[data-rm]'); if (rb) return openJob(remakeJob(remakes[+rb.getAttribute('data-rm')])); var b = e.target.closest('[data-k]'); if (b) return openJob(jobs[+b.getAttribute('data-k')]); var wj = e.target.closest('[data-w]'); if (wj) return openJob(shownW[+wj.getAttribute('data-w')]); var d = e.target.closest('[data-d]'); if (d) openJob(shownDone[+d.getAttribute('data-d')]); });
 // Refresh list: also checks for a newer version of the app (if one arrives, the app reloads and says so)
 el('reload').onclick = function(){
   refreshAsked = true; updAsked = true; loadList();
@@ -578,6 +590,20 @@ function measure(t){
   return esc(t).replace(/(\d+)\s*\/\s*(\d+)/g, '<span class="fr"><sup>$1</sup><span class="sl">/</span><sub>$2</sub></span>').replace(/@\s*/g, '<span class="at">@</span>');
 }
 // units as entered in the field (INPUT tab), for the layout drawings
+// a remake: only the rows (and boxes) of the chosen rail tags are kept
+function remakeTrim(L, tags){
+  if (L.hdr == null) return;
+  var keep = function(r){ return r <= L.hdr || tags.indexOf(L.txt(r, L.cols[0]).trim()) >= 0; };
+  L.rows = L.rows.filter(keep);
+  Object.keys(L.chk).forEach(function(k){ if (!keep(+k.split(':')[0])) delete L.chk[k]; });
+  Object.keys(L.rowTap || {}).forEach(function(r){ if (!keep(+r)) delete L.rowTap[r]; });
+}
+function remakeDone(rm){
+  var next = remakes.filter(function(x){ return x.id !== rm.id; }); if (next.length === remakes.length) return;
+  remakes = next; lsSet('shop-remakes', remakes);
+  toast('✓ Remake ' + rm.tags.join(', ') + ' done');
+  api('remakeset', { remakes: next }).catch(function(){});
+}
 function unitOf(tag){ return String(tag == null ? '' : tag).trim().replace(/\.\d+$/, ''); }
 function readUnits(sd){
   var mount = String(cellVal(sd, 7, 2) || 'Fascia'), out = {};
@@ -770,7 +796,8 @@ function renderSheet(book, item, done){
     L.rows.forEach(function(r){ L.cols.forEach(function(c){ if (r >= m.r1 && r <= m.r2 && c >= m.c1 && c <= m.c2 && !(r === m.r1 && c === m.c1)) skip[r + ':' + c] = 1; }); });
   });
   var scr = SCREEN_RE.test(sh.name) && L.hdr != null;
-  var h = (scr ? screenHead(item) : '') + (WELD && isTop() && /^(CUT SHEET|POST SHEET)$/.test(sh.name) ? '<div class="bpnote"><b>Top mount · weld-on base plates</b><span class="bpkey"><i>Cen</i> centred on the plate · <i>Off</i> offset: post at the outer end, plate reaches in under the rail · <i>Rev</i> reverse offset: plate sticks out past the end · <i>L / R</i> left / right end of the rail · <i>EC</i> corner turns right with the run, <i>IC</i> turns left · 4x4 plates for 2x2 posts</span>' + (sh.name === 'POST SHEET' ? 'Post lengths are in section 1. The plates to weld, and how many of each, are under Base plates. The Cuts tab shows which plate goes on each rail end.' : 'The L Post and R Post columns show which base plate goes on each end of the rail. The Posts tab has the post lengths and the plate totals.') + '</div>' : '') + '<table class="sheet">';
+  var rmk = cur && cur.f.remake && sh.name === 'CUT SHEET' ? cur.f.remake : null;
+  var h = (rmk ? '<div class="rmbanner"><b>↻ Remake · ' + esc(rmk.tags.join(', ')) + '</b>' + (rmk.note ? '<span>' + esc(rmk.note) + '</span>' : '') + '</div>' : '') + (scr ? screenHead(item) : '') + (WELD && isTop() && /^(CUT SHEET|POST SHEET)$/.test(sh.name) ? '<div class="bpnote"><b>Top mount · weld-on base plates</b><span class="bpkey"><i>Cen</i> centred on the plate · <i>Off</i> offset: post at the outer end, plate reaches in under the rail · <i>Rev</i> reverse offset: plate sticks out past the end · <i>L / R</i> left / right end of the rail · <i>EC</i> corner turns right with the run, <i>IC</i> turns left · 4x4 plates for 2x2 posts</span>' + (sh.name === 'POST SHEET' ? 'Post lengths are in section 1. The plates to weld, and how many of each, are under Base plates. The Cuts tab shows which plate goes on each rail end.' : 'The L Post and R Post columns show which base plate goes on each end of the rail. The Posts tab has the post lengths and the plate totals.') + '</div>' : '') + '<table class="sheet">';
   var isCut = sh.name === 'CUT SHEET' && cur && Object.keys(cur.units || {}).length, lastUnit = null;
   var hiSheet = /^(COVER|POST SHEET)$/.test(sh.name);
   // Cut Sheet: a black line between the float lengths (Left / Right) and the posts (L Post …), so the two groups read apart
@@ -957,6 +984,7 @@ function saveLocal(){
 function saveProg(){
   if (!cur) return;
   cur.t = Date.now(); saveLocal();
+  if (cur.f.remake && cur.tot && cutKeys('cut').concat(cutKeys('asm')).every(function(k){ return cur.done[k]; })) remakeDone(cur.f.remake);
   clearTimeout(syncTimer); syncTimer = setTimeout(syncNow, 800);
 }
 // pull the backend copy, merge, show any changes from the other tablet, push back what the backend is missing
@@ -1002,7 +1030,7 @@ function pullW(id){
 function mgrDone(){ return (doneJobs || []).filter(function(d){ return d.doneAt >= WELD_START && !wLoad(d.id).fin; }); }
 function pullAll(then){
   var mgrOn = !el('mgr').hidden;
-  return Promise.all(jobs.map(function(f){
+  return Promise.all(jobs.concat(WELD ? [] : remakes.map(remakeJob)).map(function(f){
     return api('progget', { id: f.id }).then(function(r){
       var m = decodeProg(lsGet(progKey(f.id)));
       if (r.prog){
@@ -1114,6 +1142,7 @@ function openJob(f){
       }
       return shopSheets(book).then(function(items){
         items.forEach(function(it){ it.L = layout(book, it); });
+        if (f.remake){ items = items.filter(function(it){ return it.sh.name === 'CUT SHEET'; }); items.forEach(function(it){ remakeTrim(it.L, f.remake.tags); }); }
         var p = loadProg(f.id), tab0 = lsGet(UI + 'tab:' + f.id);
         var cutsTab = items.map(function(it){ return it.sh.name; }).indexOf('CUT SHEET');
         var ds = decodeProg(p); cur = { f: f, book: book, items: items, t: ds.t, done: ds.done, un: ds.un, tl: ds.tl, tla: ds.tla, fin: ds.fin, asm: ds.asm, finX: ds.finX, asmX: ds.asmX, w: wLoad(f.id), sort: WELD ? '' : (lsGet('shop-sort:' + f.id) || ''), tab: tab0 != null && tab0 < items.length && !WELD ? tab0 : (cutsTab >= 0 ? cutsTab : 0), units: {}, open: {} };
@@ -1136,11 +1165,12 @@ function openJob(f){
       });
     }).catch(function(e){ msg('Couldn’t read that cut sheet: ' + (e && e.message ? e.message : e)); });
   };
-  fileGet(f.id).then(function(local){
+  var fid = f.src || f.id;   // a remake opens its job's file
+  fileGet(fid).then(function(local){
     if (local && local.updated >= f.updated) return show(local.b64);
     msg('Opening ' + f.name.replace(/\.xlsx$/i, '') + '…', true);
-    return apiNew('fabopen2', 'fabopen', { id: f.id }).then(function(r){
-      filePut({ id: f.id, name: f.name, updated: f.updated, b64: r.b64 });
+    return apiNew('fabopen2', 'fabopen', { id: fid }).then(function(r){
+      filePut({ id: fid, name: f.name, updated: f.updated, b64: r.b64 });
       return show(r.b64, local ? 'A newer version came in from the office.' : '');
     }, function(e){
       if (local) return show(local.b64, 'No signal, so this is the copy saved on the tablet.');
@@ -1180,7 +1210,7 @@ function stageCard(st, all, rec){
 function renderFin(){
   var box = el('fin'), ci = cutItem(), it = cur.items[cur.tab];
   var onIt = ci ? it === ci : !!(it && (SCREEN_RE.test(it.sh.name) || it.virt));   // screen jobs: under the Screens and Posts tabs
-  if (!WELD && !onIt){ box.hidden = true; return; }   // the weld tablet shows its sign-off under every tab
+  if ((!WELD && !onIt) || cur.f.remake){ box.hidden = true; return; }   // remakes clear themselves when every box is ticked   // the weld tablet shows its sign-off under every tab
   var h = '', when = function(rec){ var at = new Date(rec.at); return esc(rec.by) + ' · ' + esc(at.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })) + ', ' + esc(at.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })); };
   if (WELD){
     var allW = weldAll();
@@ -1334,6 +1364,7 @@ function renderMgr(){
 // ---------- job priority (manager screen, works on a computer too) ----------
 function renderPrio(){
   if (el('ordProg')) setTimeout(renderOrder, 0);
+  if (el('rmList')) setTimeout(renderRemakes, 0);
   var ids = {}; jobs.forEach(function(f){ ids[f.id] = f; });
   var on = prio.filter(function(id){ return ids[id]; }), rest = jobs.filter(function(f){ return on.indexOf(f.id) < 0; }).slice().sort(function(a, b){ return b.updated - a.updated; });
   var nm = function(f){ return esc(f.name.replace(/\.xls[xm]$/i, '')); };
@@ -1379,6 +1410,60 @@ el('mgr').addEventListener('click', function(e){
   var j = a === 'top' ? 0 : a === 'up' ? i - 1 : i + 1; if (j < 0 || j >= arr.length || j === i) return;
   var x = arr.splice(i, 1)[0]; arr.splice(j, 0, x); G[g] = arr;
   saveOrder(G.prog.concat(G.rest).map(function(k){ return jobs[k].id; }));
+});
+// ---------- remakes (manager screen): pick a job, tick the rail tags, add a note, send ----------
+var rmTagsFor = null;
+function renderRemakes(){
+  var box = el('rmList'); if (!box) return;
+  box.innerHTML = remakes.length ? remakes.map(function(rm, i){
+    var s = lsGet(SUM + 'rm' + rm.id);
+    return '<div class="prow"><span class="pnum rmn">↻</span><span class="pname">' + esc(rm.name.replace(/\.xls[xm]$/i, '')) + ' · <b>' + esc(rm.tags.join(', ')) + '</b>' + (rm.note ? '<span class="rmnote2">' + esc(rm.note) + '</span>' : '') + '</span>' +
+      '<span class="pday">' + (s && s.total ? s.done + '/' + s.total : 'not started') + '</span><button type="button" class="pbtn px" data-rmx="' + i + '" aria-label="Take this remake off the tablets">✕</button></div>';
+  }).join('') : '<div class="pempty">No remakes on the tablets.</div>';
+  var sel = el('rmJob'), was = sel.value;
+  var all = jobs.map(function(f){ return [f.id, f.name, '']; }).concat((doneJobs || []).map(function(f){ return [f.id, f.name, ' (completed)']; }));
+  sel.innerHTML = '<option value="">Pick a job…</option>' + all.map(function(a){ return '<option value="' + esc(a[0]) + '">' + esc(a[1].replace(/\.xls[xm]$/i, '') + a[2]) + '</option>'; }).join('');
+  sel.value = was;
+}
+function saveRemakes(next, ok){
+  var before = remakes; remakes = next; lsSet('shop-remakes', remakes); renderRemakes();
+  return api('remakeset', { remakes: next }).then(function(){ toast(ok); }, function(e){
+    remakes = before; lsSet('shop-remakes', remakes); renderRemakes();
+    toast(e && /unknown request/i.test(e.message || '') ? 'Not saved: Apps Script needs the new version deployed first.' : 'Not saved: no signal. Try again.');
+  });
+}
+function rmLoadTags(){
+  var id = el('rmJob').value, box = el('rmTags'); rmTagsFor = null; el('rmSend').disabled = true;
+  if (!id){ box.innerHTML = ''; return; }
+  var f = jobs.concat(doneJobs || []).filter(function(x){ return x.id === id; })[0];
+  box.innerHTML = '<div class="pempty">Opening ' + esc(f.name.replace(/\.xls[xm]$/i, '')) + '…</div>';
+  fileGet(id).then(function(local){
+    if (local && local.updated >= f.updated) return local.b64;
+    return apiNew('fabopen2', 'fabopen', { id: id }).then(function(r){ filePut({ id: id, name: f.name, updated: f.updated, b64: r.b64 }); return r.b64; });
+  }).then(parseBook).then(function(book){
+    return shopSheets(book).then(function(items){
+      var it = items.filter(function(x){ return x.sh.name === 'CUT SHEET'; })[0]; if (!it) throw new Error('This job has no Cut Sheet.');
+      var L = layout(book, it), tags = [];
+      L.rows.forEach(function(r){ var t = L.txt(r, L.cols[0]).trim(); if (r > L.hdr && /^\S+\.\d+$/.test(t) && tags.indexOf(t) < 0) tags.push(t); });
+      if (el('rmJob').value !== id) return;
+      rmTagsFor = { id: id, name: f.name };
+      box.innerHTML = tags.length ? tags.map(function(t){ return '<label class="rmchk"><input type="checkbox" value="' + esc(t) + '"><span>' + esc(t) + '</span></label>'; }).join('') : '<div class="pempty">No rail tags found on the Cut Sheet.</div>';
+    });
+  }).catch(function(e){ box.innerHTML = '<div class="pempty">Couldn’t open it: ' + esc(e && e.message ? e.message : String(e)) + '</div>'; });
+}
+el('mgr').addEventListener('change', function(e){
+  if (e.target.id === 'rmJob') return rmLoadTags();
+  if (e.target.closest('#rmTags')) el('rmSend').disabled = !el('rmTags').querySelector('input:checked');
+});
+el('mgr').addEventListener('click', function(e){
+  var x = e.target.closest('[data-rmx]');
+  if (x){ var rm = remakes[+x.getAttribute('data-rmx')]; return confirmBox('Take remake ' + rm.tags.join(', ') + ' off the tablets?', function(){ saveRemakes(remakes.filter(function(r){ return r.id !== rm.id; }), '✓ Remake taken off'); }); }
+  if (e.target.closest('#rmSend') && rmTagsFor){
+    var tags = [].map.call(el('rmTags').querySelectorAll('input:checked'), function(i){ return i.value; }); if (!tags.length) return;
+    var rm = { id: Date.now().toString(36), file: rmTagsFor.id, name: rmTagsFor.name, tags: tags, note: el('rmNote').value.trim().slice(0, 200), at: Date.now() };
+    saveRemakes(remakes.concat([rm]), '✓ Remake sent · the tablets show it within a minute');
+    el('rmJob').value = ''; el('rmTags').innerHTML = ''; el('rmNote').value = ''; el('rmSend').disabled = true; rmTagsFor = null;
+  }
 });
 var prioSaving = 0;
 function savePrio(next){

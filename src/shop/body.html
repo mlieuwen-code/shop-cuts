@@ -20,8 +20,17 @@
 
   <section id="mgr" hidden>
     <div class="apphead"><button type="button" class="round" id="mgrBack" aria-label="Back to the job list"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2A2622" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button>
-      <div class="ttl"><div class="eyebrow">Manager</div><h2>Priority &amp; fab times</h2></div></div>
-    <h3 class="mgrh">Job priority</h3>
+      <div class="ttl"><div class="eyebrow">Manager</div><h2>Remakes, priority &amp; fab times</h2></div></div>
+    <h3 class="mgrh">Remakes</h3>
+    <p class="mgrnote">Send one or more rails of a job back to the shop. The tablets show just those rails, with your note, in a Remakes card at the top. It clears itself once every box is ticked. The job's own ticks aren't touched.</p>
+    <div class="prio" id="rmList"></div>
+    <div class="rmnew">
+      <select id="rmJob" aria-label="Job to remake from"></select>
+      <div class="rmtags" id="rmTags"></div>
+      <input type="text" id="rmNote" maxlength="200" placeholder="Note for the shop, e.g. Standoff 2&quot; instead of 1 1/2&quot;" aria-label="Note for the shop">
+      <button type="button" class="rmsend" id="rmSend" disabled>Send remake</button>
+    </div>
+    <h3 class="mgrh mgrh2">Job priority</h3>
     <p class="mgrnote">Jobs on this list show at the top of the shop tablets, numbered, in this order, and first under Ready to weld on the weld tablet. Everything else follows, newest first.</p>
     <div class="prio" id="prioOn"></div>
     <button type="button" class="pclear" id="prioClear" hidden>Clear all priorities</button>
