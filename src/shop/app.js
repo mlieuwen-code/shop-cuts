@@ -505,7 +505,8 @@ function fenceify(L, sd){
   var box = function(valC, head){ if (valC == null) return; var v = valC + 0.5; L.cols.splice(L.cols.indexOf(valC) + 1, 0, v); L.vchk[v] = 1; units.forEach(function(r){ if (L.txt(r, valC) !== '') L.chk[r + ':' + v] = { left: valC, head: head }; }); };
   var lp = colOf(/^left post$/i);
   box(L.cols[0], 'Rail tag'); box(colOf(/^top (channel|rail)$/i), 'Top channel'); box(colOf(/^bottom channel$/i), 'Bottom channel');
-  if (lp != null) L.div[lp] = 1;
+  // black lines before Left post, Right post and R post ht
+  [lp, colOf(/^right post$/i), colOf(/^r post ht$/i)].forEach(function(c){ if (c != null) L.div[c] = 1; });
 }
 function fenceHead(book, item){
   var sd = item.sd, L = item.L, got = [];
