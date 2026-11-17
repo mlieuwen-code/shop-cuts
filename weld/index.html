@@ -889,7 +889,7 @@ function wId(id){ return id + '.w'; }
 var el = function(id){ return document.getElementById(id); };
 function esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 // a short notice at the bottom of the screen
-var VERSION = '11.17.1433', toastT = null;
+var VERSION = '11.17.1437', toastT = null;
 function toast(t){ var b = el('toast'); b.textContent = t; b.hidden = false; b.classList.remove('out'); clearTimeout(toastT); toastT = setTimeout(function(){ b.classList.add('out'); setTimeout(function(){ b.hidden = true; }, 400); }, 3200); }
 function msg(t, ok){ var m = el('msg'); m.hidden = !t; m.className = 'msg ' + (ok ? 'ok' : 'err'); m.textContent = t || ''; }
 function lsGet(k){ try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
@@ -1418,7 +1418,7 @@ function fmt16(v){ var n = Math.round(v * 16), w = Math.floor(n / 16), f = n % 1
 // base plate codes in plain words: Cen = centred on the plate, Off = offset (post not centred), Rev = reverse offset.
 // Plates: 4x4 for 2x2 posts. (3x2 posts are left out for now.)
 // plate codes in full words for the weld tablet: E-Off-L = End Offset Left, IC-Cen = Inside Corner Centered, Mid-Cen = Mid Centered
-var BP_WORDS = { E: 'End', EC: 'End Corner', IC: 'Inside Corner', Mid: 'Mid', Joint: 'Joint', T: 'T', W: 'Wall End', '6EP': 'Double Corner End' };
+var BP_WORDS = { Cor: 'Corner', E: 'End', EC: 'End Corner', IC: 'Inside Corner', Mid: 'Mid', Joint: 'Joint', T: 'T', W: 'Wall End', '6EP': 'Double Corner End' };
 function bpName(code){
   var p = String(code || '').trim().split('-'), out = [BP_WORDS[p[0]] || BP_WORDS[Object.keys(BP_WORDS).filter(function(k){ return k.toLowerCase() === String(p[0]).toLowerCase(); })[0]] || p[0]];
   p.slice(1).forEach(function(x){ x = x.toLowerCase(); out.push(x === 'cen' ? 'Centered' : x === 'off' ? 'Offset' : x === 'rev' ? 'Reverse Offset' : x === 'l' ? 'Left' : x === 'r' ? 'Right' : x); });
@@ -1465,7 +1465,7 @@ function bpDesc(code){
 // 4" plate, 2" post, bolt holes 3/8" in; offset = post 1/4" from the outer edge, plate reaching in under the rail; Rev = flipped)
 // corners: EC turns right with the run, IC turns left; joints run straight through. side = which end of the rail the code is on (L / R), when known
 function bpIcon(code, side){
-  var c = String(code || '').trim(), m = /^E-(Cen|Off|Rev)-(L|R)$/i.exec(c), mid = /^(Mid|Joint)-Cen$/i.test(c), cen = /-Cen$/i.test(c), cor = /^(EC|IC)-Cen$/i.exec(c);
+  var c = String(code || '').trim(), m = /^E-(Cen|Off|Rev)-(L|R)$/i.exec(c), mid = /^(Mid|Joint)-Cen$/i.test(c), cen = /-Cen$/i.test(c), cor = /^(EC|IC)-Cen$/i.exec(c) || (/^Cor-Cen$/i.test(c) ? [c, 'EC'] : null);
   if (!m && !mid && !cen) return '';
   var X0 = 18, W = 64, P = 32, px = X0 + (W - P) / 2, rails = [];
   if (m){
@@ -1613,6 +1613,25 @@ function sheetSections(item){
     return { row: sc.row, keys: keys, label: label };
   }).filter(function(sc){ return sc.keys.length; });
 }
+
+// top mount fences: the base plates follow the top mount railing rules. End posts are offset (the plate reaches in under the fence),
+// mid and corner posts are centred, and an Open side has no post (the next opening's post covers it).
+function fenceTop(item){ return !!(WELD && item && item.L && item.L.fence && /^top/i.test(String(fenceLabel(item.sd, /^mount:?$/i)).trim())); }
+function fencePlateSize(item){ var w = String(fenceLabel(item.sd, /^post wall:?$/i)); return /3\s*x\s*3/i.test(w) ? '5x5' : '4x4'; }
+function fencePlateCode(t, side){ t = String(t || '').trim().toLowerCase(); return t === 'end' ? 'E-Off-' + side : t === 'mid' ? 'Mid-Cen' : /^cor(ner)?$/.test(t) ? 'Cor-Cen' : ''; }
+function fencePlates(item){
+  var L = item.L, cs = {}, n = { end: 0, mid: 0, cor: 0 }, sides = {};
+  L.cols.forEach(function(c){ var t = L.txt(L.hdr, c).trim(); if (/^left post$/i.test(t)) cs[c] = 'L'; if (/^right post$/i.test(t)) cs[c] = 'R'; });
+  L.rows.forEach(function(r){ if (r <= L.hdr) return; Object.keys(cs).forEach(function(c){ var t = L.txt(r, +c).trim().toLowerCase(); if (t === 'end'){ n.end++; sides[cs[c]] = 1; } else if (t === 'mid') n.mid++; else if (/^cor(ner)?$/.test(t)) n.cor++; }); });
+  var size = fencePlateSize(item), rows = [];
+  if (n.end) rows.push({ code: 'E-Off-' + (sides.L ? 'L' : 'R'), name: 'End Offset', q: n.end, sub: size + ' plate · ' + (sides.L && sides.R ? 'both ends of the fence, welded the same' : 'end of the fence'), how: 'Weld-on, offset: post at the outer end, plate reaches in under the fence' });
+  if (n.mid) rows.push({ code: 'Mid-Cen', name: 'Mid Centered', q: n.mid, sub: size + ' plate', how: 'Weld-on, centered' });
+  if (n.cor) rows.push({ code: 'Cor-Cen', name: 'Corner Centered', q: n.cor, sub: size + ' plate', how: 'Weld-on, centered' });
+  if (!rows.length) return '';
+  return '<table class="sheet bplist"><tr class="subhdr"><td>Base plate</td><td>Quantity</td><td>How it’s welded</td></tr>' + rows.map(function(x){
+    return '<tr class="data"><td class="bp"><span class="bpw">' + bpIcon(x.code, 'R') + '<span>' + esc(x.name) + '<small class="bpd">' + esc(x.sub) + '</small></span></span></td><td class="c num"><b>' + x.q + '</b></td><td>' + esc(x.how) + '</td></tr>';
+  }).join('') + '</table>';
+}
 function renderSheet(book, item, done){
   var L = item.L, sd = item.sd, sh = item.sh, pre = sh.name + '|';
   var vis = {}; L.rows.forEach(function(r, i){ vis['r' + r] = i; }); L.cols.forEach(function(c, i){ vis['c' + c] = i; });
@@ -1625,7 +1644,7 @@ function renderSheet(book, item, done){
   });
   var plateRows = '';
   var rmk = cur && cur.f.remake && sh.name === 'CUT SHEET' ? cur.f.remake : null;
-  var h = (rmk ? '<div class="rmbanner"><b>↻ Remake · ' + esc(rmk.tags.join(', ')) + '</b>' + (rmk.note ? '<span>' + esc(rmk.note) + '</span>' : '') + '</div>' : '') + (L.fence ? fenceHead(book, item) : '') + (WELD && isTop() && /^(CUT SHEET|POST SHEET)$/.test(sh.name) ? '<div class="bpnote"><b>Top mount · weld-on base plates</b><span class="bpkey">4x4 plates for 2x2 posts. Offset: the post sits at the outer end and the plate reaches in under the rail. Reverse offset: the plate sticks out past the end. End corners turn right with the run, inside corners turn left.</span>' + (sh.name === 'POST SHEET' ? 'Left and right ends are welded the same, and so are end corners and inside corners, so they’re listed together with the total quantity. The Cut sheet tab shows which plate goes on each rail end.' : 'The Left post and Right post columns show which base plate goes on each end of the rail.') + '</div>' : '') + '<table class="sheet' + (L.fence ? ' fence' : '') + '">' + (L.fence ? '<tr hidden></tr>' : '');   // stands in for Shop Cuts' sort row, so the stripes line up with Dave's tablet
+  var h = (rmk ? '<div class="rmbanner"><b>↻ Remake · ' + esc(rmk.tags.join(', ')) + '</b>' + (rmk.note ? '<span>' + esc(rmk.note) + '</span>' : '') + '</div>' : '') + (L.fence ? fenceHead(book, item) : '') + (fenceTop(item) ? '<div class="bpnote"><b>Top mount fence · weld-on base plates</b><span class="bpkey">' + fencePlateSize(item) + ' plates for ' + esc(String(fenceLabel(item.sd, /^post wall:?$/i) || '2x2')) + ' posts, the same rules as top mount railings. <i>End</i> offset: the post sits at the outer end and the plate reaches in under the fence · <i>Mid</i> and <i>Corner</i> centered · <i>Open</i> no post on that side (the next opening’s post)</span>The Left post and Right post columns show which plate goes on each post.</div>' + fencePlates(item) : '') + (WELD && isTop() && /^(CUT SHEET|POST SHEET)$/.test(sh.name) ? '<div class="bpnote"><b>Top mount · weld-on base plates</b><span class="bpkey">4x4 plates for 2x2 posts. Offset: the post sits at the outer end and the plate reaches in under the rail. Reverse offset: the plate sticks out past the end. End corners turn right with the run, inside corners turn left.</span>' + (sh.name === 'POST SHEET' ? 'Left and right ends are welded the same, and so are end corners and inside corners, so they’re listed together with the total quantity. The Cut sheet tab shows which plate goes on each rail end.' : 'The Left post and Right post columns show which base plate goes on each end of the rail.') + '</div>' : '') + '<table class="sheet' + (L.fence ? ' fence' : '') + '">' + (L.fence ? '<tr hidden></tr>' : '');   // stands in for Shop Cuts' sort row, so the stripes line up with Dave's tablet
   var isCut = sh.name === 'CUT SHEET' && cur && Object.keys(cur.units || {}).length, lastUnit = null;
   var hiSheet = /^(COVER|POST SHEET)$/.test(sh.name);
   // Cut Sheet: a black line between the float lengths (Left / Right) and the posts (L Post …), so the two groups read apart
@@ -1637,7 +1656,8 @@ function renderSheet(book, item, done){
   var wmap = {}, wcol = false; if (WELD && sh.name === 'CUT SHEET' && cur) weldRows(item).forEach(function(x){ wmap[x.row] = x.key; wcol = true; });
   var NC = L.cols.length + (wcol ? 1 : 0);
   // Shop Welds, top mount jobs: the base plate codes stand out (L Post / R Post on the Cut Sheet, the plate list on the Post Sheet)
-  var bpC = {}, bpFrom = Infinity, bpTo = Infinity;
+  var bpC = {}, bpFrom = Infinity, bpTo = Infinity, fpC = {}, fTop = fenceTop(item);
+  if (fTop) L.cols.forEach(function(c){ var t = L.txt(L.hdr, c).trim(); if (/^left post$/i.test(t)) fpC[c] = 'L'; if (/^right post$/i.test(t)) fpC[c] = 'R'; });
   if (WELD && isTop()){
     if (sh.name === 'CUT SHEET' && L.hdr != null) L.cols.forEach(function(c){ if (/^[lr]\s*post$/i.test(L.txt(L.hdr, c).trim())) bpC[c] = L.txt(L.hdr, c).trim().charAt(0).toUpperCase(); });
     if (sh.name === 'POST SHEET') L.rows.forEach(function(r){ var t0 = L.txt(r, L.cols[0]); if (SEC_RE.test(t0)){ bpFrom = /bracket|plate/i.test(t0) ? r : Infinity; bpTo = Infinity; } else if (r > bpFrom && bpTo === Infinity && !t0) bpTo = r; });
@@ -1740,8 +1760,10 @@ function renderSheet(book, item, done){
       if (xf && xf.h === 'center') cls.push('c');
       if ((xf && xf.wrap) || t.length > 22) cls.push('wrapcell');
       var style = (cell ? (cell.css || '') + (L.fence && r > L.hdr ? '' : fillCss(book, cell.s)) : '') + (f && f.rgb && /^FF[0-9A-F]{6}$/i.test(f.rgb) && f.rgb.slice(2).toUpperCase() !== '000000' ? 'color:#' + f.rgb.slice(2) + ';' : '');
-      var bd = cls.indexOf('bp') >= 0 ? bpDesc(t) : '';
-      h += '<td' + (cls.length ? ' class="' + cls.join(' ') + '"' : '') + (style ? ' style="' + style + '"' : '') + attr + '>' + (bd ? '<span class="bpw">' + bpIcon(t, bpC[c] || '') + '<span>' + esc(bpName(t)) + '<small class="bpd">' + esc(bd.replace(/ · .*$/, '')) + '</small></span></span>' : (big ? measure(t) : esc(t))) + '</td>';
+      var fcode = fTop && fpC[c] && r > L.hdr ? fencePlateCode(t, fpC[c]) : '';
+      if (fcode) cls.push('bp');
+      var bd = fcode ? '' : cls.indexOf('bp') >= 0 ? bpDesc(t) : '';
+      h += '<td' + (cls.length ? ' class="' + cls.join(' ') + '"' : '') + (style ? ' style="' + style + '"' : '') + attr + '>' + (fcode ? '<span class="bpw">' + bpIcon(fcode, fpC[c]) + '<span>' + esc(bpName(fcode).replace(/ (Left|Right)$/, '')) + '</span></span>' : bd ? '<span class="bpw">' + bpIcon(t, bpC[c] || '') + '<span>' + esc(bpName(t)) + '<small class="bpd">' + esc(bd.replace(/ · .*$/, '')) + '</small></span></span>' : (big ? measure(t) : esc(t))) + '</td>';
     });
     h += '</tr>';
   });
