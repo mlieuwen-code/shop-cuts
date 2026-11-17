@@ -367,6 +367,13 @@ table.sheet.fence td.wrapcell{min-width:0;max-width:150px}
 .rmbanner b{font-weight:900}
 .rmbanner span{font-size:20px;font-weight:800;background:rgba(255,255,255,.18);border-radius:10px;padding:4px 12px}
 table.sheet.laytab{margin-bottom:10px}
+.weldnote{position:fixed;left:0;right:0;top:0;z-index:70;padding:calc(10px + env(safe-area-inset-top,0px)) 14px 10px;cursor:pointer}
+.weldnote .wn-in{max-width:1100px;margin:0 auto;display:flex;align-items:center;gap:16px;background:#E8590C;color:#fff;border-radius:20px;padding:16px 18px 16px 22px;box-shadow:0 10px 30px rgba(0,0,0,.3);animation:wnIn .35s ease-out}
+.weldnote .wn-t{flex:1;display:flex;flex-direction:column;gap:4px;font-size:21px;font-weight:800;line-height:1.25}
+.weldnote .wn-t b{font-size:15px;font-weight:900;letter-spacing:.06em;text-transform:uppercase;opacity:.85}
+.weldnote .wn-ok{flex:0 0 auto;min-height:56px;min-width:120px;border:0;border-radius:14px;background:#fff;color:#8A3205;font-size:19px;font-weight:900}
+@keyframes wnIn{from{transform:translateY(-30px);opacity:0}to{transform:none;opacity:1}}
+@media (max-width:640px){.weldnote .wn-in{flex-direction:column;align-items:stretch}.weldnote .wn-t{font-size:18px}}
 </style>
 </head><body>
 
@@ -448,6 +455,7 @@ table.sheet.laytab{margin-bottom:10px}
   </div>
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+<div class="weldnote" id="weldNote" role="alert" hidden></div>
 <script>/*!
 
 JSZip v3.10.1 - A JavaScript class for generating and reading zip files
@@ -890,7 +898,7 @@ function wId(id){ return id + '.w'; }
 var el = function(id){ return document.getElementById(id); };
 function esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 // a short notice at the bottom of the screen
-var VERSION = '11.17.1500', toastT = null;
+var VERSION = '11.17.1512', toastT = null;
 function toast(t){ var b = el('toast'); b.textContent = t; b.hidden = false; b.classList.remove('out'); clearTimeout(toastT); toastT = setTimeout(function(){ b.classList.add('out'); setTimeout(function(){ b.hidden = true; }, 400); }, 3200); }
 function msg(t, ok){ var m = el('msg'); m.hidden = !t; m.className = 'msg ' + (ok ? 'ok' : 'err'); m.textContent = t || ''; }
 function lsGet(k){ try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
@@ -1074,6 +1082,7 @@ function renderWeldList(box, have, done){
     (ready.length || gates.length ? '<div class="prcard rcard"><div class="prhead"><span class="prflame" aria-hidden="true">' + SPARK + '</span>Ready to weld<span>· ' + (anyPriReady ? 'priority and remakes first, then longest waiting' : 'longest waiting first') + '</span></div>' + ready.map(function(x, i){ return card(x, pri.length + i, true); }).join('') + gateCards() + '</div>'
       : '<div class="empty">Nothing is waiting on welding right now.</div>') +
     (shop.length ? '<div class="prrest">Still in the shop · cutting and assembly</div>' + shop.map(function(x, i){ return card(x, pri.length + ready.length + i, false); }).join('') : '') + done;
+  weldNotices(pri, ready);
 }
 // how many rails (or screens) a job has, for the job list
 function railLabel(book){
@@ -2569,6 +2578,58 @@ function remakeTrim(L, tags){
   Object.keys(L.chk).forEach(function(k){ if (!keep(+k.split(':')[0])) delete L.chk[k]; });
   Object.keys(L.rowTap || {}).forEach(function(r){ if (!keep(+r)) delete L.rowTap[r]; });
 }
+
+// ---------- heads-up banner: a new job ready to weld, a priority change, a remake on the way ----------
+// Compares what the list shows now with what this tablet showed before (kept between visits), so a job assembled
+// while the app was closed still gets a banner when it's opened. The very first visit just takes note, without a banner.
+var NOTE_K = 'weld-notice', noteMsgs = [], audioCtx = null;
+function noteName(f){ return String(f.name || '').replace(/\.(xls[xm]|pdf)$/i, ''); }
+function weldNotices(pri, ready){
+  if (!WELD || !listFresh) return;
+  var st = lsGet(NOTE_K), first = !st, now = Date.now(), msgs = [];
+  st = st || { ready: {}, rm: {}, prio: null };
+  ready.forEach(function(x){ var id = x.f.id; if (!st.ready[id]){ if (!first) msgs.push({ k: 'ready', t: (x.f.remake ? 'Remake ready to weld: ' : 'New job ready to weld: ') + noteName(x.f) }); st.ready[id] = now; } });
+  gates.forEach(function(g){ if (!st.ready[g.id]){ if (!first) msgs.push({ k: 'ready', t: 'New gate drawing ready to weld: ' + noteName(g) }); st.ready[g.id] = now; } });
+  rmCur.forEach(function(rm){ var id = 'rm' + rm.id; if (!st.rm[id]){ if (!first) msgs.push({ k: 'rm', t: 'Remake coming up: ' + noteName(rmF(rm, 0)) }); st.rm[id] = now; } });
+  // the priority list, as far as it covers jobs and remakes still on this tablet's list
+  var on = {}; shownW.forEach(function(f){ on[f.id] = f; });
+  var p = prio.filter(function(id){ return on[id]; });
+  if (st.prio && p.join('|') !== st.prio.join('|')){
+    // a job leaving the list (welded, finished) isn't news; one joining it, or the order of the rest changing, is
+    var added = p.filter(function(id){ return st.prio.indexOf(id) < 0; }), keptNow = p.filter(function(id){ return st.prio.indexOf(id) >= 0; }), keptBefore = st.prio.filter(function(id){ return p.indexOf(id) >= 0; });
+    if (added.length) added.forEach(function(id){ msgs.push({ k: 'pri', t: 'New priority: ' + noteName(on[id]) + ' is #' + (p.indexOf(id) + 1) }); });
+    else if (p.length && keptNow.join('|') !== keptBefore.join('|')) msgs.push({ k: 'pri', t: 'Priority order changed: #1 is now ' + noteName(on[p[0]]) + (p[1] ? ', #2 ' + noteName(on[p[1]]) : '') });
+  }
+  if (!st.prio || p.join('|') !== st.prio.join('|')) st.prio = p;
+  // forget things after a month
+  ['ready', 'rm'].forEach(function(k){ Object.keys(st[k]).forEach(function(id){ if (now - st[k][id] > 30 * 864e5) delete st[k][id]; }); });
+  lsSet(NOTE_K, st);
+  if (msgs.length) showNotice(msgs);
+}
+function showNotice(msgs){
+  msgs.forEach(function(m){ if (!noteMsgs.some(function(x){ return x.t === m.t; })) noteMsgs.push(m); });
+  var b = el('weldNote');
+  b.innerHTML = '<div class="wn-in"><div class="wn-t"><b>' + (noteMsgs.length > 1 ? noteMsgs.length + ' updates' : 'Heads up') + '</b>' +
+    noteMsgs.map(function(m){ return '<span class="wn-' + m.k + '">' + esc(m.t) + '</span>'; }).join('') + '</div><button type="button" class="wn-ok">Got it</button></div>';
+  b.hidden = false;
+  try { if (navigator.vibrate) navigator.vibrate([300, 150, 300]); } catch (e) {}
+  noteBeep();
+}
+function noteBeep(){
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    [0, 0.28].forEach(function(t0){
+      var o = audioCtx.createOscillator(), g = audioCtx.createGain(), t = audioCtx.currentTime + t0;
+      o.type = 'sine'; o.frequency.value = 880; o.connect(g); g.connect(audioCtx.destination);
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.35, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+      o.start(t); o.stop(t + 0.24);
+    });
+  } catch (e) {}
+}
+// browsers only let a page make sound after a tap, so the first tap anywhere gets the sound ready
+document.addEventListener('pointerdown', function(){ try { audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); if (audioCtx.state === 'suspended') audioCtx.resume(); } catch (e) {} }, { once: true, capture: true });
+el('weldNote').addEventListener('click', function(){ noteMsgs = []; el('weldNote').hidden = true; });
 
 // ---------- start ----------
 if (WELD){
