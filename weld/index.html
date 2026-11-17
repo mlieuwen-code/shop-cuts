@@ -344,6 +344,21 @@ table.bplist td.chk.ro{width:56px}
   .fin{padding:16px}
   .fin .frow .btn{flex:1 1 40%}
 }
+
+/* gate shop drawings */
+.gring{color:var(--deep)}
+.gtools{display:flex;align-items:center;gap:8px;padding:6px 0 2px}
+.gtools .btn{flex:0 0 auto;min-width:56px;min-height:44px;margin:0;font-size:20px}
+.gtools .btn[data-gz="fit"]{font-size:15px}
+.gtools span{min-width:54px;text-align:center;font-weight:800;color:var(--muted)}
+.gpages{overflow:auto;-webkit-overflow-scrolling:touch;padding:6px 0 120px}
+.gpage{background:#fff;border:1px solid var(--line);border-radius:10px;margin:0 0 12px;display:inline-block;min-width:100%;overflow:hidden}
+.gpage canvas{display:block}
+.gfin{position:fixed;left:0;right:0;bottom:0;padding:10px 16px calc(10px + env(safe-area-inset-bottom));background:rgba(255,255,255,.96);border-top:1px solid var(--line);display:flex;justify-content:center;z-index:5}
+.gfin .gsign{min-width:260px;min-height:60px;font-size:20px;gap:12px}
+.gfin .gsign .box{width:30px;height:30px;border-radius:8px;border:3px solid currentColor;background:transparent}
+.gdone{display:flex;align-items:center;gap:14px;flex-wrap:wrap;justify-content:center}
+.gdone .btn{flex:0 0 auto;min-width:110px;margin:0}
 </style>
 </head><body>
 
@@ -403,6 +418,17 @@ table.bplist td.chk.ro{width:56px}
     <div class="sheetwrap"><div id="sheet"></div></div>
     <div id="fin" class="fins" hidden></div>
     <div class="legend" id="legend"></div>
+  </section>
+  <section id="gate" hidden>
+    <div class="jobtop">
+    <div class="apphead">
+      <button type="button" class="round" id="gback" aria-label="Back to the job list"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2A2622" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button>
+      <div class="ttl"><div class="eyebrow" id="gateSub"></div><h2 id="gateName"></h2></div>
+    </div>
+    <div class="gtools" id="gateTools"><button type="button" class="btn" data-gz="out" aria-label="Zoom out">−</button><span id="gateZ">100%</span><button type="button" class="btn" data-gz="in" aria-label="Zoom in">+</button><button type="button" class="btn" data-gz="fit">Fit</button></div>
+    </div>
+    <div class="gpages" id="gatePages"></div>
+    <div class="gfin" id="gateFin"></div>
   </section>
 </div>
 
@@ -817,7 +843,7 @@ function wId(id){ return id + '.w'; }
 var el = function(id){ return document.getElementById(id); };
 function esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 // a short notice at the bottom of the screen
-var VERSION = '11.16.926', toastT = null;
+var VERSION = '11.17.715', toastT = null;
 function toast(t){ var b = el('toast'); b.textContent = t; b.hidden = false; b.classList.remove('out'); clearTimeout(toastT); toastT = setTimeout(function(){ b.classList.add('out'); setTimeout(function(){ b.hidden = true; }, 400); }, 3200); }
 function msg(t, ok){ var m = el('msg'); m.hidden = !t; m.className = 'msg ' + (ok ? 'ok' : 'err'); m.textContent = t || ''; }
 function lsGet(k){ try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
@@ -887,6 +913,7 @@ function completedList(){
   (doneJobs || []).forEach(function(d){ if (d.doneAt >= cut && !ids[d.id] && !late[d.id]){ ids[d.id] = 1; out.push(d); } });
   try { for (var i = 0; i < localStorage.length; i++){ var k = localStorage.key(i); if (k.indexOf(WPROG) !== 0) continue; var id = k.slice(WPROG.length);
     if (ids[id] || late[id]) continue; var pp = lsGet(k); if (pp && pp.name && pp.fin && pp.fin.at >= cut){ ids[id] = 1; out.push({ id: id, name: pp.name, updated: 0, doneAt: pp.fin.at, by: pp.fin.by }); } } } catch (e) {}
+  if (WELD) gatesDone.forEach(function(g){ if (g.doneAt >= cut && !ids[g.id]){ ids[g.id] = 1; out.push({ id: g.id, name: g.name, updated: g.updated, doneAt: g.doneAt, by: g.by, gate: 1 }); } });
   return out.sort(function(a, b){ return b.doneAt - a.doneAt; });
 }
 // Shop Welds only: jobs an old Shop Cuts tablet moved to Completed at Assembly, before they were welded.
@@ -922,8 +949,8 @@ function renderList(cached){
     var open = lsGet(UI + 'done-open') === 1;
     var done = !shownDone.length ? '<div class="donehead donenone"><span class="chev">✓</span>Completed (0) <span>· jobs show here for ' + DONE_DAYS + ' days once Welding complete is signed off</span></div>' : '<button type="button" class="donehead" data-act="donetoggle" aria-expanded="' + open + '"><span class="chev">' + (open ? '▾' : '▸') + '</span>Completed (' + shownDone.length + ') <span>· last ' + DONE_DAYS + ' days</span></button>' + (!open ? '' : '<div class="donesearch"><input type="search" id="doneQ" placeholder="Search completed jobs" autocomplete="off" aria-label="Search completed jobs" value="' + esc(doneQuery) + '"><span id="doneN"></span></div>' + shownDone.map(function(f, k){
       var on = have.indexOf(f.id) >= 0;
-      return '<button type="button" class="job done fin-job" data-d="' + k + '" data-name="' + esc(f.name.toLowerCase()) + '"><span class="ring donering" aria-hidden="true">✓</span><span class="t"><b>' + esc(f.name.replace(/\.xls[xm]$/i, '')) + '</b>' +
-        '<span class="s"><span class="fin-tag">✓ Completed · ' + (f.by ? esc(f.by) + ' · ' : '') + esc(new Date(f.doneAt).toLocaleDateString([], { month: 'short', day: 'numeric' })) + '</span>' + (on ? ' · <span class="offline">✓ on tablet</span>' : '') + '</span></span></button>';
+      return '<button type="button" class="job done fin-job" data-d="' + k + '" data-name="' + esc(f.name.toLowerCase()) + '"><span class="ring donering" aria-hidden="true">✓</span><span class="t"><b>' + esc(f.name.replace(/\.(xls[xm]|pdf)$/i, '')) + '</b>' +
+        '<span class="s"><span class="fin-tag">✓ ' + (f.gate ? 'Welded · gate drawing · ' : 'Completed · ') + (f.by ? esc(f.by) + ' · ' : '') + esc(new Date(f.doneAt).toLocaleDateString([], { month: 'short', day: 'numeric' })) + '</span>' + (on ? ' · <span class="offline">✓ on tablet</span>' : '') + '</span></span></button>';
     }).join('') + '<div class="empty" id="doneNone" hidden>No completed jobs match.</div>');
     if (WELD){ renderWeldList(box, have, done); setTimeout(filterDone, 0); return; }
     if (!jobs.length){ box.innerHTML = '<div class="empty">No jobs in Ready to Fab yet. When a job is ready, it’s saved there from the office and shows up here.</div>' + done; return; }
@@ -960,7 +987,7 @@ var shownW = [];
 function renderWeldList(box, have, done){
   var day = function(t){ return esc(new Date(t).toLocaleDateString([], { month: 'short', day: 'numeric' })); };
   var all = jobs.concat(lateJobs()).filter(function(f){ return !wLoad(f.id).fin; });
-  if (!all.length){ box.innerHTML = '<div class="empty">No jobs in the shop yet. A job shows here once it’s in Ready to Fab, and moves up to Ready to weld when Assembly complete is signed off.</div>' + done; return; }
+  if (!all.length && !gates.length){ box.innerHTML = '<div class="empty">No jobs in the shop yet. A job shows here once it’s in Ready to Fab, and moves up to Ready to weld when Assembly complete is signed off.</div>' + done; return; }
   var info = all.map(function(f){
     var s = lsGet(SUM + f.id) || {}, ws = lsGet(WSUM + f.id) || {};
     return { f: f, s: s, ws: ws, asm: s.asm || (f.late ? { by: f.by, at: f.doneAt } : null), p: ws.n ? Math.min(1, (ws.d || 0) / ws.n) : 0 };
@@ -982,7 +1009,7 @@ function renderWeldList(box, have, done){
       (isReady && !x.ws.fin ? '<span class="wdone" data-weld="' + i + '" role="button" aria-label="Mark ' + esc(f.name.replace(/\.xls[xm]$/i, '')) + ' welded"><span class="box"></span><small>Welded</small></span>' : '') + '</button>';
   };
   box.innerHTML = (pri.length ? '<div class="prcard"><div class="prhead"><span class="prflame" aria-hidden="true">⚡</span>Priority<span>· same order as the shop tablets</span></div>' + pri.map(function(x, i){ return card(x, i, isReady(x)); }).join('') + '</div>' : '') +
-    (ready.length ? '<div class="prcard rcard"><div class="prhead"><span class="prflame" aria-hidden="true">' + SPARK + '</span>Ready to weld<span>· longest waiting first</span></div>' + ready.map(function(x, i){ return card(x, pri.length + i, true); }).join('') + '</div>'
+    (ready.length || gates.length ? '<div class="prcard rcard"><div class="prhead"><span class="prflame" aria-hidden="true">' + SPARK + '</span>Ready to weld<span>· longest waiting first</span></div>' + ready.map(function(x, i){ return card(x, pri.length + i, true); }).join('') + gateCards() + '</div>'
       : (pri.some(isReady) ? '' : '<div class="empty">Nothing is waiting on welding right now.</div>')) +
     (shop.length ? '<div class="prrest">Still in the shop · cutting and assembly</div>' + shop.map(function(x, i){ return card(x, pri.length + ready.length + i, false); }).join('') : '') + done;
 }
@@ -1032,6 +1059,7 @@ el('ver').textContent = (WELD ? 'Shop Welds' : 'Shop Cuts') + ' · version ' + V
 var refreshAsked = false;
 var listFresh = false;   // once the backend has answered, the copy saved on the tablet never overwrites it
 function loadList(){
+  if (WELD) loadGates();
   kvGet('list').then(function(l){ kvGet('donelist').then(function(d){ if (listFresh) return; if (d && !doneJobs) doneJobs = d; if (l && !jobs.length){ jobs = l; renderList(true); } }); });
   apiNew('fablist2', 'fablist', {}).then(function(r){
     listFresh = true; jobs = r.files || []; doneJobs = r.done || null; if (Array.isArray(r.prio)){ prio = r.prio; lsSet('shop-prio', prio); } applyPrio(); kvSet('list', jobs); if (doneJobs) kvSet('donelist', doneJobs);
@@ -1046,7 +1074,7 @@ function loadList(){
     else renderList(true);
   });
 }
-el('jobs').addEventListener('click', function(e){ var wd = e.target.closest('[data-weld]'); if (wd){ e.preventDefault(); return weldAsk(shownW[+wd.getAttribute('data-weld')]); } if (e.target.closest('[data-act="donetoggle"]')){ lsSet(UI + 'done-open', lsGet(UI + 'done-open') === 1 ? 0 : 1); return renderList(false); } var b = e.target.closest('[data-k]'); if (b) return openJob(jobs[+b.getAttribute('data-k')]); var wj = e.target.closest('[data-w]'); if (wj) return openJob(shownW[+wj.getAttribute('data-w')]); var d = e.target.closest('[data-d]'); if (d) openJob(shownDone[+d.getAttribute('data-d')]); });
+el('jobs').addEventListener('click', function(e){ var gw = e.target.closest('[data-gweld]'); if (gw){ e.preventDefault(); return weldAsk(gates[+gw.getAttribute('data-gweld')], gateSign); } var gj = e.target.closest('[data-g]'); if (gj) return openGate(gates[+gj.getAttribute('data-g')], false); var gd = e.target.closest('[data-d]'); if (gd && shownDone[+gd.getAttribute('data-d')] && shownDone[+gd.getAttribute('data-d')].gate) return openGate(shownDone[+gd.getAttribute('data-d')], true); var wd = e.target.closest('[data-weld]'); if (wd){ e.preventDefault(); return weldAsk(shownW[+wd.getAttribute('data-weld')]); } if (e.target.closest('[data-act="donetoggle"]')){ lsSet(UI + 'done-open', lsGet(UI + 'done-open') === 1 ? 0 : 1); return renderList(false); } var b = e.target.closest('[data-k]'); if (b) return openJob(jobs[+b.getAttribute('data-k')]); var wj = e.target.closest('[data-w]'); if (wj) return openJob(shownW[+wj.getAttribute('data-w')]); var d = e.target.closest('[data-d]'); if (d) openJob(shownDone[+d.getAttribute('data-d')]); });
 // Refresh list: also checks for a newer version of the app (if one arrives, the app reloads and says so)
 el('reload').onclick = function(){
   refreshAsked = true; loadList();
@@ -1908,9 +1936,9 @@ function unComplete(id){
 var catching = {};
 // Shop Welds: Welding complete straight from the job list. The sign-off is saved like one made inside the job, then the hard copy is
 // made and the job moves to Completed (catchUpCompleted does that for any welded job still in Ready To Fab).
-function weldAsk(f){
+function weldAsk(f, signFn){
   if (!f) return;
-  var m = el('modal'), inp = el('modalInput'), yes = el('modalYes'), no = el('modalNo'), t = el('modalText'), nm = f.name.replace(/\.xls[xm]$/i, '');
+  var m = el('modal'), inp = el('modalInput'), yes = el('modalYes'), no = el('modalNo'), t = el('modalText'), nm = f.name.replace(/\.(xls[xm]|pdf)$/i, ''), sign = signFn || weldSign;
   // Ian, Chris, then any names typed here before (Other…)
   var others = (lsGet('shop-others') || []).filter(function(n){ return !SHOP_CREW.concat(WELD_CREW).some(function(c){ return c.toLowerCase() === n.toLowerCase(); }); }), close = function(){ m.hidden = true; inp.hidden = true; inp.type = 'password'; yes.hidden = false; yes.textContent = 'OK'; m.classList.remove('wask'); };
   t.innerHTML = '<b class="big">Welding complete?</b><span class="wjob">' + esc(nm) + '</span>Who welded it?<span class="wnames">' +
@@ -1921,9 +1949,9 @@ function weldAsk(f){
   t.onclick = function(e){
     var b = e.target.closest('[data-wn]'); if (!b) return;
     var n = b.getAttribute('data-wn');
-    if (n !== '__other'){ close(); return weldSign(f, n); }
+    if (n !== '__other'){ close(); return sign(f, n); }
     inp.type = 'text'; inp.removeAttribute('inputmode'); inp.placeholder = 'Name'; inp.setAttribute('aria-label', 'Name'); inp.value = ''; inp.hidden = false; yes.hidden = false; yes.textContent = 'Done'; setTimeout(function(){ inp.focus(); }, 100);
-    yes.onclick = function(){ var v = inp.value.trim(); if (!v) return inp.focus(); close(); weldSign(f, v); };
+    yes.onclick = function(){ var v = inp.value.trim(); if (!v) return inp.focus(); close(); sign(f, v); };
     inp.onkeydown = function(ev){ if (ev.key === 'Enter') yes.click(); };
   };
 }
@@ -2108,6 +2136,163 @@ function openMgr(){
 })();
 el('mgrBack').onclick = function(){ el('mgr').hidden = true; el('list').hidden = false; renderList(false); window.scrollTo(0, 0); };
 el('back').onclick = function(){ cur = null; try { localStorage.removeItem(UI + 'open'); } catch (e) {} el('job').hidden = true; el('list').hidden = false; msg(''); renderList(false); window.scrollTo(0, 0); loadList(); };
+
+// ---------- gate shop drawings (PDFs in Railings / Ready To Weld; Welded moves them to Ready To Weld / Welded) ----------
+var gates = lsGet('weld-gates') || [], gatesDone = lsGet('weld-gates-done') || [], gateBusy = false, curGate = null, gateZoom = 1, gateDoc = null;
+var GPEND = 'weld-gate-pending';
+function gateName(f){ return String(f.name || '').replace(/\.pdf$/i, ''); }
+function gatePend(){ return lsGet(GPEND) || []; }
+function kvDel(k){ return store('kv', 'readwrite', function(s){ return s.delete(k); }).catch(function(){}); }
+function kvKeys(){ return store('kv', 'readonly', function(s){ return s.getAllKeys(); }).catch(function(){ return []; }); }
+function gateSave(){ lsSet('weld-gates', gates); lsSet('weld-gates-done', gatesDone); }
+// what the tablet shows: the backend's lists with this tablet's not-yet-sent sign-offs and undos laid over them
+function gateApply(list, done){
+  var p = gatePend(), byId = {};
+  list = list.slice(); done = done.slice();
+  p.forEach(function(x){
+    var inL = list.filter(function(g){ return g.id === x.id; })[0], inD = done.filter(function(g){ return g.id === x.id; })[0], g = inL || inD || x.f;
+    if (!g) return;
+    list = list.filter(function(y){ return y.id !== x.id; }); done = done.filter(function(y){ return y.id !== x.id; });
+    if (x.a === 'c') done.unshift({ id: g.id, name: g.name, updated: g.updated, doneAt: x.at, by: x.by });
+    else list.push({ id: g.id, name: g.name, updated: g.updated });
+  });
+  list.forEach(function(g){ byId[g.id] = 1; });
+  gates = list; gatesDone = done.filter(function(g){ return !byId[g.id]; }).sort(function(a, b){ return b.doneAt - a.doneAt; });
+  gateSave();
+}
+function flushGates(){
+  var p = gatePend(); if (!p.length) return Promise.resolve();
+  var x = p[0];
+  return api(x.a === 'c' ? 'weldcomplete' : 'welduncomplete', { id: x.id, at: x.at, by: x.by }).then(function(){
+    lsSet(GPEND, gatePend().filter(function(y){ return y.k !== x.k; })); return flushGates();
+  }, function(e){
+    // the drawing was moved or removed in Drive: drop the request rather than retrying forever
+    if (e && e.code !== 'pin' && /not found|not in|no such|not a/i.test(e.message || '')) { lsSet(GPEND, gatePend().filter(function(y){ return y.k !== x.k; })); return flushGates(); }
+    throw e;
+  });
+}
+function loadGates(){
+  if (!WELD || gateBusy) return; gateBusy = true;
+  flushGates().catch(function(){}).then(function(){ return api('weldlist'); }).then(function(r){
+    gateBusy = false;
+    gateApply(r.files || [], r.done || []);
+    if (!curGate && el('gate').hidden) renderList(false);
+    // keep downloaded drawings only while they're listed
+    var keep = {}; gates.concat(gatesDone).forEach(function(g){ keep['gate:' + g.id] = 1; });
+    kvKeys().then(function(ks){ ks.forEach(function(k){ if (/^gate:/.test(k) && !keep[k]) kvDel(k); }); });
+    gates.forEach(function(g){ gateFile(g).catch(function(){}); });   // so they open with no signal
+  }, function(){ gateBusy = false; });
+}
+function gateFile(g){
+  return kvGet('gate:' + g.id).then(function(c){
+    if (c && c.b64 && c.updated === g.updated) return c.b64;
+    return api('weldopen', { id: g.id }).then(function(r){ kvSet('gate:' + g.id, { b64: r.b64, updated: g.updated }); return r.b64; }, function(e){ if (c && c.b64) return c.b64; throw e; });
+  });
+}
+function gateCards(start){
+  var day = function(t){ return esc(new Date(t).toLocaleDateString([], { month: 'short', day: 'numeric' })); };
+  return gates.map(function(g, i){
+    var nm = gateName(g);
+    return '<button type="button" class="job gjob" data-g="' + i + '"><span class="ring gring" aria-hidden="true">' + GATE_ICON + '</span>' +
+      '<span class="t"><b>' + esc(nm) + '</b><span class="s"><span class="signoff">Gate drawing</span> · ready to weld' + (g.updated ? ' since ' + day(g.updated) : '') + '</span></span>' +
+      '<span class="wdone" data-gweld="' + i + '" role="button" aria-label="Mark ' + esc(nm) + ' welded"><span class="box"></span><small>Welded</small></span></button>';
+  }).join('');
+}
+var GATE_ICON = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21V4M21 21V4M3 6h18M3 19h18M7 6v13M11 6v13M15 6v13M19 6v13"/></svg>';
+function gateSign(g, name){
+  if (!SHOP_CREW.concat(WELD_CREW, FIELD_CREW).some(function(n){ return n.toLowerCase() === name.toLowerCase(); })){
+    var o = lsGet('shop-others') || []; if (!o.some(function(n){ return n.toLowerCase() === name.toLowerCase(); })){ o.push(name); lsSet('shop-others', o); }
+  }
+  var p = gatePend().filter(function(x){ return x.id !== g.id; }); p.push({ k: Date.now() + ':' + g.id, id: g.id, a: 'c', at: Date.now(), by: name, f: { id: g.id, name: g.name, updated: g.updated } }); lsSet(GPEND, p);
+  gateApply(gates, gatesDone);
+  toast('✓ ' + gateName(g) + ' welded · ' + name);
+  if (curGate && curGate.id === g.id) gateClose(); else renderList(false);
+  flushGates().catch(function(){});
+}
+function gateUndo(g){
+  confirmBox('Undo Welded on ' + gateName(g) + '? It goes back to Ready to weld.', function(){
+    var p = gatePend().filter(function(x){ return x.id !== g.id; }); p.push({ k: Date.now() + ':' + g.id, id: g.id, a: 'u', at: Date.now(), by: '', f: { id: g.id, name: g.name, updated: g.updated } }); lsSet(GPEND, p);
+    gateApply(gates, gatesDone);
+    toast('Undone · ' + gateName(g) + ' is back in Ready to weld');
+    gateClose(); flushGates().catch(function(){});
+  });
+}
+// pdf.js is only loaded the first time a drawing is opened
+var pdfReady = null;
+function loadPdfJs(){
+  if (pdfReady) return pdfReady;
+  pdfReady = new Promise(function(ok, bad){
+    if (window.pdfjsLib) return ok(window.pdfjsLib);
+    var s = document.createElement('script'); s.src = GATE_PDFJS; s.onload = function(){ if (!window.pdfjsLib) return bad(new Error('viewer')); window.pdfjsLib.GlobalWorkerOptions.workerSrc = GATE_WORKER; ok(window.pdfjsLib); };
+    s.onerror = function(){ pdfReady = null; bad(new Error('Couldn’t load the drawing viewer')); }; document.head.appendChild(s);
+  });
+  return pdfReady;
+}
+var GATE_PDFJS = 'pdf.min.js', GATE_WORKER = 'pdf.worker.min.js';
+function b64bytes(b64){ var s = atob(b64), a = new Uint8Array(s.length); for (var i = 0; i < s.length; i++) a[i] = s.charCodeAt(i); return a; }
+function openGate(g, done){
+  if (!g) return;
+  curGate = g; gateZoom = 1; gateDoc = null;
+  el('gateName').textContent = gateName(g);
+  el('gateSub').textContent = done ? 'Gate shop drawing · welded' : 'Gate shop drawing';
+  el('gatePages').innerHTML = '<div class="empty">Opening the drawing…</div>';
+  gateFin(g, done);
+  el('list').hidden = true; el('job').hidden = true; el('gate').hidden = false; window.scrollTo(0, 0);
+  Promise.all([loadPdfJs(), gateFile(g)]).then(function(r){
+    if (curGate !== g) return;
+    return r[0].getDocument({ data: b64bytes(r[1]) }).promise.then(function(doc){ if (curGate !== g) return; gateDoc = doc; drawGate(); });
+  }).catch(function(e){
+    if (curGate !== g) return;
+    el('gatePages').innerHTML = '<div class="empty">Couldn’t open the drawing (' + esc((e && e.message) || 'no signal') + '). Drawings opened once with signal stay on this tablet.</div>';
+  });
+}
+var drawSeq = 0;
+function drawGate(){
+  var doc = gateDoc, box = el('gatePages'); if (!doc) return;
+  var seq = ++drawSeq, w = Math.max(280, box.clientWidth || el('gate').clientWidth || 800), dpr = Math.min(window.devicePixelRatio || 1, 2);
+  box.innerHTML = ''; el('gateZ').textContent = Math.round(gateZoom * 100) + '%';
+  var pages = []; for (var i = 1; i <= doc.numPages; i++) pages.push(i);
+  pages.reduce(function(chain, n){
+    return chain.then(function(){
+      if (seq !== drawSeq) return;
+      return doc.getPage(n).then(function(pg){
+        if (seq !== drawSeq) return;
+        var v1 = pg.getViewport({ scale: 1 }), css = w * gateZoom / v1.width, px = css * dpr;
+        // keep each canvas under about 16 million pixels so the tablet doesn't run out of memory
+        var cap = Math.sqrt(16e6 / (v1.width * v1.height)); if (px > cap) px = cap;
+        var vp = pg.getViewport({ scale: px }), c = document.createElement('canvas');
+        c.width = Math.floor(vp.width); c.height = Math.floor(vp.height);
+        c.style.width = Math.floor(v1.width * css) + 'px'; c.style.height = Math.floor(v1.height * css) + 'px';
+        var wrap = document.createElement('div'); wrap.className = 'gpage'; wrap.appendChild(c); box.appendChild(wrap);
+        return pg.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
+      });
+    });
+  }, Promise.resolve()).catch(function(){});
+}
+function gateFin(g, done){
+  var f = el('gateFin'), d = gatesDone.filter(function(x){ return x.id === g.id; })[0];
+  if (done && d){
+    f.innerHTML = '<div class="gdone"><span class="fin-tag">✓ Welded · ' + (d.by ? esc(d.by) + ' · ' : '') + esc(new Date(d.doneAt).toLocaleDateString([], { month: 'short', day: 'numeric' })) + '</span><button type="button" class="btn" data-gf="undo">Undo</button></div>';
+  } else {
+    f.innerHTML = '<button type="button" class="btn pri big gsign" data-gf="sign"><span class="box" aria-hidden="true"></span>Welded</button>';
+  }
+}
+function gateClose(){
+  curGate = null; gateDoc = null; drawSeq++;
+  el('gate').hidden = true; el('gatePages').innerHTML = ''; el('list').hidden = false; renderList(false);
+}
+el('gback').onclick = function(){ gateClose(); loadGates(); };
+el('gateTools').addEventListener('click', function(e){
+  var b = e.target.closest('[data-gz]'); if (!b) return;
+  var a = b.getAttribute('data-gz');
+  gateZoom = a === 'fit' ? 1 : Math.max(0.5, Math.min(4, gateZoom * (a === 'in' ? 1.4 : 1 / 1.4)));
+  drawGate();
+});
+el('gateFin').addEventListener('click', function(e){
+  var b = e.target.closest('[data-gf]'); if (!b || !curGate) return;
+  if (b.getAttribute('data-gf') === 'sign') weldAsk(curGate, gateSign); else gateUndo(curGate);
+});
+var gateRz = 0; window.addEventListener('resize', function(){ if (!curGate || el('gate').hidden) return; clearTimeout(gateRz); gateRz = setTimeout(drawGate, 250); });
 
 // ---------- start ----------
 if (WELD){
