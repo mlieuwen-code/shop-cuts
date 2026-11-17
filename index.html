@@ -761,7 +761,7 @@ function wId(id){ return id + '.w'; }
 var el = function(id){ return document.getElementById(id); };
 function esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 // a short notice at the bottom of the screen
-var VERSION = '11.17.311', toastT = null;
+var VERSION = '11.17.315', toastT = null;
 function toast(t){ var b = el('toast'); b.textContent = t; b.hidden = false; b.classList.remove('out'); clearTimeout(toastT); toastT = setTimeout(function(){ b.classList.add('out'); setTimeout(function(){ b.hidden = true; }, 400); }, 3200); }
 function msg(t, ok){ var m = el('msg'); m.hidden = !t; m.className = 'msg ' + (ok ? 'ok' : 'err'); m.textContent = t || ''; }
 function lsGet(k){ try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
@@ -1410,7 +1410,7 @@ function screenDiagram(kinds){
     var fl = function(x, y, t){ return '<circle cx="' + x + '" cy="' + y + '" r="9" fill="#2F5D50"/><text x="' + x + '" y="' + (y + 4) + '" text-anchor="middle" font-size="11" font-weight="900" fill="#fff">' + t + '</text>'; };
     o += '<rect x="' + (xB - 20) + '" y="' + dk + '" width="' + (wallR + 26 - xB + 20) + '" height="10" fill="#D9D0C3"/>' + note(xB - 20, dk + 22, 'DECK');
     o += '<rect x="' + wallR + '" y="10" width="26" height="' + (dk - 10) + '" fill="url(#hatch)" stroke="#9A9087"/>' + note(wallR + 13, 8, 'WALL', 'middle');
-    o += '<rect x="' + (xB - 26) + '" y="110" width="20" height="10" rx="2" fill="#B9AFA4" stroke="#8C8279"/><rect x="' + (xB - 14) + '" y="120" width="8" height="' + (dk - 120) + '" fill="#CFC6BB" stroke="#9A9087"/>' +
+    o += '<rect x="' + (xB - 20) + '" y="110" width="20" height="10" rx="2" fill="#B9AFA4" stroke="#8C8279"/><rect x="' + (xB - 14) + '" y="120" width="8" height="' + (dk - 120) + '" fill="#CFC6BB" stroke="#9A9087"/>' +
       note(xB - 32, 112, 'RAILING', 'end') + note(xB - 32, 124, '(end view)', 'end');
     // the two top rails: one on top, one along the bottom up off the deck (clearance underneath)
     o += '<rect x="' + xB + '" y="' + top + '" width="' + (xr - xB) + '" height="' + tr + '" rx="2" fill="#8C8279"/>';
