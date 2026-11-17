@@ -662,7 +662,7 @@ function screenDiagram(kinds){
   // short rail to wall: too short for glass channel, so no Post A, no Post C and no channels. One wide Post B (6x2, 4x2 … from the sheet)
   // between two top rails, one along the top and one along the bottom; both run to the wall on clips like the others
   var short = function(size){
-    var dk = 226, top = 34, tr = 9, ink = '#1F1B17', o = '', wallR = 262, xr = wallR - 5, yC = dk - 28, BW = /^[46]x/.test(size || '6x2') ? 40 : 22, xB = wallR - 44 - BW, xA = xB;
+    var dk = 226, top = 34, tr = 9, ink = '#1F1B17', o = '', wallR = 262, xr = wallR - 5, yC = dk - 28, BW = /^[46]x/.test(size || '6x2') ? 24 : 12, xB = wallR - 16 - BW, xA = xB;   // same 2 1/2" gap to the wall as the other drawings
     var lbl = function(x, y, t){ return '<circle cx="' + x + '" cy="' + y + '" r="13" fill="' + ink + '"/><text x="' + x + '" y="' + (y + 5) + '" text-anchor="middle" font-size="15" font-weight="900" fill="#fff">' + t + '</text>'; };
     var note = function(x, y, t, a, col){ return '<text x="' + x + '" y="' + y + '" font-size="11" font-weight="800" fill="' + (col || '#6B6157') + '"' + (a ? ' text-anchor="' + a + '"' : '') + '>' + t + '</text>'; };
     var fl = function(x, y, t){ return '<circle cx="' + x + '" cy="' + y + '" r="9" fill="#2F5D50"/><text x="' + x + '" y="' + (y + 4) + '" text-anchor="middle" font-size="11" font-weight="900" fill="#fff">' + t + '</text>'; };
@@ -684,10 +684,9 @@ function screenDiagram(kinds){
     o += clip(top + 2, 5, top, tr + 6, top + tr + 3) + clip(yC + 2, 5, yC - 6, tr + 6, yC - 3);
     var gy = 162, ga = xB + BW, gb = wallR;
     o += '<g stroke="#6B6157" stroke-width="1.2"><line x1="' + ga + '" y1="' + gy + '" x2="' + gb + '" y2="' + gy + '"/><line x1="' + ga + '" y1="' + (gy - 4) + '" x2="' + ga + '" y2="' + (gy + 4) + '"/><line x1="' + gb + '" y1="' + (gy - 4) + '" x2="' + gb + '" y2="' + (gy + 4) + '"/></g><text x="' + ((ga + gb) / 2) + '" y="' + (gy - 6) + '" text-anchor="middle" font-size="10" font-weight="800" fill="#6B6157">2½"</text>';
-    var gx = (xB + BW + wallR - 5) / 2;
-    o += fl(gx, top + 24, 'T') + fl(gx, yC - 14, 'T');
-    o += note(xB - 12, top + 8, 'TOP RAIL', 'end') + note(xB - 12, yC - 5, 'TOP RAIL', 'end') + note(xB - 12, yC + 7, '(BOTTOM)', 'end');
-    o += lbl(xB + BW / 2, 92, 'B') + note(xB + BW / 2, 140, esc(size || '6x2'), 'middle', '#1F1B17').replace('<text ', '<text transform="rotate(-90 ' + (xB + BW / 2) + ' 140)" ').replace('fill="#1F1B17"', 'fill="#fff"');
+    o += fl(xB - 14, top + 24, 'T') + fl(xB - 14, yC - 14, 'T');
+    o += note(xB - 30, top + 8, 'TOP RAIL', 'end') + note(xB - 30, yC - 5, 'TOP RAIL', 'end') + note(xB - 30, yC + 7, '(BOTTOM)', 'end');
+    o += lbl(xB + BW / 2, 92, 'B');
     return '<figure class="scrfig"><svg viewBox="0 0 360 250" role="img" aria-label="Short rail to wall privacy screen: one wide Post B between two top rails"><defs><pattern id="hatch2" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="#EFE9E1"/><line x1="0" y1="0" x2="0" y2="6" stroke="#B9AFA4" stroke-width="2"/></pattern></defs>' + o.replace(/url\(#hatch\)/g, 'url(#hatch2)') + '</svg>' +
       '<figcaption><b>Short rail to wall</b><span><i>B</i>one post (' + esc(size || '6x2') + ' on this job), up against the railing, between the two top rails</span><span><i>&#8593;</i>two top rails from Post B to the wall: one along the top, one along the bottom up off the deck, both on clips at the wall</span><span><i>&#8212;</i>for a very small gap between the railing and the wall: no Post A, no Post C, no channels</span><span><i style="background:#2F5D50">T</i>top rail sleeve clip</span></figcaption></figure>';
   };
