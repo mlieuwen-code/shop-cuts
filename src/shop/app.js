@@ -495,14 +495,16 @@ function fenceHead(book, item){
       if (sd.hc[c]) continue;
       var t = show(book, sd.cells[r + ':' + c]).trim(); if (!t) continue;
       if (/:$/.test(t)){ lab = t.replace(/:$/, '').trim(); lc = c; continue; }
-      if (lab){ got.push({ c: lc, r: r, lab: lab, val: t }); lab = null; }
+      if (lab){ got.push({ c: lc, r: r, lab: /^post top to rails?$/i.test(lab) ? 'Channel Block Heights' : lab, val: t }); lab = null; }
     }
   }
   got.sort(function(a, b){ return a.c - b.c || a.r - b.r; });
   var h = '<table class="sheet finfo"><tr><td colspan="4" class="b">' + esc(show(book, sd.cells['1:1']).trim() || 'CUT SHEET') + '</td></tr>';
   for (var i = 0; i < got.length; i += 2){
     var z = (i / 2) % 2 ? '' : ' style="background:#FFF2CC"', p = got[i], q = got[i + 1];
-    h += '<tr class="info"' + z + '><td class="c">' + esc(p.lab) + '</td><td class="c b">' + esc(p.val) + '</td>' + (q ? '<td class="c">' + esc(q.lab) + '</td><td class="c b">' + esc(q.val) + '</td>' : '<td></td><td></td>') + '</tr>';
+    // the channel type (3/4 Punch …) stands out like post height on the railing sheets
+    var pair = function(x){ var hi = /^channel$/i.test(x.lab); return '<td class="c' + (hi ? ' hilab' : '') + '">' + esc(x.lab) + '</td><td class="c b' + (hi ? ' hival' : '') + '">' + esc(x.val) + '</td>'; };
+    h += '<tr class="info"' + z + '>' + pair(p) + (q ? pair(q) : '<td></td><td></td>') + '</tr>';
   }
   return h + '</table>';
 }
