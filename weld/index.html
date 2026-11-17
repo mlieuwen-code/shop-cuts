@@ -889,7 +889,7 @@ function wId(id){ return id + '.w'; }
 var el = function(id){ return document.getElementById(id); };
 function esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 // a short notice at the bottom of the screen
-var VERSION = '11.17.1443', toastT = null;
+var VERSION = '11.17.1451', toastT = null;
 function toast(t){ var b = el('toast'); b.textContent = t; b.hidden = false; b.classList.remove('out'); clearTimeout(toastT); toastT = setTimeout(function(){ b.classList.add('out'); setTimeout(function(){ b.hidden = true; }, 400); }, 3200); }
 function msg(t, ok){ var m = el('msg'); m.hidden = !t; m.className = 'msg ' + (ok ? 'ok' : 'err'); m.textContent = t || ''; }
 function lsGet(k){ try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
@@ -1310,6 +1310,23 @@ function fencePosts(book, item){
   R++; put(1, '2 · Blocking');
   R++; ['Category', 'Qty', '✓', 'Top channel', 'Bottom channel'].concat(hasOther ? ['Other side'] : []).forEach(function(t, i){ put(i + 1, t, { c: 1 }); });
   blks.forEach(function(g, i){ R++; var z = i % 2 ? YEL : ''; put(1, fenceType(g.p.type), { c: 1, b: 1, css: z }); put(2, String(g.n), { c: 1, b: 1, css: z }); put(3, '', { css: z }); put(4, len(g.p.top), { c: 1, b: 1, css: z }); put(5, len(g.p.bot), { c: 1, b: 1, css: z }); if (hasOther) put(6, len(g.p.other), { c: 1, b: 1, css: z }); });
+  // Shop Welds, top mount fences: 3 · Welding lists the base plates by type, like Bracketing on a railing Post Sheet
+  // (ends offset with the plate reaching in under the fence; mids and corners centred; Cor turns right, Incor left)
+  if (WELD && /^top/i.test(String(fenceLabel(sd, /^mount:?$/i)).trim())){
+    var size = /3\s*x\s*3/i.test(String(fenceLabel(sd, /^post wall:?$/i))) ? '5x5' : '4x4', wn = { end: 0, mid: 0, rt: 0, lt: 0 };
+    posts.forEach(function(p){ var t = p.type.toLowerCase(); if (t === 'end') wn.end++; else if (t === 'mid') wn.mid++; else if (/^cor(ner)?$/.test(t)) wn.rt++; else if (/^incor(ner)?$/.test(t)) wn.lt++; });
+    var wl = [];
+    if (wn.end) wl.push(['E-Off-L', wn.end, size + ' plate · ' + (wn.end > 1 ? 'both ends of the fence, welded the same' : 'end of the fence'), 'Weld-on, offset: post at the outer end, plate reaches in under the fence']);
+    if (wn.mid) wl.push(['Mid-Cen', wn.mid, size + ' plate', 'Weld-on, centered']);
+    if (wn.rt + wn.lt) wl.push([wn.rt ? 'Cor-Cen' : 'Incor-Cen', wn.rt + wn.lt, size + ' plate · ' + (wn.rt && wn.lt ? 'corners turning right (Cor) and left (Incor), welded the same' : wn.rt ? 'corners turning right' : 'corners turning left'), 'Weld-on, centered']);
+    if (wl.length){
+      R++;
+      R++; put(1, '3 · Welding');
+      var HD = 'background:#E7DFCF;box-shadow:0 2px 0 #D5CBB8;font-size:16px;';   // looks like the column-heading rows above
+      R++; ['Base plate', 'Qty', '', 'How it’s welded'].forEach(function(t, i){ put(i + 1, t, { c: 1, css: HD }); }); fake.merges.push({ r1: R, r2: R, c1: 4, c2: N });
+      wl.forEach(function(w, i){ R++; var z = i % 2 ? YEL : ''; put(1, w[0], { b: 1, css: z + 'font-size:24px;', bpc: w[0], bpd: w[2] }); put(2, String(w[1]), { c: 1, b: 1, css: z + 'font-size:26px;height:76px;' }); put(3, '', { css: z }); put(4, w[3], { css: z + 'font-size:20px;font-weight:700;' }); fake.merges.push({ r1: R, r2: R, c1: 4, c2: N }); });
+    }
+  }
   fake.maxR = R;
   return fake;
 }
@@ -1761,10 +1778,10 @@ function renderSheet(book, item, done){
       if (xf && xf.h === 'center') cls.push('c');
       if ((xf && xf.wrap) || t.length > 22) cls.push('wrapcell');
       var style = (cell ? (cell.css || '') + (L.fence && r > L.hdr ? '' : fillCss(book, cell.s)) : '') + (f && f.rgb && /^FF[0-9A-F]{6}$/i.test(f.rgb) && f.rgb.slice(2).toUpperCase() !== '000000' ? 'color:#' + f.rgb.slice(2) + ';' : '');
-      var fcode = fTop && fpC[c] && r > L.hdr ? fencePlateCode(t, fpC[c]) : '';
+      var fcode = cell && cell.bpc ? cell.bpc : fTop && fpC[c] && r > L.hdr ? fencePlateCode(t, fpC[c]) : '';
       if (fcode) cls.push('bp');
       var bd = fcode ? '' : cls.indexOf('bp') >= 0 ? bpDesc(t) : '';
-      h += '<td' + (cls.length ? ' class="' + cls.join(' ') + '"' : '') + (style ? ' style="' + style + '"' : '') + attr + '>' + (fcode ? '<span class="bpw">' + bpIcon(fcode, fpC[c]) + '<span>' + esc(bpName(fcode).replace(/ (Left|Right)$/, '')) + '</span></span>' : bd ? '<span class="bpw">' + bpIcon(t, bpC[c] || '') + '<span>' + esc(bpName(t)) + '<small class="bpd">' + esc(bd.replace(/ · .*$/, '')) + '</small></span></span>' : (big ? measure(t) : esc(t))) + '</td>';
+      h += '<td' + (cls.length ? ' class="' + cls.join(' ') + '"' : '') + (style ? ' style="' + style + '"' : '') + attr + '>' + (fcode ? '<span class="bpw">' + bpIcon(fcode, fpC[c] || 'R') + '<span>' + esc(bpName(fcode).replace(/ (Left|Right)$/, '')) + (cell && cell.bpd ? '<small class="bpd">' + esc(cell.bpd) + '</small>' : '') + '</span></span>' : bd ? '<span class="bpw">' + bpIcon(t, bpC[c] || '') + '<span>' + esc(bpName(t)) + '<small class="bpd">' + esc(bd.replace(/ · .*$/, '')) + '</small></span></span>' : (big ? measure(t) : esc(t))) + '</td>';
     });
     h += '</tr>';
   });
