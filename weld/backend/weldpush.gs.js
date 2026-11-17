@@ -142,35 +142,35 @@ function wpJwt_(aud, dB64) {
 const WP_P = BigInt('0xffffffff00000001000000000000000000000000ffffffffffffffffffffffff');
 const WP_N = BigInt('0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551');
 const WP_G = [BigInt('0x6b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296'), BigInt('0x4fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5')];
-function wpMod_(a, m) { const r = a % m; return r < 0n ? r + m : r; }
-function wpPow_(b, e, m) { let r = 1n; b = wpMod_(b, m); while (e > 0n) { if (e & 1n) r = r * b % m; b = b * b % m; e >>= 1n; } return r; }
-function wpInv_(a, m) { return wpPow_(a, m - 2n, m); }
+function wpMod_(a, m) { const r = a % m; return r < BigInt(0) ? r + m : r; }
+function wpPow_(b, e, m) { let r = BigInt(1); b = wpMod_(b, m); while (e > BigInt(0)) { if (e & BigInt(1)) r = r * b % m; b = b * b % m; e >>= BigInt(1); } return r; }
+function wpInv_(a, m) { return wpPow_(a, m - BigInt(2), m); }
 // Jacobian coordinates [X, Y, Z]; a = -3
 function wpDbl_(P) {
   const X = P[0], Y = P[1], Z = P[2], p = WP_P;
-  if (Y === 0n || Z === 0n) return [0n, 1n, 0n];
-  const YY = Y * Y % p, S = 4n * X * YY % p, ZZ = Z * Z % p, M = 3n * (X - ZZ) * (X + ZZ) % p;
-  const X3 = wpMod_(M * M - 2n * S, p), Y3 = wpMod_(M * (S - X3) - 8n * YY * YY, p), Z3 = 2n * Y * Z % p;
+  if (Y === BigInt(0) || Z === BigInt(0)) return [BigInt(0), BigInt(1), BigInt(0)];
+  const YY = Y * Y % p, S = BigInt(4) * X * YY % p, ZZ = Z * Z % p, M = BigInt(3) * (X - ZZ) * (X + ZZ) % p;
+  const X3 = wpMod_(M * M - BigInt(2) * S, p), Y3 = wpMod_(M * (S - X3) - BigInt(8) * YY * YY, p), Z3 = BigInt(2) * Y * Z % p;
   return [X3, Y3, Z3];
 }
 function wpAdd_(P, Q) {
   const p = WP_P;
-  if (P[2] === 0n) return Q; if (Q[2] === 0n) return P;
+  if (P[2] === BigInt(0)) return Q; if (Q[2] === BigInt(0)) return P;
   const Z1Z1 = P[2] * P[2] % p, Z2Z2 = Q[2] * Q[2] % p;
   const U1 = P[0] * Z2Z2 % p, U2 = Q[0] * Z1Z1 % p, S1 = P[1] * Q[2] % p * Z2Z2 % p, S2 = Q[1] * P[2] % p * Z1Z1 % p;
-  if (U1 === U2) return S1 === S2 ? wpDbl_(P) : [0n, 1n, 0n];
+  if (U1 === U2) return S1 === S2 ? wpDbl_(P) : [BigInt(0), BigInt(1), BigInt(0)];
   const H = wpMod_(U2 - U1, p), R = wpMod_(S2 - S1, p), HH = H * H % p, HHH = H * HH % p, V = U1 * HH % p;
-  const X3 = wpMod_(R * R - HHH - 2n * V, p), Y3 = wpMod_(R * (V - X3) - S1 * HHH, p), Z3 = P[2] * Q[2] % p * H % p;
+  const X3 = wpMod_(R * R - HHH - BigInt(2) * V, p), Y3 = wpMod_(R * (V - X3) - S1 * HHH, p), Z3 = P[2] * Q[2] % p * H % p;
   return [X3, Y3, Z3];
 }
 function wpMul_(k) {
-  let R = [0n, 1n, 0n], A = [WP_G[0], WP_G[1], 1n];
-  while (k > 0n) { if (k & 1n) R = wpAdd_(R, A); A = wpDbl_(A); k >>= 1n; }
+  let R = [BigInt(0), BigInt(1), BigInt(0)], A = [WP_G[0], WP_G[1], BigInt(1)];
+  while (k > BigInt(0)) { if (k & BigInt(1)) R = wpAdd_(R, A); A = wpDbl_(A); k >>= BigInt(1); }
   const zi = wpInv_(R[2], WP_P), zi2 = zi * zi % WP_P;
   return [R[0] * zi2 % WP_P, R[1] * zi2 % WP_P * zi % WP_P];
 }
-function wpBytesToInt_(b) { let x = 0n; for (let i = 0; i < b.length; i++) x = (x << 8n) | BigInt(b[i] & 255); return x; }
-function wpIntToBytes_(x) { const out = new Array(32); for (let i = 31; i >= 0; i--) { out[i] = Number(x & 255n); x >>= 8n; } return out; }
+function wpBytesToInt_(b) { let x = BigInt(0); for (let i = 0; i < b.length; i++) x = (x << BigInt(8)) | BigInt(b[i] & 255); return x; }
+function wpIntToBytes_(x) { const out = new Array(32); for (let i = 31; i >= 0; i--) { out[i] = Number(x & BigInt(255)); x >>= BigInt(8); } return out; }
 function wpHmac_(key, data) { return Utilities.computeHmacSignature(Utilities.MacAlgorithm.HMAC_SHA_256, data.map(function (v) { return v > 127 ? v - 256 : v; }), key.map(function (v) { return v > 127 ? v - 256 : v; })).map(function (v) { return v & 255; }); }
 function wpSign_(msg, dBytes) {
   const d = wpBytesToInt_(dBytes), h = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, msg).map(function (v) { return v & 255; });
@@ -181,10 +181,10 @@ function wpSign_(msg, dBytes) {
   for (;;) {
     V = wpHmac_(K, V);
     const k = wpBytesToInt_(V);
-    if (k >= 1n && k < WP_N) {
+    if (k >= BigInt(1) && k < WP_N) {
       const r = wpMod_(wpMul_(k)[0], WP_N);
       const s = wpMod_(wpInv_(k, WP_N) * (z + r * d), WP_N);
-      if (r !== 0n && s !== 0n) return wpIntToBytes_(r).concat(wpIntToBytes_(s)).map(function (v) { return v > 127 ? v - 256 : v; });
+      if (r !== BigInt(0) && s !== BigInt(0)) return wpIntToBytes_(r).concat(wpIntToBytes_(s)).map(function (v) { return v > 127 ? v - 256 : v; });
     }
     K = wpHmac_(K, V.concat([0])); V = wpHmac_(K, V);
   }
