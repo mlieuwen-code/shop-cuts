@@ -575,7 +575,39 @@ function turnFor(run, isLast, mount){
 function autoTurnName(run, mount){ var t = turnFor({ r: run.r, ar: run.ar }, false, mount); return t === null ? 'Gap' : (t === 0 ? 'Straight' : (t > 0 ? 'Right' : 'Left')); }
 // a corner forced the opposite way from its mount's rule
 function wrongTurn(run, mount){ var d = cornerDir(String(run.r || ''), mount); return !!(d && run._turn && run._turn !== 'S' && (run._turn === 'R' ? 1 : -1) !== d); }
+
+// Shop Welds: turn each layout so its long way runs left to right (the drawing is worked out pointing up first, then turned a quarter if it's taller than wide)
+function layWide(u){
+  var mnt = unitSetup(u).mount, last = u.secs.length - 1, x = 0, y = 0, h = 270, xs = [0], ys = [0];
+  var ZGAP = u.secs.reduce(function(a, r){ var v = parseLen(r.len); return a + (v > 0 ? v : 36); }, 0) * 0.12;
+  u.secs.forEach(function(run, j){
+    var L = parseLen(run.len); if (L === null || isNaN(L) || L <= 0) L = 36;
+    x += L * Math.cos(h * Math.PI / 180); y += L * Math.sin(h * Math.PI / 180); xs.push(x); ys.push(y);
+    var t = turnFor(run, j === last, mnt);
+    if (t === null){ var gap = Math.max(12, L * 0.15, ZGAP); x += gap * Math.cos(h * Math.PI / 180); y += gap * Math.sin(h * Math.PI / 180); if (run._gapTurn && j < last) h += run._gapTurn; }
+    else h += t;
+  });
+  var w = Math.max.apply(null, xs) - Math.min.apply(null, xs), hh = Math.max.apply(null, ys) - Math.min.apply(null, ys);
+  return hh > w * 1.05 ? 90 : 0;
+}
+// top mount: which base plate sits under each post. Ends are offset unless the Plate L / Plate R column says Centered or Rev Offset;
+// corners, joints and mid posts are centred. 3x2 posts and codes we don't know get no plate.
+function plateFor(u, pt){
+  if (!/^top/i.test(String(u.mount || ''))) return null;
+  var c = String(pt.code || '').trim().toUpperCase(), run = u.secs[pt.j] || {};
+  if (c === 'E'){ var ov = String((pt.side === 'l' ? run.pl : run.pr) || ''); return /rev/i.test(ov) ? 'rev' : /cen/i.test(ov) ? 'cen' : 'off'; }
+  if (/^(EC|IC|FC)O?$/.test(c) || JOINT_CODES[c] || /^(F|FA)$/.test(c)) return 'cen';
+  return null;
+}
+function KEY_PLATE(k){ var sh = k === 'off' ? 4 : k === 'rev' ? -4 : 0; return '<svg width="34" height="18" viewBox="0 0 34 18" aria-hidden="true"><line x1="14" y1="9" x2="34" y2="9" stroke="#2F5D50" stroke-width="3"/><rect x="' + (5 + sh) + '" y="1" width="16" height="16" rx="2" fill="#E9E5DC" stroke="#5F5E5A" stroke-width="1.3"/><rect x="9" y="5" width="8" height="8" fill="#1F1B17"/></svg>'; }
+var PLATE_WORD = { off: 'Offset', cen: 'Centered', rev: 'Reverse offset' };
+// a base plate square under a post, turned with the rail; offset slides it in under the rail, reverse offset slides it out past the end
+function plateSvg(x, y, deg, half, kind, inward, sw){
+  var sh = kind === 'off' ? half * 0.42 * inward : kind === 'rev' ? -half * 0.42 * inward : 0;
+  return '<g transform="translate(' + x + ' ' + y + ') rotate(' + deg + ')"><rect x="' + (sh - half) + '" y="' + (-half) + '" width="' + half * 2 + '" height="' + half * 2 + '" rx="' + half * 0.12 + '" fill="#E9E5DC" stroke="#5F5E5A" stroke-width="' + sw * 0.35 + '"/></g>';
+}
 function layoutSvg(u){
+  if (u._rot == null) u._rot = layWide(u);
   var mnt = unitSetup(u).mount, last = u.secs.length - 1;
   var ZGAP = u.secs.reduce(function(a, r){ var v = parseLen(r.len); return a + (v > 0 ? v : 36); }, 0) * 0.12;
   var totalTurn = 0, x = 0, y = 0, h = 270 + (u._rot || 0), segs = [], pts = [], xs = [0], ys = [0];
@@ -586,11 +618,11 @@ function layoutSvg(u){
     segs.push({ x1: x, y1: y, x2: x2, y2: y2, h: h, L: L, tag: secLabel(u, j), len: known ? fmtFrac(L) : '?', known: known, ns: run.ns === 'Yes', mids: Math.max(0, Math.min(40, Math.round(+run.mids || 0))),
       fl: flv > 0 && flv < L ? flv : 0, fr: frv > 0 && frv < L ? frv : 0 });
     var nX = -Math.sin(h * Math.PI / 180), nY = Math.cos(h * Math.PI / 180);
-    if (j === 0 || !pts.length || pts[pts.length - 1].x !== x || pts[pts.length - 1].y !== y) pts.push({ x: x, y: y, code: run.l || '?', nx: nX, ny: nY, kind: 'end', j: j, side: 'l' });
+    if (j === 0 || !pts.length || pts[pts.length - 1].x !== x || pts[pts.length - 1].y !== y) pts.push({ x: x, y: y, code: run.l || '?', nx: nX, ny: nY, kind: 'end', j: j, side: 'l', h: h, inw: 1 });
     var t = turnFor(run, j === last, mnt);
     var cnx = nX, cny = nY;
     if (t){ var hi = h * Math.PI / 180, ho = (h + t) * Math.PI / 180, ox = Math.cos(hi) - Math.cos(ho), oy = Math.sin(hi) - Math.sin(ho), ol = Math.sqrt(ox * ox + oy * oy) || 1; cnx = ox / ol; cny = oy / ol; }
-    pts.push({ x: x2, y: y2, code: run.r || '?', kind: t === null ? 'end' : (t === 0 ? 'joint' : 'corner'), nx: cnx, ny: cny, bad: j < last && wrongTurn(run, mnt), j: j, side: 'r', pair: t !== null && j < last });
+    pts.push({ x: x2, y: y2, h: h, inw: -1, code: run.r || '?', kind: t === null ? 'end' : (t === 0 ? 'joint' : 'corner'), nx: cnx, ny: cny, bad: j < last && wrongTurn(run, mnt), j: j, side: 'r', pair: t !== null && j < last });
     x = x2; y = y2; xs.push(x); ys.push(y);
     if (t === null){ var gap = Math.max(12, L * 0.15, ZGAP); x += gap * Math.cos(h * Math.PI / 180); y += gap * Math.sin(h * Math.PI / 180); if (run._gapTurn && j < last) h += run._gapTurn; }
     else { h += t; totalTurn += t; }
@@ -617,7 +649,7 @@ function layoutSvg(u){
   }
   // posts are obstacles too
   pts.forEach(function(pt){ var r = sw * 2.2; boxes.push({ x0: pt.x - r, x1: pt.x + r, y0: pt.y - r, y1: pt.y + r }); });
-  var out = '', floatPosts = '', anyFloat = false, anyMid = false;
+  var out = '', floatPosts = '', anyFloat = false, anyMid = false, anyPlate = false;
   segs.forEach(function(sg){
     var dash = sg.known ? '' : ' stroke-dasharray="' + sw * 2 + ' ' + sw * 2 + '" opacity=".55"';
     var line = function(ax, ay, bx, by, col){ return '<line x1="' + ax + '" y1="' + ay + '" x2="' + bx + '" y2="' + by + '" stroke="' + col + '" stroke-width="' + sw + '" stroke-linecap="round"' + dash + '/>'; };
@@ -639,6 +671,7 @@ function layoutSvg(u){
     for (var i = 1; i <= sg.mids; i++){
       var t = (a + (b - a) * i / (sg.mids + 1)) / sg.L, px = sg.x1 + (sg.x2 - sg.x1) * t, py = sg.y1 + (sg.y2 - sg.y1) * t;
       zMids.push({ x: px, y: py });
+      if (/^top/i.test(String(u.mount || ''))){ midPosts += plateSvg(px, py, sg.h, sw * 1.9, 'cen', 1, sw); anyPlate = true; }
       midPosts += '<rect x="' + (px - r) + '" y="' + (py - r) + '" width="' + r * 2 + '" height="' + r * 2 + '" fill="var(--ink)" stroke="var(--card)" stroke-width="' + sw * 0.35 + '"/>';
       boxes.push({ x0: px - sw * 1.6, x1: px + sw * 1.6, y0: py - sw * 1.6, y1: py + sw * 1.6 });
     }
@@ -773,14 +806,15 @@ function layoutSvg(u){
       });
       pts.forEach(function(pt, k){
         var q = T(pt.x, pt.y); if (dd(q[0], q[1], best.x, best.y) > R + r) return;
+        var bpk = plateFor(u, pt); if (bpk) g += plateSvg(q[0], q[1], pt.h, r * 1.7, bpk, pt.inw, sw);
         if (pt.kind === 'end' || k === 0) g += '<rect x="' + (q[0] - r) + '" y="' + (q[1] - r) + '" width="' + r * 2 + '" height="' + r * 2 + '" fill="var(--ink)"/>';
         else if (pt.kind === 'corner') g += '<circle cx="' + q[0] + '" cy="' + q[1] + '" r="' + r * 1.1 + '" fill="' + (pt.bad ? 'var(--badbg)' : 'var(--card)') + '" stroke="' + (pt.bad ? 'var(--bad)' : 'var(--ink)') + '" stroke-width="' + sw * 0.7 + '"/>';
         else g += '<circle cx="' + q[0] + '" cy="' + q[1] + '" r="' + r * 0.8 + '" fill="var(--ink)"/>';
         if (inPts.indexOf(pt) < 0) return;
         var cs = pt.kind === 'corner' ? 1 : (totalTurn < 0 ? -1 : 1), cands = [];
         [fs * 1.4, fs * 2.2, fs * 3].forEach(function(d1){ [[pt.nx * cs, pt.ny * cs], [-pt.nx * cs, -pt.ny * cs], [0, -1], [0, 1], [1, 0], [-1, 0], [0.7, -0.7], [-0.7, -0.7], [0.7, 0.7], [-0.7, 0.7]].forEach(function(v){ cands.push({ x: q[0] + v[0] * d1, y: q[1] + v[1] * d1, nx: v[0] }); }); });
-        var lp = bplace(cands, pt.code, fs * 0.95);
-        txt += '<text x="' + lp.x + '" y="' + lp.y + '" font-size="' + fs * 0.95 + '" text-anchor="' + lp.a + '" dominant-baseline="middle" fill="var(--deep, var(--ink))" font-weight="900">' + esc(pt.code) + '</text>';
+        var bw = bpk ? PLATE_WORD[bpk] : pt.code, lp = bplace(cands, bw, fs * 0.95);
+        txt += '<text x="' + lp.x + '" y="' + lp.y + '" font-size="' + fs * 0.95 + '" text-anchor="' + lp.a + '" dominant-baseline="middle" fill="var(--deep, var(--ink))" font-weight="900">' + esc(bw) + '</text>';
       });
       g += txt + '</g><text x="' + best.x + '" y="' + (best.y + R + fs * 1.1) + '" font-size="' + fs * 0.75 + '" text-anchor="middle" fill="var(--muted)" font-weight="800">zoomed ×' + Math.round(mag) + '</text>';
       bub += g;
@@ -791,12 +825,14 @@ function layoutSvg(u){
     var r = sw * 1.6, cs = (pt.kind === 'corner') ? 1 : (totalTurn < 0 ? -1 : 1), d1 = fs * 1.5, d2 = fs * 2.6, cands = [];
     [[pt.nx * cs, pt.ny * cs], [-pt.nx * cs, -pt.ny * cs], [0, -1], [0, 1], [1, 0], [-1, 0], [0.7, -0.7], [-0.7, -0.7], [0.7, 0.7], [-0.7, 0.7]].forEach(function(v){ cands.push({ x: pt.x + v[0] * d1, y: pt.y + v[1] * d1, nx: v[0] }); });
     [[pt.nx * cs, pt.ny * cs], [0, -1], [0, 1], [1, 0], [-1, 0]].forEach(function(v){ cands.push({ x: pt.x + v[0] * d2, y: pt.y + v[1] * d2, nx: v[0] }); });
-    var lp = zHide(pt) ? null : place(cands, pt.code, fs * 0.85);
+    var bpk = plateFor(u, pt), word = bpk ? PLATE_WORD[bpk] : pt.code;
+    if (bpk){ posts += plateSvg(pt.x, pt.y, pt.h, r * 1.75, bpk, pt.inw, sw); anyPlate = true; }
+    var lp = zHide(pt) ? null : place(cands, word, fs * 0.85);
     var hitA = ' data-x="' + pt.j + '" data-side="' + pt.side + '" data-pair="' + (pt.pair ? 1 : 0) + '" style="cursor:pointer"';
     if (pt.kind === 'end' || k === 0) posts += '<rect x="' + (pt.x - r) + '" y="' + (pt.y - r) + '" width="' + r * 2 + '" height="' + r * 2 + '" fill="var(--ink)"/>';
     else if (pt.kind === 'corner') posts += '<circle cx="' + pt.x + '" cy="' + pt.y + '" r="' + r * (pt.bad ? 1.6 : 1.1) + '" fill="' + (pt.bad ? 'var(--badbg)' : 'var(--card)') + '" stroke="' + (pt.bad ? 'var(--bad)' : 'var(--ink)') + '" stroke-width="' + sw * (pt.bad ? 0.9 : 0.6) + '"/>';
     else posts += '<circle cx="' + pt.x + '" cy="' + pt.y + '" r="' + r * 0.8 + '" fill="var(--ink)"/>';
-    if (lp) posts += '<text x="' + lp.x + '" y="' + lp.y + '" font-size="' + fs * 0.85 + '" text-anchor="' + lp.a + '" dominant-baseline="middle" fill="var(--deep, var(--ink))" font-weight="800"' + hitA + '>' + esc(pt.code) + '</text>';
+    if (lp) posts += '<text x="' + lp.x + '" y="' + lp.y + '" font-size="' + fs * 0.85 + '" text-anchor="' + lp.a + '" dominant-baseline="middle" fill="var(--deep, var(--ink))" font-weight="800"' + hitA + '>' + esc(word) + '</text>';
     // a generous invisible tap target over the post and its code
     posts += '<circle cx="' + pt.x + '" cy="' + pt.y + '" r="' + Math.max(fs * 1.3, sw * 4) + '" fill="transparent"' + hitA + '/>';
   });
@@ -818,7 +854,8 @@ function layoutSvg(u){
   boxes.forEach(function(b){ bx0 = Math.min(bx0, b.x0); bx1 = Math.max(bx1, b.x1); by0 = Math.min(by0, b.y0); by1 = Math.max(by1, b.y1); });
   var m = (bx1 - bx0 + by1 - by0) * 0.03;
   out = '<svg class="laysvg" viewBox="' + [bx0 - m, by0 - m, bx1 - bx0 + m * 2, by1 - by0 + m * 2].map(function(n){ return n.toFixed(2); }).join(' ') + '" role="img" aria-label="Bird’s-eye layout of unit ' + esc(u.unit || '') + '">' + out + '</svg>';
-  return out + '<div class="laykey"><span><i class="k-end"></i>End post</span><span><i class="k-cor"></i>Corner</span><span><i class="k-jt"></i>Joint</span>' + (anyMid ? '<span><i class="k-mid"></i>Mid post</span>' : '') + (anyFloat ? '<span><i class="k-fl"></i>Floating / float</span><span><i class="k-fp"></i>Float post</span>' : '') + '</div>';
+  return out + '<div class="laykey"><span><i class="k-end"></i>End post</span><span><i class="k-cor"></i>Corner</span><span><i class="k-jt"></i>Joint</span>' + (anyMid ? '<span><i class="k-mid"></i>Mid post</span>' : '') + (anyFloat ? '<span><i class="k-fl"></i>Floating / float</span><span><i class="k-fp"></i>Float post</span>' : '') +
+    (anyPlate ? '<span>' + KEY_PLATE('off') + 'Offset · plate reaches in under the rail</span><span>' + KEY_PLATE('cen') + 'Centered</span><span>' + KEY_PLATE('rev') + 'Reverse offset · plate sticks out past the end</span>' : '') + '</div>';
 }
 return { svg: layoutSvg };
 })();
@@ -843,7 +880,7 @@ function wId(id){ return id + '.w'; }
 var el = function(id){ return document.getElementById(id); };
 function esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 // a short notice at the bottom of the screen
-var VERSION = '11.17.715', toastT = null;
+var VERSION = '11.17.803', toastT = null;
 function toast(t){ var b = el('toast'); b.textContent = t; b.hidden = false; b.classList.remove('out'); clearTimeout(toastT); toastT = setTimeout(function(){ b.classList.add('out'); setTimeout(function(){ b.hidden = true; }, 400); }, 3200); }
 function msg(t, ok){ var m = el('msg'); m.hidden = !t; m.className = 'msg ' + (ok ? 'ok' : 'err'); m.textContent = t || ''; }
 function lsGet(k){ try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
@@ -1250,7 +1287,7 @@ function readUnits(sd){
     var tag = cellVal(sd, r, 1); if (tag == null || tag === '') continue;
     var g = function(c){ var v = cellVal(sd, r, c); return v == null ? '' : v; };
     var u = unitOf(tag); if (!out[u]) out[u] = { unit: u, mount: mount, secs: [] };
-    out[u].secs.push({ tag: String(tag), l: String(g(2)), r: String(g(3)), fl: g(4), fr: g(5), len: g(6), mids: g(9), al: g(17), ar: g(18), ns: String(g(19)) });
+    out[u].secs.push({ tag: String(tag), l: String(g(2)), r: String(g(3)), fl: g(4), fr: g(5), len: g(6), mids: g(9), al: g(17), ar: g(18), ns: String(g(19)), pl: String(g(15)), pr: String(g(16)) });
   }
   return out;
 }
