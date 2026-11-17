@@ -367,7 +367,8 @@ table.sheet.fence td.wrapcell{min-width:0;max-width:150px}
 .rmbanner b{font-weight:900}
 .rmbanner span{font-size:20px;font-weight:800;background:rgba(255,255,255,.18);border-radius:10px;padding:4px 12px}
 table.sheet.laytab{margin-bottom:10px}
-.weldnote{position:fixed;left:0;right:0;top:0;z-index:70;padding:calc(10px + env(safe-area-inset-top,0px)) 14px 10px;cursor:pointer}
+.weldnote{position:fixed;left:0;right:0;top:0;z-index:70;padding:calc(10px + env(safe-area-inset-top,0px)) 14px 10px;cursor:pointer;pointer-events:none}
+.weldnote .wn-in{pointer-events:auto}
 .weldnote .wn-in{max-width:1100px;margin:0 auto;display:flex;align-items:center;gap:16px;background:#E8590C;color:#fff;border-radius:20px;padding:16px 18px 16px 22px;box-shadow:0 10px 30px rgba(0,0,0,.3);animation:wnIn .35s ease-out}
 .weldnote .wn-t{flex:1;display:flex;flex-direction:column;gap:4px;font-size:21px;font-weight:800;line-height:1.25}
 .weldnote .wn-t b{font-size:15px;font-weight:900;letter-spacing:.06em;text-transform:uppercase;opacity:.85}
@@ -898,7 +899,7 @@ function wId(id){ return id + '.w'; }
 var el = function(id){ return document.getElementById(id); };
 function esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 // a short notice at the bottom of the screen
-var VERSION = '11.17.1512', toastT = null;
+var VERSION = '11.17.1518', toastT = null;
 function toast(t){ var b = el('toast'); b.textContent = t; b.hidden = false; b.classList.remove('out'); clearTimeout(toastT); toastT = setTimeout(function(){ b.classList.add('out'); setTimeout(function(){ b.hidden = true; }, 400); }, 3200); }
 function msg(t, ok){ var m = el('msg'); m.hidden = !t; m.className = 'msg ' + (ok ? 'ok' : 'err'); m.textContent = t || ''; }
 function lsGet(k){ try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
@@ -2586,8 +2587,10 @@ var NOTE_K = 'weld-notice', noteMsgs = [], audioCtx = null;
 function noteName(f){ return String(f.name || '').replace(/\.(xls[xm]|pdf)$/i, ''); }
 function weldNotices(pri, ready){
   if (!WELD || !listFresh) return;
-  var st = lsGet(NOTE_K), first = !st, now = Date.now(), msgs = [];
-  st = st || { ready: {}, rm: {}, prio: null };
+  var st = lsGet(NOTE_K), now = Date.now(), msgs = [];
+  st = st || { ready: {}, rm: {}, prio: null, since: now };
+  // the first half-minute on a new tablet is quiet: the jobs' progress is still coming in, so everything would look new
+  var first = !st.since || now - st.since < 30000;
   ready.forEach(function(x){ var id = x.f.id; if (!st.ready[id]){ if (!first) msgs.push({ k: 'ready', t: (x.f.remake ? 'Remake ready to weld: ' : 'New job ready to weld: ') + noteName(x.f) }); st.ready[id] = now; } });
   gates.forEach(function(g){ if (!st.ready[g.id]){ if (!first) msgs.push({ k: 'ready', t: 'New gate drawing ready to weld: ' + noteName(g) }); st.ready[g.id] = now; } });
   rmCur.forEach(function(rm){ var id = 'rm' + rm.id; if (!st.rm[id]){ if (!first) msgs.push({ k: 'rm', t: 'Remake coming up: ' + noteName(rmF(rm, 0)) }); st.rm[id] = now; } });
