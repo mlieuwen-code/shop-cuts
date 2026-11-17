@@ -78,6 +78,12 @@ td.chk.on .box{background:var(--doneink);border-color:var(--doneink);color:#fff}
 /* every second line yellowish so rows are easy to follow; data lines get room for gloved fingers */
 table.sheet tr.data td{height:76px;font-size:26px;font-weight:800;letter-spacing:.2px}
 table.sheet.fence td.wrapcell{min-width:0;max-width:150px}
+/* fence cut sheet: tighter so a Step column still fits a laptop */
+table.sheet.fence td{padding:6px 5px}
+table.sheet.fence td.chk{width:50px;min-width:50px;padding:7px 3px}
+table.sheet.fence td.chk .box{width:40px;height:40px;border-radius:11px;font-size:25px}
+table.sheet.fence tr.hdr td{font-size:13px;white-space:normal;line-height:1.2}
+table.sheet.fence tr.hdr td.wrapcell{max-width:96px}
 table.sheet.finfo{margin-bottom:6px}
 table.sheet.finfo td{font-size:16px;padding:6px 10px}
 table.sheet tr.info td{font-size:15px;padding:4px 8px;font-weight:700}

@@ -87,6 +87,12 @@ td.chk.on .box{background:var(--doneink);border-color:var(--doneink);color:#fff}
 /* every second line yellowish so rows are easy to follow; data lines get room for gloved fingers */
 table.sheet tr.data td{height:76px;font-size:26px;font-weight:800;letter-spacing:.2px}
 table.sheet.fence td.wrapcell{min-width:0;max-width:150px}
+/* fence cut sheet: tighter so a Step column still fits a laptop */
+table.sheet.fence td{padding:6px 5px}
+table.sheet.fence td.chk{width:50px;min-width:50px;padding:7px 3px}
+table.sheet.fence td.chk .box{width:40px;height:40px;border-radius:11px;font-size:25px}
+table.sheet.fence tr.hdr td{font-size:13px;white-space:normal;line-height:1.2}
+table.sheet.fence tr.hdr td.wrapcell{max-width:96px}
 table.sheet.finfo{margin-bottom:6px}
 table.sheet.finfo td{font-size:16px;padding:6px 10px}
 table.sheet tr.info td{font-size:15px;padding:4px 8px;font-weight:700}
@@ -761,7 +767,7 @@ function wId(id){ return id + '.w'; }
 var el = function(id){ return document.getElementById(id); };
 function esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 // a short notice at the bottom of the screen
-var VERSION = '11.17.325', toastT = null;
+var VERSION = '11.17.328', toastT = null;
 function toast(t){ var b = el('toast'); b.textContent = t; b.hidden = false; b.classList.remove('out'); clearTimeout(toastT); toastT = setTimeout(function(){ b.classList.add('out'); setTimeout(function(){ b.hidden = true; }, 400); }, 3200); }
 function msg(t, ok){ var m = el('msg'); m.hidden = !t; m.className = 'msg ' + (ok ? 'ok' : 'err'); m.textContent = t || ''; }
 function lsGet(k){ try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
@@ -1769,6 +1775,7 @@ function renderSheet(book, item, done){
       var cell = sd.cells[k], t = sh.name === 'POST SHEET' ? topWords(show(book, cell)) : show(book, cell), sp = span[k], xf = cell && book.st.xfs[cell.s], f = xf && book.st.fonts[xf.font];
       // top mount: a centred plate's method reads WELD-ON Centered (the cut sheet says just "WELD-ON plate" for Mid-Cen)
       if (sh.name === 'POST SHEET' && /^cj$/i.test(t.trim())) t = 'Joints';
+      if (L.fence && r === L.hdr) t = t.replace(/^1st space \(cut end to hole edge\)$/i, '1st space (to hole edge)');
       if (L.fence && r > L.hdr && /^step$/i.test(L.txt(L.hdr, c))) t = t.replace(/\bLow\b/, 'Down').replace(/\bHigh\b/, 'Up');   // fence steps read Up / Down   // the template's bracket code CJ reads as Joints on the tablet
       if (sh.name === 'POST SHEET' && /^MIDS$/.test(t.trim())) t = 'Mids';     // and MIDS (in capitals in the template) reads as Mids
       if (sh.name === 'POST SHEET' && isTop() && /^weld-on plate$/i.test(t.trim()) && /^(Mid|EC|IC|Joint|E)-Cen(-[LR])?$/i.test(L.txt(r, L.cols[0]).trim())) t = 'WELD-ON Centered';
