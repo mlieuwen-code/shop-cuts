@@ -761,7 +761,7 @@ function wId(id){ return id + '.w'; }
 var el = function(id){ return document.getElementById(id); };
 function esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 // a short notice at the bottom of the screen
-var VERSION = '11.17.123', toastT = null;
+var VERSION = '11.17.253', toastT = null;
 function toast(t){ var b = el('toast'); b.textContent = t; b.hidden = false; b.classList.remove('out'); clearTimeout(toastT); toastT = setTimeout(function(){ b.classList.add('out'); setTimeout(function(){ b.hidden = true; }, 400); }, 3200); }
 function msg(t, ok){ var m = el('msg'); m.hidden = !t; m.className = 'msg ' + (ok ? 'ok' : 'err'); m.textContent = t || ''; }
 function lsGet(k){ try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
@@ -1160,9 +1160,9 @@ function shopSheets(book){
 // The fence Post Sheet lists every opening's left and right post, so a post shared by two openings looks like it's cut twice.
 // The tablet rebuilds it like the railing Post Sheet from the sheet's hidden one-row-per-post list (is post / type / cut / top blk / bot blk):
 // the job info with post height and block marks standing out, then 1 · Post cutting and 2 · Blocking, totals by post type.
-var FENCE_TYPES = { end: 'Ends', mid: 'Mids', cor: 'Corners', corner: 'Corners' };
-function fenceType(t){ var k = String(t).trim().toLowerCase(); return FENCE_TYPES[k] || (k ? t.charAt(0).toUpperCase() + t.slice(1) + 's' : 'Posts'); }
-function fenceRank(t){ var i = ['end', 'mid', 'cor', 'corner'].indexOf(String(t).trim().toLowerCase()); return i < 0 ? 9 : Math.min(i, 2); }
+var FENCE_TYPES = { end: 'Ends', mid: 'Mids', cor: 'Corners', corner: 'Corners', incor: 'InCors' };
+function fenceType(t){ var k = String(t).trim().toLowerCase(); return FENCE_TYPES[k] || (k ? String(t).trim() : 'Posts'); }
+function fenceRank(t){ var k = String(t).trim().toLowerCase(), i = ['end', 'mid', 'cor', 'incor'].indexOf(k); return i >= 0 ? Math.min(i, 2) : /^tran/.test(k) ? 3 : /^float/.test(k) ? 4 : 9; }
 function fenceLabel(sd, re){
   for (var r = 1; r <= 12; r++) for (var c = 1; c <= 12; c++){
     if (!re.test(String(cellVal(sd, r, c) == null ? '' : cellVal(sd, r, c)).trim())) continue;
@@ -1180,14 +1180,18 @@ function fencePosts(book, item){
   var posts = [];
   for (var r = H + 1; r <= (sd.maxR || 0); r++){
     if (+v(r, col['is post']) !== 1) continue;
-    posts.push({ type: String(v(r, col.type)).trim(), cut: +v(r, col.cut) || 0, top: v(r, col['top blk']), bot: v(r, col['bot blk']), other: String(v(r, col['other side'])).trim() });
+    // a step post (Tran): standard blocks on the high side, the step added on the low side (helper columns low side / low top / low bot)
+    var ls = String(v(r, col['low side'])).trim();
+    posts.push({ type: String(v(r, col.type)).trim(), cut: +v(r, col.cut) || 0, top: v(r, col['top blk']), bot: v(r, col['bot blk']), other: ls ? '' : String(v(r, col['other side'])).trim(),
+      ls: ls, lt: ls ? v(r, col['low top']) : '', lb: ls ? v(r, col['low bot']) : '' });
   }
   if (!posts.length) return null;
   var len = function(x){ return x === '' || x == null ? '' : typeof x === 'number' ? fmt16(x) : String(x); };
   var group = function(keyf){ var out = []; posts.forEach(function(p){ var k = keyf(p), g = out.filter(function(x){ return x.k === k; })[0]; if (!g){ g = { k: k, p: p, n: 0 }; out.push(g); } g.n++; });
     return out.sort(function(a, b){ return fenceRank(a.p.type) - fenceRank(b.p.type) || (b.p.cut - a.p.cut); }); };
-  var cuts = group(function(p){ return p.type + '|' + p.cut; }), blks = group(function(p){ return p.type + '|' + p.top + '|' + p.bot + '|' + p.other; });
-  var hasOther = posts.some(function(p){ return p.other !== '' && p.other !== '0'; }), N = hasOther ? 6 : 5;
+  var cuts = group(function(p){ return p.type + '|' + p.cut; }), blks = group(function(p){ return p.type + '|' + p.top + '|' + p.bot + '|' + p.other + '|' + p.ls + '|' + p.lt + '|' + p.lb; });
+  var hasOther = posts.some(function(p){ return p.other !== '' && p.other !== '0'; }), hasLow = posts.some(function(p){ return p.ls; });
+  var N = 5 + (hasLow ? 3 : 0) + (hasOther ? 1 : 0);
   var fake = { cells: {}, hr: {}, hc: {}, w: {}, merges: [], maxR: 0, maxC: N }, R = 0, YEL = 'background:#FFF2CC;';
   var put = function(c, val, o){ fake.cells[R + ':' + c] = Object.assign({ v: val }, o || {}); };
   var same = function(f){ var a = posts.map(f).map(String); return a.every(function(x){ return x === a[0]; }) ? a[0] : null; };
@@ -1195,7 +1199,8 @@ function fencePosts(book, item){
   R++; put(1, 'POST SHEET', { b: 1 });
   [['Job', /^job:?$/i], ['Colour', /^colou?r:?$/i], ['Mount', /^mount:?$/i], ['Post', /^post wall:?$/i]].forEach(function(a){ var x = fenceLabel(sd, a[1]); if (String(x).trim() !== '') info(a[0], x); });
   var ph = same(function(p){ return p.cut; });
-  info('Post height', ph != null ? len(+ph) : 'see Post cutting');
+  var stdH = fenceLabel(sd, /^std post ht:?$/i);
+  info('Post height', ph != null ? len(+ph) : stdH !== '' ? len(+stdH) + (posts.some(function(p){ return /^tran/i.test(p.type); }) ? ' · step posts taller' : '') : 'see Post cutting');
   var tb = same(function(p){ return p.top; }), bb = same(function(p){ return p.bot; });
   info('Top channel block', tb != null ? len(posts[0].top) : 'see Blocking', 'hilab');
   info('Bottom channel block', bb != null ? len(posts[0].bot) : 'see Blocking', 'hilab');
@@ -1206,8 +1211,11 @@ function fencePosts(book, item){
   cuts.forEach(function(g, i){ R++; var z = i % 2 ? YEL : ''; put(1, fenceType(g.p.type), { c: 1, b: 1, css: z }); put(2, String(g.n), { c: 1, b: 1, css: z }); put(3, '', { css: z }); put(4, len(g.p.cut), { c: 1, b: 1, css: z }); });
   R++;
   R++; put(1, '2 · Blocking');
-  R++; ['Category', 'Qty', '✓', 'Top channel', 'Bottom channel'].concat(hasOther ? ['Other side'] : []).forEach(function(t, i){ put(i + 1, t, { c: 1 }); });
-  blks.forEach(function(g, i){ R++; var z = i % 2 ? YEL : ''; put(1, fenceType(g.p.type), { c: 1, b: 1, css: z }); put(2, String(g.n), { c: 1, b: 1, css: z }); put(3, '', { css: z }); put(4, len(g.p.top), { c: 1, b: 1, css: z }); put(5, len(g.p.bot), { c: 1, b: 1, css: z }); if (hasOther) put(6, len(g.p.other), { c: 1, b: 1, css: z }); });
+  R++; ['Category', 'Qty', '✓', hasLow ? 'Top channel (high side)' : 'Top channel', hasLow ? 'Bottom channel (high side)' : 'Bottom channel'].concat(hasLow ? ['Low side', 'Top channel (low)', 'Bottom channel (low)'] : []).concat(hasOther ? ['Other side'] : []).forEach(function(t, i){ put(i + 1, t, { c: 1 }); });
+  blks.forEach(function(g, i){ R++; var z = i % 2 ? YEL : '', c = 6, lo = g.p.ls ? ' hival' : '';
+    put(1, fenceType(g.p.type), { c: 1, b: 1, css: z }); put(2, String(g.n), { c: 1, b: 1, css: z }); put(3, '', { css: z }); put(4, len(g.p.top), { c: 1, b: 1, css: z }); put(5, len(g.p.bot), { c: 1, b: 1, css: z });
+    if (hasLow){ put(c++, g.p.ls || '', { c: 1, b: 1, css: z }); put(c++, len(g.p.lt), { c: 1, b: 1, css: z, cls: lo.trim() }); put(c++, len(g.p.lb), { c: 1, b: 1, css: z, cls: lo.trim() }); }
+    if (hasOther) put(c, len(g.p.other), { c: 1, b: 1, css: z }); });
   fake.maxR = R;
   return fake;
 }
