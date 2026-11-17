@@ -77,6 +77,9 @@ table.sheet td.chk{width:66px;min-width:66px;text-align:center;padding:10px 6px;
 td.chk.on .box{background:var(--doneink);border-color:var(--doneink);color:#fff}
 /* every second line yellowish so rows are easy to follow; data lines get room for gloved fingers */
 table.sheet tr.data td{height:76px;font-size:26px;font-weight:800;letter-spacing:.2px}
+table.sheet.fence td.wrapcell{min-width:0;max-width:150px}
+table.sheet.finfo{margin-bottom:6px}
+table.sheet.finfo td{font-size:16px;padding:6px 10px}
 table.sheet tr.info td{font-size:15px;padding:4px 8px;font-weight:700}
 table.sheet tr.hdr td{font-size:16px;position:sticky;top:calc(var(--toph,160px) / var(--z,1));transition:top .22s ease;z-index:2;background:#E7DFCF!important;box-shadow:0 2px 0 #D5CBB8}
 .fr{display:inline-flex;flex-direction:column;align-items:center;vertical-align:middle;line-height:.9;margin-left:3px;font-size:.62em;font-weight:900}

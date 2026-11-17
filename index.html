@@ -86,6 +86,9 @@ table.sheet td.chk{width:66px;min-width:66px;text-align:center;padding:10px 6px;
 td.chk.on .box{background:var(--doneink);border-color:var(--doneink);color:#fff}
 /* every second line yellowish so rows are easy to follow; data lines get room for gloved fingers */
 table.sheet tr.data td{height:76px;font-size:26px;font-weight:800;letter-spacing:.2px}
+table.sheet.fence td.wrapcell{min-width:0;max-width:150px}
+table.sheet.finfo{margin-bottom:6px}
+table.sheet.finfo td{font-size:16px;padding:6px 10px}
 table.sheet tr.info td{font-size:15px;padding:4px 8px;font-weight:700}
 table.sheet tr.hdr td{font-size:16px;position:sticky;top:calc(var(--toph,160px) / var(--z,1));transition:top .22s ease;z-index:2;background:#E7DFCF!important;box-shadow:0 2px 0 #D5CBB8}
 .fr{display:inline-flex;flex-direction:column;align-items:center;vertical-align:middle;line-height:.9;margin-left:3px;font-size:.62em;font-weight:900}
@@ -758,7 +761,7 @@ function wId(id){ return id + '.w'; }
 var el = function(id){ return document.getElementById(id); };
 function esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 // a short notice at the bottom of the screen
-var VERSION = '11.17.1212', toastT = null;
+var VERSION = '11.17.111', toastT = null;
 function toast(t){ var b = el('toast'); b.textContent = t; b.hidden = false; b.classList.remove('out'); clearTimeout(toastT); toastT = setTimeout(function(){ b.classList.add('out'); setTimeout(function(){ b.hidden = true; }, 400); }, 3200); }
 function msg(t, ok){ var m = el('msg'); m.hidden = !t; m.className = 'msg ' + (ok ? 'ok' : 'err'); m.textContent = t || ''; }
 function lsGet(k){ try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
@@ -1145,12 +1148,105 @@ function shopSheets(book){
     var sh = book.sheets.filter(function(s){ return s.name === d.n; })[0]; if (!sh) return null;
     return parseSheet(book, sh).then(function(sd){ if (d.always || (d.has && d.has(sd)) || (sh.state === 'visible' && !(d.has === screenUnits))) return { sh: sh, sd: sd, label: d.label, view: d.view }; return null; });
   })).then(function(a){
-    list = a.filter(Boolean);
+    list = a.filter(Boolean).map(function(it){ var fp = it.sh.name === 'POST SHEET' ? fencePosts(book, it) : null; return fp ? Object.assign({}, it, { sd: fp, sh: Object.assign({}, it.sh, { pa: '' }), fence: 1 }) : it; });
     var sp = screenPosts(list); if (sp) list.push(sp);
     // any other tab that's been un-hidden for this job and has a print area
     var extra = book.sheets.filter(function(s){ return s.state === 'visible' && s.pa && !SKIP.test(s.name) && !SHOP.some(function(d){ return d.n === s.name; }); });
     return Promise.all(extra.map(function(sh){ return parseSheet(book, sh).then(function(sd){ return { sh: sh, sd: sd, label: sh.name.charAt(0) + sh.name.slice(1).toLowerCase() }; }); })).then(function(b){ return list.concat(b); });
   });
+}
+
+// ---------- fence jobs (CUT SHEET — OPEN TOP FENCE) ----------
+// The fence Post Sheet lists every opening's left and right post, so a post shared by two openings looks like it's cut twice.
+// The tablet rebuilds it like the railing Post Sheet from the sheet's hidden one-row-per-post list (is post / type / cut / top blk / bot blk):
+// the job info with post height and block marks standing out, then 1 · Post cutting and 2 · Blocking, totals by post type.
+var FENCE_TYPES = { end: 'Ends', mid: 'Mids', cor: 'Corners', corner: 'Corners' };
+function fenceType(t){ var k = String(t).trim().toLowerCase(); return FENCE_TYPES[k] || (k ? t.charAt(0).toUpperCase() + t.slice(1) + 's' : 'Posts'); }
+function fenceRank(t){ var i = ['end', 'mid', 'cor', 'corner'].indexOf(String(t).trim().toLowerCase()); return i < 0 ? 9 : Math.min(i, 2); }
+function fenceLabel(sd, re){
+  for (var r = 1; r <= 12; r++) for (var c = 1; c <= 12; c++){
+    if (!re.test(String(cellVal(sd, r, c) == null ? '' : cellVal(sd, r, c)).trim())) continue;
+    for (var c2 = c + 1; c2 <= c + 6; c2++){ var x = cellVal(sd, r, c2); if (x != null && String(x).trim() !== '') return x; }
+    return '';
+  }
+  return '';
+}
+function fencePosts(book, item){
+  var sd = item.sd, v = function(r, c){ var x = c == null ? null : cellVal(sd, r, c); return x == null ? '' : x; }, H = null, col = {}, mc = Math.max(sd.maxC || 0, 34);
+  for (var r = 1; r <= 20 && H == null; r++) for (var c = 1; c <= mc; c++) if (/^is post$/i.test(String(v(r, c)).trim())){ H = r; break; }
+  if (H == null) return null;
+  for (var c = 1; c <= mc; c++){ var hh = String(v(H, c)).trim().toLowerCase(); if (hh && col[hh] == null) col[hh] = c; }
+  if (col.type == null || col.cut == null) return null;
+  var posts = [];
+  for (var r = H + 1; r <= (sd.maxR || 0); r++){
+    if (+v(r, col['is post']) !== 1) continue;
+    posts.push({ type: String(v(r, col.type)).trim(), cut: +v(r, col.cut) || 0, top: v(r, col['top blk']), bot: v(r, col['bot blk']), other: String(v(r, col['other side'])).trim() });
+  }
+  if (!posts.length) return null;
+  var len = function(x){ return x === '' || x == null ? '' : typeof x === 'number' ? fmt16(x) : String(x); };
+  var group = function(keyf){ var out = []; posts.forEach(function(p){ var k = keyf(p), g = out.filter(function(x){ return x.k === k; })[0]; if (!g){ g = { k: k, p: p, n: 0 }; out.push(g); } g.n++; });
+    return out.sort(function(a, b){ return fenceRank(a.p.type) - fenceRank(b.p.type) || (b.p.cut - a.p.cut); }); };
+  var cuts = group(function(p){ return p.type + '|' + p.cut; }), blks = group(function(p){ return p.type + '|' + p.top + '|' + p.bot + '|' + p.other; });
+  var hasOther = posts.some(function(p){ return p.other !== '' && p.other !== '0'; }), N = hasOther ? 6 : 5;
+  var fake = { cells: {}, hr: {}, hc: {}, w: {}, merges: [], maxR: 0, maxC: N }, R = 0, YEL = 'background:#FFF2CC;';
+  var put = function(c, val, o){ fake.cells[R + ':' + c] = Object.assign({ v: val }, o || {}); };
+  var same = function(f){ var a = posts.map(f).map(String); return a.every(function(x){ return x === a[0]; }) ? a[0] : null; };
+  var info = function(lab, val, cls){ R++; var z = R % 2 ? '' : YEL; put(1, lab, { c: 1, css: z, cls: cls }); put(2, String(val), { c: 1, b: 1, css: z, cls: cls ? cls.replace('hilab', 'hival') : '' }); fake.merges.push({ r1: R, r2: R, c1: 2, c2: N }); };
+  R++; put(1, 'POST SHEET', { b: 1 });
+  [['Job', /^job:?$/i], ['Colour', /^colou?r:?$/i], ['Mount', /^mount:?$/i], ['Post', /^post wall:?$/i]].forEach(function(a){ var x = fenceLabel(sd, a[1]); if (String(x).trim() !== '') info(a[0], x); });
+  var ph = same(function(p){ return p.cut; });
+  info('Post height', ph != null ? len(+ph) : 'see Post cutting');
+  var tb = same(function(p){ return p.top; }), bb = same(function(p){ return p.bot; });
+  info('Top channel block', tb != null ? len(posts[0].top) : 'see Blocking', 'hilab');
+  info('Bottom channel block', bb != null ? len(posts[0].bot) : 'see Blocking', 'hilab');
+  info('Posts', posts.length);
+  R++;
+  R++; put(1, '1 · Post cutting');
+  R++; ['Category', 'Qty', '✓', 'Cut length'].forEach(function(t, i){ put(i + 1, t, { c: 1 }); });
+  cuts.forEach(function(g, i){ R++; var z = i % 2 ? YEL : ''; put(1, fenceType(g.p.type), { c: 1, b: 1, css: z }); put(2, String(g.n), { c: 1, b: 1, css: z }); put(3, '', { css: z }); put(4, len(g.p.cut), { c: 1, b: 1, css: z }); });
+  R++;
+  R++; put(1, '2 · Blocking');
+  R++; ['Category', 'Qty', '✓', 'Top channel', 'Bottom channel'].concat(hasOther ? ['Other side'] : []).forEach(function(t, i){ put(i + 1, t, { c: 1 }); });
+  blks.forEach(function(g, i){ R++; var z = i % 2 ? YEL : ''; put(1, fenceType(g.p.type), { c: 1, b: 1, css: z }); put(2, String(g.n), { c: 1, b: 1, css: z }); put(3, '', { css: z }); put(4, len(g.p.top), { c: 1, b: 1, css: z }); put(5, len(g.p.bot), { c: 1, b: 1, css: z }); if (hasOther) put(6, len(g.p.other), { c: 1, b: 1, css: z }); });
+  fake.maxR = R;
+  return fake;
+}
+// fence Cut Sheet: tick boxes like the railing (✓ per unit for assembly, and after each channel for cutting),
+// the job info as a clean block above, blank rows and the post block columns (they're on the Posts tab) left out
+function isFenceCut(sh, sd){ return sh.name === 'CUT SHEET' && /fence/i.test(String(cellVal(sd, 1, 1) || '')); }
+function fenceify(L, sd){
+  var hdr = L.rows.filter(function(r){ return /^unit$/i.test(L.txt(r, L.cols[0])); })[0]; if (hdr == null) return;
+  L.hdr = hdr; L.fence = 1; L.rowTap = {}; L.chk = {}; L.div = {}; L.vchk = {}; L.vhead = {};
+  L.rows = L.rows.filter(function(r){ return r <= hdr || L.cols.some(function(c){ return L.txt(r, c) !== ''; }); });
+  L.cols = L.cols.filter(function(c, i){ return !i || (!/^post top to/i.test(L.txt(hdr, c)) && L.rows.some(function(r){ return r > hdr && !/^total/i.test(L.txt(r, L.cols[0])) && L.txt(r, c) !== ''; })); });
+  var units = L.rows.filter(function(r){ var x = L.txt(r, L.cols[0]); return r > hdr && x !== '' && !isNaN(+x); });
+  // post heights: only worth a column when some post isn't the standard height (they're all on the Posts tab)
+  var std = String(fenceLabel(sd, /^std post ht:?$/i)).trim();
+  L.cols = L.cols.filter(function(c){ return !/^[lr] post ht$/i.test(L.txt(hdr, c)) || units.some(function(r){ var x = L.txt(r, c); return x !== '' && x !== std; }); });
+  var colOf = function(re){ return L.cols.filter(function(c){ return re.test(L.txt(hdr, c)); })[0]; };
+  var box = function(valC, head){ if (valC == null) return; var v = valC + 0.5; L.cols.splice(L.cols.indexOf(valC) + 1, 0, v); L.vchk[v] = 1; units.forEach(function(r){ if (L.txt(r, valC) !== '') L.chk[r + ':' + v] = { left: valC, head: head }; }); };
+  var lp = colOf(/^left post$/i);
+  box(L.cols[0], 'Rail tag'); box(colOf(/^top (channel|rail)$/i), 'Top channel'); box(colOf(/^bottom channel$/i), 'Bottom channel');
+  if (lp != null) L.div[lp] = 1;
+}
+function fenceHead(book, item){
+  var sd = item.sd, L = item.L, got = [];
+  for (var r = 1; r < L.hdr; r++){
+    var lab = null, lc = 0;
+    for (var c = 1; c <= 14; c++){
+      if (sd.hc[c]) continue;
+      var t = show(book, sd.cells[r + ':' + c]).trim(); if (!t) continue;
+      if (/:$/.test(t)){ lab = t.replace(/:$/, '').trim(); lc = c; continue; }
+      if (lab){ got.push({ c: lc, r: r, lab: lab, val: t }); lab = null; }
+    }
+  }
+  got.sort(function(a, b){ return a.c - b.c || a.r - b.r; });
+  var h = '<table class="sheet finfo"><tr><td colspan="4" class="b">' + esc(show(book, sd.cells['1:1']).trim() || 'CUT SHEET') + '</td></tr>';
+  for (var i = 0; i < got.length; i += 2){
+    var z = (i / 2) % 2 ? '' : ' style="background:#FFF2CC"', p = got[i], q = got[i + 1];
+    h += '<tr class="info"' + z + '><td class="c">' + esc(p.lab) + '</td><td class="c b">' + esc(p.val) + '</td>' + (q ? '<td class="c">' + esc(q.lab) + '</td><td class="c b">' + esc(q.val) + '</td>' : '<td></td><td></td>') + '</tr>';
+  }
+  return h + '</table>';
 }
 
 // ---------- render a sheet like the printout, with tick boxes ----------
@@ -1193,6 +1289,7 @@ function layout(book, item){
   if (hdr == null){ var firstTap = rows.filter(function(r){ return rowTap[r]; })[0]; if (firstTap != null){ var i = rows.indexOf(firstTap); for (var q = i - 1; q >= 0; q--) if (cols.filter(function(c){ return txt(rows[q], c) !== ''; }).length >= 2){ hdr = rows[q]; break; } } }
   var L = { a: a, rows: rows, cols: cols, chk: chk, rowTap: rowTap, txt: txt, hdr: hdr };
   if (SCREEN_RE.test(sh.name) && hdr != null) screenify(L, sd);
+  if (isFenceCut(sh, sd)) fenceify(L, sd);
   return L;
 }
 // privacy screen sheets: posts are cut from the Posts tab, so they're left off here. Each screen needs a bottom channel
@@ -1544,7 +1641,7 @@ function renderSheet(book, item, done){
   });
   var scr = SCREEN_RE.test(sh.name) && L.hdr != null;
   var rmk = cur && cur.f.remake && sh.name === 'CUT SHEET' ? cur.f.remake : null;
-  var h = (rmk ? '<div class="rmbanner"><b>↻ Remake · ' + esc(rmk.tags.join(', ')) + '</b>' + (rmk.note ? '<span>' + esc(rmk.note) + '</span>' : '') + '</div>' : '') + (scr ? screenHead(item) : '') + (WELD && isTop() && /^(CUT SHEET|POST SHEET)$/.test(sh.name) ? '<div class="bpnote"><b>Top mount · weld-on base plates</b><span class="bpkey"><i>Cen</i> centred on the plate · <i>Off</i> offset: post at the outer end, plate reaches in under the rail · <i>Rev</i> reverse offset: plate sticks out past the end · <i>L / R</i> left / right end of the rail · <i>EC</i> corner turns right with the run, <i>IC</i> turns left · 4x4 plates for 2x2 posts</span>' + (sh.name === 'POST SHEET' ? 'Post lengths are in section 1. The plates to weld, and how many of each, are under Base plates. The Cuts tab shows which plate goes on each rail end.' : 'The L Post and R Post columns show which base plate goes on each end of the rail. The Posts tab has the post lengths and the plate totals.') + '</div>' : '') + '<table class="sheet">';
+  var h = (rmk ? '<div class="rmbanner"><b>↻ Remake · ' + esc(rmk.tags.join(', ')) + '</b>' + (rmk.note ? '<span>' + esc(rmk.note) + '</span>' : '') + '</div>' : '') + (scr ? screenHead(item) : '') + (L.fence ? fenceHead(book, item) : '') + (WELD && isTop() && /^(CUT SHEET|POST SHEET)$/.test(sh.name) ? '<div class="bpnote"><b>Top mount · weld-on base plates</b><span class="bpkey"><i>Cen</i> centred on the plate · <i>Off</i> offset: post at the outer end, plate reaches in under the rail · <i>Rev</i> reverse offset: plate sticks out past the end · <i>L / R</i> left / right end of the rail · <i>EC</i> corner turns right with the run, <i>IC</i> turns left · 4x4 plates for 2x2 posts</span>' + (sh.name === 'POST SHEET' ? 'Post lengths are in section 1. The plates to weld, and how many of each, are under Base plates. The Cuts tab shows which plate goes on each rail end.' : 'The L Post and R Post columns show which base plate goes on each end of the rail. The Posts tab has the post lengths and the plate totals.') + '</div>' : '') + '<table class="sheet' + (L.fence ? ' fence' : '') + '">';
   var isCut = sh.name === 'CUT SHEET' && cur && Object.keys(cur.units || {}).length, lastUnit = null;
   var hiSheet = /^(COVER|POST SHEET)$/.test(sh.name);
   // Cut Sheet: a black line between the float lengths (Left / Right) and the posts (L Post …), so the two groups read apart
@@ -1594,7 +1691,7 @@ function renderSheet(book, item, done){
     }
   }
   order.forEach(function(r){
-    if (scr && r < L.hdr) return;   // privacy screens: the top block is shown as the summary above the table
+    if ((scr || L.fence) && r < L.hdr) return;   // privacy screens: the top block is shown as the summary above the table
     if (isCut && !sorted && L.hdr != null && r > L.hdr){
       var tg = L.txt(r, L.cols[0]), un = /^\S+\.\d+$/.test(tg) ? unitOf(tg) : null;
       if (un && un !== lastUnit){ h += layoutRow(un, NC); lastUnit = un; }
@@ -1641,10 +1738,11 @@ function renderSheet(book, item, done){
       if (c === L.cols[0] && L.hdr != null && r > L.hdr && floatTag[t.trim()]) cls.push('floatrail');
       if (((bpC[c] && r > L.hdr) || (r > bpFrom && r < bpTo && c === L.cols[0] && !L.cols.some(function(cc){ return L.txt(r, cc) === '✓'; }))) && bpDesc(t)) cls.push('bp');
       if (f && f.b) cls.push('b');
+      if (cell && cell.b) cls.push('b'); if (cell && cell.c) cls.push('c'); if (cell && cell.cls) cls.push(cell.cls);
       if (cell && typeof cell.v === 'number') cls.push('num');
       if (xf && xf.h === 'center') cls.push('c');
       if ((xf && xf.wrap) || t.length > 22) cls.push('wrapcell');
-      var style = (cell ? fillCss(book, cell.s) : '') + (f && f.rgb && /^FF[0-9A-F]{6}$/i.test(f.rgb) && f.rgb.slice(2).toUpperCase() !== '000000' ? 'color:#' + f.rgb.slice(2) + ';' : '');
+      var style = (cell ? (cell.css || '') + (L.fence && r > L.hdr ? '' : fillCss(book, cell.s)) : '') + (f && f.rgb && /^FF[0-9A-F]{6}$/i.test(f.rgb) && f.rgb.slice(2).toUpperCase() !== '000000' ? 'color:#' + f.rgb.slice(2) + ';' : '');
       var bd = cls.indexOf('bp') >= 0 ? bpDesc(t) : '';
       h += '<td' + (cls.length ? ' class="' + cls.join(' ') + '"' : '') + (style ? ' style="' + style + '"' : '') + attr + '>' + (bd ? '<span class="bpw">' + bpIcon(t, bpC[c] || '') + '<span>' + (big ? measure(t) : esc(t)) + '<small class="bpd">' + esc(bd) + '</small></span></span>' : (big ? measure(t) : esc(t))) + '</td>';
     });
