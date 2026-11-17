@@ -359,6 +359,7 @@ table.bplist td.chk.ro{width:56px}
 .gfin .gsign .box{width:30px;height:30px;border-radius:8px;border:3px solid currentColor;background:transparent}
 .gdone{display:flex;align-items:center;gap:14px;flex-wrap:wrap;justify-content:center}
 .gdone .btn{flex:0 0 auto;min-width:110px;margin:0}
+.newtag{display:inline-block;margin-left:8px;padding:1px 8px;border-radius:999px;background:#E8590C;color:#fff;font-size:13px;font-weight:900;vertical-align:middle;letter-spacing:.02em}
 </style>
 </head><body>
 
@@ -882,7 +883,7 @@ function wId(id){ return id + '.w'; }
 var el = function(id){ return document.getElementById(id); };
 function esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 // a short notice at the bottom of the screen
-var VERSION = '11.17.818', toastT = null;
+var VERSION = '11.17.1319', toastT = null;
 function toast(t){ var b = el('toast'); b.textContent = t; b.hidden = false; b.classList.remove('out'); clearTimeout(toastT); toastT = setTimeout(function(){ b.classList.add('out'); setTimeout(function(){ b.hidden = true; }, 400); }, 3200); }
 function msg(t, ok){ var m = el('msg'); m.hidden = !t; m.className = 'msg ' + (ok ? 'ok' : 'err'); m.textContent = t || ''; }
 function lsGet(k){ try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
@@ -1033,23 +1034,34 @@ function renderWeldList(box, have, done){
   });
   // Priority card first, the same jobs in the same order as on Dave's tablet (wherever they're at), then Ready to weld (longest waiting first), then the rest
   var isReady = function(x){ return !!(x.asm || x.ws.fin); };
-  var pri = info.filter(function(x){ return prioRank(x.f.id) < Infinity; }).sort(function(a, b){ return prioRank(a.f.id) - prioRank(b.f.id); });
-  var ready = info.filter(function(x){ return isReady(x) && prioRank(x.f.id) === Infinity; }).sort(function(a, b){ return (a.asm ? a.asm.at : 0) - (b.asm ? b.asm.at : 0); });
+  // Priority coming up: Dave's priority jobs that are still being cut or assembled, in his order, so Ian knows what's headed his way.
+  // Once assembled they move into Ready to weld, ahead of everything else, still in Dave's order.
+  var pri = info.filter(function(x){ return prioRank(x.f.id) < Infinity && !isReady(x); }).sort(function(a, b){ return prioRank(a.f.id) - prioRank(b.f.id); });
+  var ready = info.filter(function(x){ return isReady(x) && prioRank(x.f.id) < Infinity; }).sort(function(a, b){ return prioRank(a.f.id) - prioRank(b.f.id); })
+    .concat(info.filter(function(x){ return isReady(x) && prioRank(x.f.id) === Infinity; }).sort(function(a, b){ return (a.asm ? a.asm.at : 0) - (b.asm ? b.asm.at : 0); }));
   var shop = info.filter(function(x){ return !isReady(x) && prioRank(x.f.id) === Infinity; });
   shownW = pri.concat(ready, shop).map(function(x){ return x.f; });
+  // a priority job is marked New on this tablet for a day after it first shows up (not on the very first load, when everything would be new)
+  var seen = lsGet('weld-pri-seen'), first = !seen, now = Date.now(), seenCh = first;
+  seen = seen || {};
+  info.forEach(function(x){ if (prioRank(x.f.id) < Infinity && !seen[x.f.id]){ seen[x.f.id] = first ? 1 : now; seenCh = true; } });
+  Object.keys(seen).forEach(function(id){ if (seen[id] > 1 && now - seen[id] > 30 * 864e5){ delete seen[id]; seenCh = true; } });
+  if (seenCh) lsSet('weld-pri-seen', seen);
+  var isNew = function(id){ return prioRank(id) < Infinity && seen[id] > 1 && now - seen[id] < 864e5; };
   var card = function(x, i, isReady){
     var f = x.f, on = have.indexOf(f.id) >= 0, pr = prioRank(f.id), st, inf = lsGet('shop-info:' + f.id), tag = inf && inf.label ? inf.label : '';
     if (x.ws.fin) st = '<span class="fin-tag">✓ Welded · ' + esc(x.ws.fin.by) + ' · ' + day(x.ws.fin.at) + '</span>';
     else if (isReady) st = (x.ws.d ? '<span class="signoff">' + x.ws.d + ' of ' + x.ws.n + ' welded</span>' : WELD_BOXES ? 'Not started' : '<span class="signoff">Ready to weld</span>') + ' · assembled' + (x.asm.by ? ' by ' + esc(x.asm.by) : '') + ' ' + day(x.asm.at);
     else st = 'Still in the shop · ' + jobStatus(x.s.total ? x.s : null) + (x.ws.d ? ' · ' + x.ws.d + ' welded' : '');
     return '<button type="button" class="job' + (x.ws.fin ? ' done' : '') + (isReady ? '' : ' wait') + '" data-w="' + i + '">' + (x.ws.fin ? '<span class="ring donering" aria-hidden="true">✓</span>' : WELD_BOXES && (isReady || x.ws.d) ? ring(x.p) : isReady ? '<span class="ring wring" aria-hidden="true">' + SPARK + '</span>' : '<span class="ring waitring" aria-hidden="true">…</span>') +
-      '<span class="t"><b>' + (pr < Infinity ? '<span class="pri">#' + (pr + 1) + '</span>' : '') + esc(f.name.replace(/\.xls[xm]$/i, '')) + '</b><span class="s">' + st + (on ? ' · <span class="offline">✓ on tablet</span>' : '') + '</span></span>' +
+      '<span class="t"><b>' + (pr < Infinity ? '<span class="pri">#' + (pr + 1) + '</span>' : '') + esc(f.name.replace(/\.xls[xm]$/i, '')) + (isNew(f.id) ? '<span class="newtag">New</span>' : '') + '</b><span class="s">' + st + (on ? ' · <span class="offline">✓ on tablet</span>' : '') + '</span></span>' +
       (tag ? '<span class="cnt' + (/^\d/.test(tag) ? '' : ' warn') + '">' + (/^(\d+) (.+)$/.test(tag) ? '<b>' + tag.replace(/ .*/, '') + '</b>' + esc(tag.replace(/^\d+ /, '')) : esc(tag)) + '</span>' : '') +
       (isReady && !x.ws.fin ? '<span class="wdone" data-weld="' + i + '" role="button" aria-label="Mark ' + esc(f.name.replace(/\.xls[xm]$/i, '')) + ' welded"><span class="box"></span><small>Welded</small></span>' : '') + '</button>';
   };
-  box.innerHTML = (pri.length ? '<div class="prcard"><div class="prhead"><span class="prflame" aria-hidden="true">⚡</span>Priority<span>· same order as the shop tablets</span></div>' + pri.map(function(x, i){ return card(x, i, isReady(x)); }).join('') + '</div>' : '') +
-    (ready.length || gates.length ? '<div class="prcard rcard"><div class="prhead"><span class="prflame" aria-hidden="true">' + SPARK + '</span>Ready to weld<span>· longest waiting first</span></div>' + ready.map(function(x, i){ return card(x, pri.length + i, true); }).join('') + gateCards() + '</div>'
-      : (pri.some(isReady) ? '' : '<div class="empty">Nothing is waiting on welding right now.</div>')) +
+  var anyPriReady = ready.some(function(x){ return prioRank(x.f.id) < Infinity; });
+  box.innerHTML = (pri.length ? '<div class="prcard"><div class="prhead"><span class="prflame" aria-hidden="true">⚡</span>Priority coming up<span>· still in cutting or assembly, in the shop’s priority order</span></div>' + pri.map(function(x, i){ return card(x, i, false); }).join('') + '</div>' : '') +
+    (ready.length || gates.length ? '<div class="prcard rcard"><div class="prhead"><span class="prflame" aria-hidden="true">' + SPARK + '</span>Ready to weld<span>· ' + (anyPriReady ? 'priority first, then longest waiting' : 'longest waiting first') + '</span></div>' + ready.map(function(x, i){ return card(x, pri.length + i, true); }).join('') + gateCards() + '</div>'
+      : '<div class="empty">Nothing is waiting on welding right now.</div>') +
     (shop.length ? '<div class="prrest">Still in the shop · cutting and assembly</div>' + shop.map(function(x, i){ return card(x, pri.length + ready.length + i, false); }).join('') : '') + done;
 }
 // how many rails (or screens) a job has, for the job list
