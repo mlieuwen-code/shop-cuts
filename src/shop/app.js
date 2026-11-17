@@ -1026,7 +1026,8 @@ function renderSheet(book, item, done){
       if (secs[r] && c === L.cols[L.cols.length - 1]){ var sc = secs[r], sa = sc.keys.every(function(kk){ return done[kk]; }); var sp0 = span[k], at0 = sp0 ? (sp0.rs > 1 ? ' rowspan="' + sp0.rs + '"' : '') + (sp0.cs > 1 ? ' colspan="' + sp0.cs + '"' : '') : ''; h += '<td class="postsall"' + at0 + '><button type="button" class="pcut' + (sa ? ' on' : '') + '" data-act="secall" data-sec="' + r + '" aria-pressed="' + sa + '"><span class="box">✓</span>' + esc(topWords(sc.label)) + '</button></td>'; return; }
       var cell = sd.cells[k], t = sh.name === 'POST SHEET' ? topWords(show(book, cell)) : show(book, cell), sp = span[k], xf = cell && book.st.xfs[cell.s], f = xf && book.st.fonts[xf.font];
       // top mount: a centred plate's method reads WELD-ON Centered (the cut sheet says just "WELD-ON plate" for Mid-Cen)
-      if (sh.name === 'POST SHEET' && /^cj$/i.test(t.trim())) t = 'Joints';   // the template's bracket code CJ reads as Joints on the tablet
+      if (sh.name === 'POST SHEET' && /^cj$/i.test(t.trim())) t = 'Joints';
+      if (L.fence && r > L.hdr && /^step$/i.test(L.txt(L.hdr, c))) t = t.replace(/\bLow\b/, 'Down').replace(/\bHigh\b/, 'Up');   // fence steps read Up / Down   // the template's bracket code CJ reads as Joints on the tablet
       if (sh.name === 'POST SHEET' && /^MIDS$/.test(t.trim())) t = 'Mids';     // and MIDS (in capitals in the template) reads as Mids
       if (sh.name === 'POST SHEET' && isTop() && /^weld-on plate$/i.test(t.trim()) && /^(Mid|EC|IC|Joint|E)-Cen(-[LR])?$/i.test(L.txt(r, L.cols[0]).trim())) t = 'WELD-ON Centered';
       var attr = sp ? (sp.rs > 1 ? ' rowspan="' + sp.rs + '"' : '') + (sp.cs > 1 ? ' colspan="' + sp.cs + '"' : '') : '';
