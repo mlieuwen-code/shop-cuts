@@ -476,7 +476,7 @@ function fencePosts(book, item){
   var tb = same(function(p){ return p.top; }), bb = same(function(p){ return p.bot; });
   info('Top channel block', tb != null ? len(posts[0].top) : 'see Blocking', 'hilab');
   info('Bottom channel block', bb != null ? len(posts[0].bot) : 'see Blocking', 'hilab');
-  info('Posts', posts.length);
+  info('Posts', posts.length, 'hilab');   // the post count is in the highlighted block too, under the channel blocks
   R++;
   R++; put(1, '1 · Post cutting');
   R++; ['Category', 'Qty', '✓', 'Cut length'].forEach(function(t, i){ put(i + 1, t, { c: 1 }); });

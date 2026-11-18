@@ -767,7 +767,7 @@ function wId(id){ return id + '.w'; }
 var el = function(id){ return document.getElementById(id); };
 function esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 // a short notice at the bottom of the screen
-var VERSION = '11.18.724', toastT = null;
+var VERSION = '11.18.728', toastT = null;
 function toast(t){ var b = el('toast'); b.textContent = t; b.hidden = false; b.classList.remove('out'); clearTimeout(toastT); toastT = setTimeout(function(){ b.classList.add('out'); setTimeout(function(){ b.hidden = true; }, 400); }, 3200); }
 function msg(t, ok){ var m = el('msg'); m.hidden = !t; m.className = 'msg ' + (ok ? 'ok' : 'err'); m.textContent = t || ''; }
 function lsGet(k){ try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
@@ -1224,7 +1224,7 @@ function fencePosts(book, item){
   var tb = same(function(p){ return p.top; }), bb = same(function(p){ return p.bot; });
   info('Top channel block', tb != null ? len(posts[0].top) : 'see Blocking', 'hilab');
   info('Bottom channel block', bb != null ? len(posts[0].bot) : 'see Blocking', 'hilab');
-  info('Posts', posts.length);
+  info('Posts', posts.length, 'hilab');   // the post count is in the highlighted block too, under the channel blocks
   R++;
   R++; put(1, '1 · Post cutting');
   R++; ['Category', 'Qty', '✓', 'Cut length'].forEach(function(t, i){ put(i + 1, t, { c: 1 }); });
