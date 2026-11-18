@@ -507,9 +507,6 @@ function fenceify(L, sd){
   var box = function(valC, head){ if (valC == null) return; var v = valC + 0.5; L.cols.splice(L.cols.indexOf(valC) + 1, 0, v); L.vchk[v] = 1; units.forEach(function(r){ if (L.txt(r, valC) !== '') L.chk[r + ':' + v] = { left: valC, head: head }; }); };
   var lp = colOf(/^left post$/i);
   box(L.cols[0], 'Rail tag'); box(colOf(/^top (channel|rail)$/i), 'Top channel'); box(colOf(/^bottom channel$/i), 'Bottom channel');
-  // pickets cut: a box so Ian can see if they're done; optional (Ian sometimes cuts them as he welds), so it doesn't hold up Cutting / Assembly complete
-  var pk = colOf(/^picket (cut|length)$/i); if (pk == null) pk = colOf(/^pickets$/i);
-  if (pk != null){ box(pk, 'Pickets'); Object.keys(L.chk).forEach(function(k){ if (L.chk[k].head === 'Pickets') L.chk[k].opt = 1; }); }
   // black lines before Left post, Right post and R post ht
   [lp, colOf(/^right post$/i), colOf(/^r post ht$/i)].forEach(function(c){ if (c != null) L.div[c] = 1; });
 }
@@ -894,7 +891,16 @@ function sortBarHtml(){
   // one compact line: Unit Order · Top rail [Longest|Shortest] · Channel [Longest|Shortest] · Optimal Cut
   var seg = function(lab, a, b){ return '<span class="sseg"><span class="sgl">' + lab + '</span>' + sbtn(a) + sbtn(b) + '</span>'; };
   return '<div class="sortbar"><span class="slab">Sort</span>' + sbtn(['', 'Unit Order']) + seg('Top rail', ['long', 'Longest'], ['short', 'Shortest']) +
-    seg('Channel', ['clong', 'Longest'], ['cshort', 'Shortest']) + sbtn(['opt', 'Optimal Cut']) + '</div>';
+    seg('Channel', ['clong', 'Longest'], ['cshort', 'Shortest']) + sbtn(['opt', 'Optimal Cut']) + pkHtml() + '</div>';
+}
+// fence jobs: one job-wide "Pickets Cut" YES / NO beside the sort buttons, so Ian can see if the pickets are done.
+// It's synced like a tick but isn't needed for Cutting / Assembly complete (Ian sometimes cuts them as he welds).
+var PK_KEY = 'FENCE|pickets';
+function isFenceJob(){ var it = cur && cutItem(); return !!(it && it.L && it.L.fence); }
+function pkHtml(){
+  if (!isFenceJob()) return '';
+  var on = !!cur.done[PK_KEY], b = function(v, t){ var sel = (v === '1') === on; return '<button type="button" class="sbtn' + (sel ? ' on' + (v === '1' ? '' : ' pkno') : '') + '" data-pk="' + v + '" aria-pressed="' + sel + '">' + t + '</button>'; };
+  return '<span class="sseg pkseg"><span class="sgl">Pickets Cut</span>' + b('1', 'YES') + b('0', 'NO') + '</span>';
 }
 // Optimal Cut: packs top rails onto 25' (300") sticks with a 1/8" kerf per cut, filling each stick as full as it can
 // (exact best fill per stick, in 1/16ths), most-full sticks first. Returns [{ rows, used, off }] plus any piece too long for a stick.
@@ -1035,6 +1041,7 @@ function renderSheet(book, item, done){
     var big = !!(need.length || L.rowTap[r]);
     if (stickHead[r]) h += '<tr class="stickrow"><td colspan="' + NC + '">' + stickHead[r] + '</td></tr>';
     if (isCut && r === L.hdr && !WELD) h += '<tr class="sortrow"><td colspan="' + NC + '">' + sortBarHtml() + '</td></tr>';
+    if (isCut && r === L.hdr && WELD && L.fence) h += '<tr class="sortrow"><td colspan="' + NC + '"><div class="sortbar"><span class="sgl">Pickets Cut</span><b class="pkro' + (cur.done[PK_KEY] ? ' on' : '') + '">' + (cur.done[PK_KEY] ? 'YES' : 'NO') + '</b></div></td></tr>';
     h += '<tr' + (trc ? ' class="' + trc + '"' : '') + (L.rowTap[r] ? ' data-row="' + pre + 'r' + r + '"' : '') + '>';
     if (wcol) h += r === L.hdr ? '<td class="wh">Weld</td>' : wmap[r] ? '<td class="chk wchk' + (cur.w.done[wmap[r]] ? ' on' : '') + '" data-wkey="' + esc(wmap[r]) + '"><span class="box" role="checkbox" aria-checked="' + !!cur.w.done[wmap[r]] + '" aria-label="Welded">✓</span></td>' : '<td class="wpad"></td>';
     var hiNext = null;
@@ -1285,6 +1292,8 @@ el('sheet').addEventListener('click', function(e){
   var wt = e.target.closest('td.wchk');
   if (wt){ var wk = wt.getAttribute('data-wkey'); setWTick(wk, !cur.w.done[wk]); saveW(); var yw = window.scrollY; renderCur(); window.scrollTo(0, yw); return; }
   if (WELD && !e.target.closest('.laybtn')) return;   // the welder's tablet only ticks welds (and opens layouts)
+  var pkb = e.target.closest('[data-pk]');
+  if (pkb && cur){ setTick(PK_KEY, pkb.getAttribute('data-pk') === '1'); saveProg(); var y2 = window.scrollY; renderCur(); window.scrollTo(0, y2); return; }
   var sbb = e.target.closest('[data-sort]');
   if (sbb){ cur.sort = sbb.getAttribute('data-sort'); lsSet('shop-sort:' + cur.f.id, cur.sort); msg(''); var y1 = window.scrollY; renderCur(); window.scrollTo(0, y1); return; }
   var pa = e.target.closest('[data-act="secall"]');
