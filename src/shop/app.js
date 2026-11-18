@@ -507,6 +507,7 @@ function fenceify(L, sd){
   var box = function(valC, head){ if (valC == null) return; var v = valC + 0.5; L.cols.splice(L.cols.indexOf(valC) + 1, 0, v); L.vchk[v] = 1; units.forEach(function(r){ if (L.txt(r, valC) !== '') L.chk[r + ':' + v] = { left: valC, head: head }; }); };
   var lp = colOf(/^left post$/i);
   box(L.cols[0], 'Rail tag'); box(colOf(/^top (channel|rail)$/i), 'Top channel'); box(colOf(/^bottom channel$/i), 'Bottom channel');
+  var chc = colOf(/^channels$/i); L.pnar = {}; if (chc != null) L.pnar[chc] = 1;
   // black lines before Left post, Right post and R post ht
   [lp, colOf(/^right post$/i), colOf(/^r post ht$/i)].forEach(function(c){ if (c != null) L.div[c] = 1; });
 }
@@ -890,7 +891,8 @@ function sortBarHtml(){
   var sbtn = function(o){ return '<button type="button" class="sbtn' + ((cur.sort || '') === o[0] ? ' on' : '') + '" data-sort="' + o[0] + '" aria-pressed="' + ((cur.sort || '') === o[0]) + '">' + o[1] + '</button>'; };
   // one compact line: Unit Order · Top rail [Longest|Shortest] · Channel [Longest|Shortest] · Optimal Cut
   var seg = function(lab, a, b){ return '<span class="sseg"><span class="sgl">' + lab + '</span>' + sbtn(a) + sbtn(b) + '</span>'; };
-  return '<div class="sortbar"><span class="slab">Sort</span>' + sbtn(['', 'Unit Order']) + seg('Top rail', ['long', 'Longest'], ['short', 'Shortest']) +
+  var ci = cutItem(), noTR = isFenceJob() && !(ci && ci.L.cols.some(function(c){ return /^top rail$/i.test(ci.L.txt(ci.L.hdr, c)); }));
+  return '<div class="sortbar' + (isFenceJob() ? ' fsort' : '') + '"><span class="slab">Sort</span>' + sbtn(['', 'Unit Order']) + (noTR ? '' : seg('Top rail', ['long', 'Longest'], ['short', 'Shortest'])) +
     seg('Channel', ['clong', 'Longest'], ['cshort', 'Shortest']) + sbtn(['opt', 'Optimal Cut']) + pkHtml() + '</div>';
 }
 // fence jobs: one job-wide "Pickets Cut" YES / NO beside the sort buttons, so Ian can see if the pickets are done.
@@ -1072,6 +1074,7 @@ function renderSheet(book, item, done){
       if (tick[c]) cls.push('cut');
       if (divC != null && c === divC && r >= L.hdr) cls.push('divl');
       if (L.div && L.div[c] && r >= L.hdr) cls.push('divl');
+      if (L.pnar && L.pnar[c]) cls.push('pnar');
       if (item.virt && r === L.hdr) cls.push('b', 'c');
       if (c === L.cols[0] && L.hdr != null && r > L.hdr && floatTag[t.trim()]) cls.push('floatrail');
       if (((bpC[c] && r > L.hdr) || (r > bpFrom && r < bpTo && c === L.cols[0] && !L.cols.some(function(cc){ return L.txt(r, cc) === '✓'; }))) && bpDesc(t)) cls.push('bp');
