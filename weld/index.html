@@ -906,7 +906,7 @@ function wId(id){ return id + '.w'; }
 var el = function(id){ return document.getElementById(id); };
 function esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 // a short notice at the bottom of the screen
-var VERSION = '11.18.715', toastT = null;
+var VERSION = '11.18.719', toastT = null;
 function toast(t){ var b = el('toast'); b.textContent = t; b.hidden = false; b.classList.remove('out'); clearTimeout(toastT); toastT = setTimeout(function(){ b.classList.add('out'); setTimeout(function(){ b.hidden = true; }, 400); }, 3200); }
 function msg(t, ok){ var m = el('msg'); m.hidden = !t; m.className = 'msg ' + (ok ? 'ok' : 'err'); m.textContent = t || ''; }
 function lsGet(k){ try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
@@ -1108,6 +1108,16 @@ function railLabel(book){
   return '';
 }
 
+
+// fence post types, as the fence templates write them: End, Mid, Cor (turns right), InCor (turns left), the transition posts
+// where the fence steps (Tran E, Tran M, Tran C, Tran IC: same plate as the plain type) and floating posts (Float E, Float IC: no base plate).
+// Returns 'end', 'mid', 'cor', 'incor', 'float' or '' (Open, blank, anything else). With withFloat, a float post gives its plain type.
+function fenceKind(t, withFloat){
+  t = String(t || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  var fl = /^float(ing)? /.test(t); if (fl && !withFloat) return 'float';
+  t = t.replace(/^(float(ing)?|tran(s|sition)?) /, '');
+  return /^(e|end)$/.test(t) ? 'end' : /^(m|mid)$/.test(t) ? 'mid' : /^(c|cor|corner)$/.test(t) ? 'cor' : /^(ic|in ?cor(ner)?|inside corner)$/.test(t) ? 'incor' : '';
+}
 // Shop Welds: how many posts Ian welds a base plate or bracket onto. Railings: the Post Sheet's Bracketing section,
 // adding up every bracket code whose method is WELD-ON (top mount base plates, weld-on fascia brackets). Screw-on doesn't count.
 // Top mount fences: every End, Mid, Cor and Incor post on the cut sheet. Returns 0 when there's nothing to weld on.
@@ -1135,7 +1145,7 @@ function weldPostCount(book){
       if (H == null) return 0;
       for (var c2 = 1; c2 <= 20; c2++){ if (cs.indexOf(c2) < 0 && /^(left|right) post$/i.test(String(cellVal(sd, H, c2) || '').trim())) cs.push(c2); }
       var m = 0;
-      for (var r2 = H + 1; r2 <= sd.maxR; r2++) cs.forEach(function(c){ if (/^(end|mid|cor|corner|incor|incorner)$/i.test(String(cellVal(sd, r2, c) || '').trim())) m++; });
+      for (var r2 = H + 1; r2 <= sd.maxR; r2++) cs.forEach(function(c){ var k = fenceKind(cellVal(sd, r2, c)); if (k && k !== 'float') m++; });
       return m;
     });
   }).catch(function(){ return 0; });
@@ -1367,7 +1377,7 @@ function fencePosts(book, item){
   // (ends offset with the plate reaching in under the fence; mids and corners centred; Cor turns right, Incor left)
   if (WELD && /^top/i.test(String(fenceLabel(sd, /^mount:?$/i)).trim())){
     var size = /3\s*x\s*3/i.test(String(fenceLabel(sd, /^post wall:?$/i))) ? '5x5' : '4x4', wn = { end: 0, mid: 0, rt: 0, lt: 0 };
-    posts.forEach(function(p){ var t = p.type.toLowerCase(); if (t === 'end') wn.end++; else if (t === 'mid') wn.mid++; else if (/^cor(ner)?$/.test(t)) wn.rt++; else if (/^incor(ner)?$/.test(t)) wn.lt++; });
+    posts.forEach(function(p){ var t = fenceKind(p.type); if (t === 'end') wn.end++; else if (t === 'mid') wn.mid++; else if (t === 'cor') wn.rt++; else if (t === 'incor') wn.lt++; });
     var wl = [];
     if (wn.end) wl.push(['E-Off-L', wn.end, size + ' plate · ' + (wn.end > 1 ? 'both ends of the fence, welded the same' : 'end of the fence'), 'Weld-on, offset: post at the outer end, plate reaches in under the fence']);
     if (wn.mid) wl.push(['Mid-Cen', wn.mid, size + ' plate', 'Weld-on, centered']);
@@ -1435,7 +1445,7 @@ function readFenceUnits(sd){
     ops.push({ tag: String(u).trim(), len: oo, l: String(cellVal(sd, r, 4) || '').trim().toLowerCase(), r: String(cellVal(sd, r, 6) || '').trim().toLowerCase(), gate: /^y/i.test(String(cellVal(sd, r, 3) || '')) });
   }
   if (!ops.length) return null;
-  var code = function(t){ return t === 'end' ? 'E' : t === 'mid' ? 'CJ' : /^cor(ner)?$/.test(t) ? 'EC' : /^incor(ner)?$/.test(t) ? 'IC' : ''; };
+  var code = function(t){ t = fenceKind(t, true); return t === 'end' ? 'E' : t === 'mid' ? 'CJ' : t === 'cor' ? 'EC' : t === 'incor' ? 'IC' : ''; };
   var mount = String(cellVal(sd, 8, 2) || 'Fascia').trim(), secs = [];
   ops.forEach(function(o, i){
     var nx = ops[i + 1], shared = o.r !== 'open' ? o.r : nx ? nx.l : 'end';
@@ -1711,11 +1721,11 @@ function sheetSections(item){
 // mid and corner posts are centred, and an Open side has no post (the next opening's post covers it).
 function fenceTop(item){ return !!(WELD && item && item.L && item.L.fence && /^top/i.test(String(fenceLabel(item.sd, /^mount:?$/i)).trim())); }
 function fencePlateSize(item){ var w = String(fenceLabel(item.sd, /^post wall:?$/i)); return /3\s*x\s*3/i.test(w) ? '5x5' : '4x4'; }
-function fencePlateCode(t, side){ t = String(t || '').trim().toLowerCase(); return t === 'end' ? 'E-Off-' + side : t === 'mid' ? 'Mid-Cen' : /^cor(ner)?$/.test(t) ? 'Cor-Cen' : /^incor(ner)?$/.test(t) ? 'Incor-Cen' : ''; }
+function fencePlateCode(t, side){ t = fenceKind(t); return t === 'end' ? 'E-Off-' + side : t === 'mid' ? 'Mid-Cen' : t === 'cor' ? 'Cor-Cen' : t === 'incor' ? 'Incor-Cen' : ''; }
 function fencePlates(item){
   var L = item.L, cs = {}, n = { end: 0, mid: 0, cor: 0, rt: 0, lt: 0 }, sides = {};
   L.cols.forEach(function(c){ var t = L.txt(L.hdr, c).trim(); if (/^left post$/i.test(t)) cs[c] = 'L'; if (/^right post$/i.test(t)) cs[c] = 'R'; });
-  L.rows.forEach(function(r){ if (r <= L.hdr) return; Object.keys(cs).forEach(function(c){ var t = L.txt(r, +c).trim().toLowerCase(); if (t === 'end'){ n.end++; sides[cs[c]] = 1; } else if (t === 'mid') n.mid++; else if (/^cor(ner)?$/.test(t)){ n.cor++; n.rt++; } else if (/^incor(ner)?$/.test(t)){ n.cor++; n.lt++; } }); });
+  L.rows.forEach(function(r){ if (r <= L.hdr) return; Object.keys(cs).forEach(function(c){ var t = fenceKind(L.txt(r, +c)); if (t === 'end'){ n.end++; sides[cs[c]] = 1; } else if (t === 'mid') n.mid++; else if (t === 'cor'){ n.cor++; n.rt++; } else if (t === 'incor'){ n.cor++; n.lt++; } }); });
   var size = fencePlateSize(item), rows = [];
   if (n.end) rows.push({ code: 'E-Off-' + (sides.L ? 'L' : 'R'), name: 'End Offset', q: n.end, sub: size + ' plate · ' + (sides.L && sides.R ? 'both ends of the fence, welded the same' : 'end of the fence'), how: 'Weld-on, offset: post at the outer end, plate reaches in under the fence' });
   if (n.mid) rows.push({ code: 'Mid-Cen', name: 'Mid Centered', q: n.mid, sub: size + ' plate', how: 'Weld-on, centered' });
@@ -1859,7 +1869,7 @@ function renderSheet(book, item, done){
       var fcode = cell && cell.bpc ? cell.bpc : fTop && fpC[c] && r > L.hdr ? fencePlateCode(t, fpC[c]) : '';
       if (fcode) cls.push('bp');
       var bd = fcode ? '' : cls.indexOf('bp') >= 0 ? bpDesc(t) : '';
-      h += '<td' + (cls.length ? ' class="' + cls.join(' ') + '"' : '') + (style ? ' style="' + style + '"' : '') + attr + '>' + (fcode ? '<span class="bpw">' + bpIcon(fcode, fpC[c] || 'R') + '<span>' + esc(bpName(fcode).replace(/ (Left|Right)$/, '')) + (cell && cell.bpd ? '<small class="bpd">' + esc(cell.bpd) + '</small>' : '') + '</span></span>' : bd ? '<span class="bpw">' + bpIcon(t, bpC[c] || '') + '<span>' + esc(bpName(t)) + '<small class="bpd">' + esc(bd.replace(/ · .*$/, '')) + '</small></span></span>' : (big ? measure(t) : esc(t))) + '</td>';
+      h += '<td' + (cls.length ? ' class="' + cls.join(' ') + '"' : '') + (style ? ' style="' + style + '"' : '') + attr + '>' + (fcode ? '<span class="bpw">' + bpIcon(fcode, fpC[c] || 'R') + '<span>' + esc(bpName(fcode).replace(/ (Left|Right)$/, '')) + (cell && cell.bpd ? '<small class="bpd">' + esc(cell.bpd) + '</small>' : /^\s*tran/i.test(t) ? '<small class="bpd">transition post (step)</small>' : '') + '</span></span>' : bd ? '<span class="bpw">' + bpIcon(t, bpC[c] || '') + '<span>' + esc(bpName(t)) + '<small class="bpd">' + esc(bd.replace(/ · .*$/, '')) + '</small></span></span>' : (big ? measure(t) : esc(t))) + '</td>';
     });
     h += '</tr>';
   });
