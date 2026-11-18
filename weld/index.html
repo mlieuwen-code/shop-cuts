@@ -912,7 +912,7 @@ function wId(id){ return id + '.w'; }
 var el = function(id){ return document.getElementById(id); };
 function esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 // a short notice at the bottom of the screen
-var VERSION = '11.18.903', toastT = null;
+var VERSION = '11.18.917', toastT = null;
 function toast(t){ var b = el('toast'); b.textContent = t; b.hidden = false; b.classList.remove('out'); clearTimeout(toastT); toastT = setTimeout(function(){ b.classList.add('out'); setTimeout(function(){ b.hidden = true; }, 400); }, 3200); }
 function msg(t, ok){ var m = el('msg'); m.hidden = !t; m.className = 'msg ' + (ok ? 'ok' : 'err'); m.textContent = t || ''; }
 function lsGet(k){ try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
@@ -1323,6 +1323,8 @@ function shopSheets(book){
     return parseSheet(book, sh).then(function(sd){ if (d.always || sh.state === 'visible' || (d.has && d.has(sd))) return { sh: sh, sd: sd, label: d.label, view: d.view }; return null; });
   })).then(function(a){
     list = a.filter(Boolean).map(function(it){ var fp = it.sh.name === 'POST SHEET' ? fencePosts(book, it) : null; return fp ? Object.assign({}, it, { sd: fp, sh: Object.assign({}, it.sh, { pa: '' }), fence: 1 }) : it; });
+    // Shop Welds: fence jobs get a Pickets tab after the cut sheet
+    if (WELD){ var ci = -1; list.forEach(function(it, i){ if (it.sh.name === 'CUT SHEET') ci = i; }); var pk = ci >= 0 ? fencePicketsTab(book, list[ci]) : null; if (pk) list.splice(ci + 1, 0, pk); }
     // any other tab that's been un-hidden for this job and has a print area
     var extra = book.sheets.filter(function(s){ return s.state === 'visible' && s.pa && !SKIP.test(s.name) && !SHOP.some(function(d){ return d.n === s.name; }); });
     return Promise.all(extra.map(function(sh){ return parseSheet(book, sh).then(function(sd){ return { sh: sh, sd: sd, label: sh.name.charAt(0) + sh.name.slice(1).toLowerCase() }; }); })).then(function(b){ return list.concat(b); });
@@ -1344,6 +1346,56 @@ function fenceLabel(sd, re){
     return '';
   }
   return '';
+}
+// Shop Welds: a Pickets tab for fence jobs, built from the cut sheet (the workbook has no pickets sheet of its own).
+// The total and the picket lengths; when the job has more than one picket length, each opening is listed too.
+// View only: Pickets Cut by Fab is Dave's tick in Shop Cuts.
+function fencePicketsTab(book, item){
+  var sd = item.sd, v = function(r, c){ var x = c == null ? null : cellVal(sd, r, c); return x == null ? '' : x; }, H = null, col = {};
+  if (!/fence/i.test(String(v(1, 1)))) return null;
+  for (var r = 1; r <= 40 && H == null; r++) if (/^unit$/i.test(String(v(r, 1)).trim())) H = r;
+  if (H == null) return null;
+  for (var c = 1; c <= Math.max(sd.maxC || 0, 22); c++){
+    var hh = String(v(H, c)).trim().toLowerCase();
+    if (/^pickets?$/.test(hh) && col.n == null) col.n = c;
+    if (/^picket (cut|length)$/.test(hh) && col.len == null) col.len = c;
+    if (/^1st space/.test(hh) && col.sp == null) col.sp = c;
+  }
+  if (col.n == null) return null;
+  // older fence sheets have one picket length for the whole job, in the info block (Picket cut:)
+  var jobLen = col.len == null ? fenceLabel(sd, /^picket (cut|length):?$/i) : '';
+  var ops = [];
+  for (var r2 = H + 1; r2 <= (sd.maxR || 0); r2++){
+    var u = String(v(r2, 1)).trim(), n = +v(r2, col.n) || 0;
+    if (u === '' || isNaN(+u) || n <= 0) continue;
+    ops.push({ u: u, n: n, len: col.len == null ? jobLen : v(r2, col.len), sp: v(r2, col.sp) });
+  }
+  if (!ops.length) return null;
+  var len = function(x){ return x === '' || x == null ? '' : typeof x === 'number' ? fmt16(x) : String(x); };
+  var total = ops.reduce(function(a, o){ return a + o.n; }, 0), byLen = [];
+  ops.forEach(function(o){ var k = len(o.len), g = byLen.filter(function(x){ return x.k === k; })[0]; if (!g){ g = { k: k, raw: +o.len || 0, n: 0, ops: [] }; byLen.push(g); } g.n += o.n; g.ops.push(o.u); });
+  byLen.sort(function(a, b){ return b.raw - a.raw; });
+  var N = 4, fake = { cells: {}, hr: {}, hc: {}, w: {}, merges: [], maxR: 0, maxC: N }, R = 0, YEL = 'background:#FFF2CC;', WHT = 'background:#FFFDF8;';
+  var HD = 'background:#E7DFCF;box-shadow:0 2px 0 #D5CBB8;font-size:16px;';
+  var put = function(c, val, o){ fake.cells[R + ':' + c] = Object.assign({ v: val }, o || {}); };
+  var info = function(lab, val, cls){ R++; var z = (R % 2 ? WHT : YEL) + (cls ? '' : 'font-size:16px;font-weight:600;height:34px;'); put(1, lab, { c: 1, css: z, cls: cls }); put(2, String(val), { c: 1, b: 1, css: z, cls: cls ? cls.replace('hilab', 'hival') : '' }); fake.merges.push({ r1: R, r2: R, c1: 2, c2: N }); };
+  R++; put(1, 'PICKETS', { b: 1 });
+  [['Job', /^job:?$/i], ['Picket', /^picket:?$/i], ['Punch on centre', /^punch on cent(re|er):?$/i]].forEach(function(a){ var x = fenceLabel(sd, a[1]); if (String(x).trim() !== '') info(a[0], typeof x === 'number' || /^\d+(\.\d+)?$/.test(String(x).trim()) ? len(+x) : x); });
+  info('Number of pickets', total, 'hilab');
+  info('Picket length', byLen.length === 1 ? (byLen[0].k || 'not on this cut sheet (older template)') : byLen.length + ' lengths · see below', 'hilab');
+  info('Pickets cut by Fab', '\u0001PK', 'hilab');   // filled in when the tab is drawn (YES / NO from Shop Cuts)
+  R++;
+  R++; put(1, '1 · Picket lengths');
+  R++; ['Picket length', 'Number of pickets', 'Openings', ''].forEach(function(t, i){ put(i + 1, t, { c: 1, css: HD }); }); fake.merges.push({ r1: R, r2: R, c1: 3, c2: N });
+  byLen.forEach(function(g, i){ R++; var z = i % 2 ? YEL : WHT; put(1, g.k || 'Not listed', { c: 1, b: 1, css: z + 'font-size:26px;height:70px;' }); put(2, String(g.n), { c: 1, b: 1, css: z + 'font-size:26px;' }); put(3, g.ops.join(', '), { c: 1, css: z + 'font-size:18px;font-weight:700;' }); fake.merges.push({ r1: R, r2: R, c1: 3, c2: N }); });
+  if (byLen.length > 1){
+    R++;
+    R++; put(1, '2 · By opening');
+    R++; ['Opening', 'Pickets', 'Picket length', '1st space (to hole edge)'].forEach(function(t, i){ put(i + 1, t, { c: 1, css: HD }); });
+    ops.forEach(function(o, i){ R++; var z = i % 2 ? YEL : WHT; put(1, o.u, { c: 1, b: 1, css: z + 'font-size:24px;height:64px;' }); put(2, String(o.n), { c: 1, b: 1, css: z + 'font-size:24px;' }); put(3, len(o.len), { c: 1, b: 1, css: z + 'font-size:24px;' }); put(4, len(o.sp), { c: 1, b: 1, css: z + 'font-size:24px;' }); });
+  }
+  fake.maxR = R;
+  return { sh: { name: 'PICKETS', pa: '', state: 'visible' }, sd: fake, label: 'Pickets' };
 }
 function fencePosts(book, item){
   var sd = item.sd, v = function(r, c){ var x = c == null ? null : cellVal(sd, r, c); return x == null ? '' : x; }, H = null, col = {}, mc = Math.max(sd.maxC || 0, 34);
@@ -1869,6 +1921,7 @@ function renderSheet(book, item, done){
       if (WELD && isTop() && sh.name === 'CUT SHEET' && r === L.hdr) t = t.replace(/^\s*L\s*Post\s*$/i, 'Left post').replace(/^\s*R\s*Post\s*$/i, 'Right post');
       // top mount: a centred plate's method reads WELD-ON Centered (the cut sheet says just "WELD-ON plate" for Mid-Cen)
       if (WELD && sh.name === 'POST SHEET' && isTop() && c === L.cols[0]) t = t.replace(/^\d+\s*[·.\-]\s*/, '');   // only the plates show, so no section number
+      if (t === '\u0001PK') t = cur && cur.done[PK_KEY] ? 'YES' : 'NO';
       if (sh.name === 'POST SHEET' && /^cj$/i.test(t.trim())) t = 'Joints';   // the template's bracket code CJ reads as Joints on the tablet
       if (L.fence && r === L.hdr) t = t.replace(/^1st space \(cut end to hole edge\)$/i, '1st space (to hole edge)').replace(/^picket cut$/i, 'Picket Length');
       if (L.fence && r > L.hdr && /^step$/i.test(L.txt(L.hdr, c))) t = t.replace(/\bLow\b/, 'Down').replace(/\bHigh\b/, 'Up');   // fence steps read Up / Down
