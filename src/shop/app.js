@@ -522,11 +522,18 @@ function fenceHead(book, item){
     }
   }
   got.sort(function(a, b){ return a.c - b.c || a.r - b.r; });
+  // total pickets for the job (sum of the Pickets column), shown with the channel type so it's easy to find
+  var pc = null; for (var ci = 1; ci <= (sd.maxC || 20) && pc == null; ci++) if (/^pickets?$/i.test(show(book, sd.cells[L.hdr + ':' + ci]).trim())) pc = ci;
+  if (pc != null){
+    var tot = 0, any = false;
+    for (var rr = L.hdr + 1; rr <= (sd.maxR || 0); rr++){ var u = String(cellVal(sd, rr, 1) == null ? '' : cellVal(sd, rr, 1)).trim(), n = +cellVal(sd, rr, pc); if (u !== '' && !isNaN(+u) && n > 0){ tot += n; any = true; } }
+    if (any){ var ix = 0; got.forEach(function(g, i){ if (/^channel$/i.test(g.lab)) ix = i; }); got.splice(ix + 1, 0, { lab: 'Pickets', val: String(tot) }); }
+  }
   var h = '<table class="sheet finfo"><tr><td colspan="4" class="b">' + esc(show(book, sd.cells['1:1']).trim() || 'CUT SHEET') + '</td></tr>';
   for (var i = 0; i < got.length; i += 2){
     var z = (i / 2) % 2 ? '' : ' style="background:#FFF2CC"', p = got[i], q = got[i + 1];
     // the channel type (3/4 Punch …) stands out like post height on the railing sheets
-    var pair = function(x){ var hi = /^channel$/i.test(x.lab); return '<td class="c' + (hi ? ' hilab' : '') + '">' + esc(x.lab) + '</td><td class="c b' + (hi ? ' hival' : '') + '">' + esc(x.val) + '</td>'; };
+    var pair = function(x){ var hi = /^(channel|pickets)$/i.test(x.lab); return '<td class="c' + (hi ? ' hilab' : '') + '">' + esc(x.lab) + '</td><td class="c b' + (hi ? ' hival' : '') + '">' + esc(x.val) + '</td>'; };
     h += '<tr class="info"' + z + '>' + pair(p) + (q ? pair(q) : '<td></td><td></td>') + '</tr>';
   }
   return h + '</table>';
