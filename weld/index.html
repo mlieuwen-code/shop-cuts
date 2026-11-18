@@ -397,6 +397,12 @@ table.sheet td.pkyes{background:var(--doneink, #2E6B2A)!important;color:#fff!imp
 .pkwrap{margin:12px 0}
 .pkban{width:100%;border:0;text-align:left;font:inherit;cursor:pointer;box-shadow:0 3px 0 rgba(0,0,0,.18)}
 .pkban:active{transform:translateY(2px);box-shadow:none}
+.pkban .pkbox{flex:0 0 auto;width:52px;height:52px;border-radius:12px;border:4px solid #fff;background:rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;font-size:36px;font-weight:900;line-height:1}
+.pkban .pkbox.on{background:#fff;color:var(--doneink, #2E6B2A)}
+.pkban .pkt{flex:1;min-width:0}
+.pkban .pkgo{flex:0 0 auto;background:#fff;color:#9C0006;border-radius:12px;padding:12px 18px;font-size:18px;font-weight:900;white-space:nowrap;box-shadow:0 2px 0 rgba(0,0,0,.2)}
+.pkban.yes .pkgo{background:rgba(255,255,255,.18);color:#fff;box-shadow:none;font-size:15px;padding:8px 14px}
+@media (max-width:640px){.pkban .pkgo{padding:10px 12px;font-size:15px}.pkban b{font-size:19px}}
 </style>
 </head><body>
 
@@ -922,7 +928,7 @@ function wId(id){ return id + '.w'; }
 var el = function(id){ return document.getElementById(id); };
 function esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 // a short notice at the bottom of the screen
-var VERSION = '11.18.959', toastT = null;
+var VERSION = '11.18.1006', toastT = null;
 function toast(t){ var b = el('toast'); b.textContent = t; b.hidden = false; b.classList.remove('out'); clearTimeout(toastT); toastT = setTimeout(function(){ b.classList.add('out'); setTimeout(function(){ b.hidden = true; }, 400); }, 3200); }
 function msg(t, ok){ var m = el('msg'); m.hidden = !t; m.className = 'msg ' + (ok ? 'ok' : 'err'); m.textContent = t || ''; }
 function lsGet(k){ try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
@@ -1364,7 +1370,10 @@ function fenceLabel(sd, re){
 // Pickets Cut by Fab (Dave's YES / NO in Shop Cuts), big enough to see from across the shop
 function pkBanner(){
   var y = !!(cur && cur.done[PK_KEY]);
-  return '<button type="button" class="pkban' + (y ? ' yes' : '') + '" data-pkt="' + (y ? '0' : '1') + '"><span class="pki" aria-hidden="true">' + (y ? '✓' : '✗') + '</span><span><b>' + (y ? 'Pickets cut' : 'Pickets NOT cut yet') + '</b><small>' + (y ? 'Shared with Dave’s tablet · tap if this was marked by mistake' : 'Shared with Dave’s tablet · tap when the pickets are cut (by Fab or by you)') + '</small></span></button>';
+  // a big tick box on the left and a "tap" button on the right, so it reads as something to press
+  return '<button type="button" class="pkban' + (y ? ' yes' : '') + '" data-pkt="' + (y ? '0' : '1') + '"><span class="pkbox' + (y ? ' on' : '') + '" aria-hidden="true">' + (y ? '✓' : '') + '</span>' +
+    '<span class="pkt"><b>' + (y ? 'Pickets cut' : 'Pickets NOT cut yet') + '</b><small>Shared with Dave’s tablet' + (y ? '' : ' · Fab or you can check it off') + '</small></span>' +
+    '<span class="pkgo">' + (y ? 'Tap to undo' : 'Tap to check off') + '</span></button>';
 }
 function fencePicketsTab(book, item){
   var sd = item.sd, v = function(r, c){ var x = c == null ? null : cellVal(sd, r, c); return x == null ? '' : x; }, H = null, col = {};
