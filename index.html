@@ -767,7 +767,7 @@ function wId(id){ return id + '.w'; }
 var el = function(id){ return document.getElementById(id); };
 function esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 // a short notice at the bottom of the screen
-var VERSION = '11.17.330', toastT = null;
+var VERSION = '11.18.724', toastT = null;
 function toast(t){ var b = el('toast'); b.textContent = t; b.hidden = false; b.classList.remove('out'); clearTimeout(toastT); toastT = setTimeout(function(){ b.classList.add('out'); setTimeout(function(){ b.hidden = true; }, 400); }, 3200); }
 function msg(t, ok){ var m = el('msg'); m.hidden = !t; m.className = 'msg ' + (ok ? 'ok' : 'err'); m.textContent = t || ''; }
 function lsGet(k){ try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
@@ -966,6 +966,8 @@ function railLabel(book){
   var cut = book.sheets.filter(function(s){ return s.name === 'CUT SHEET'; })[0];
   if (cut) return parseSheet(book, cut).then(function(sd){
     var n = null;
+    // fence cut sheets: one row per opening under the Unit heading (the job info and heading rows above aren't rails)
+    if (/fence/i.test(String(cellVal(sd, 1, 1) || ''))){ var H = null; for (var r0 = 1; r0 <= 40 && H == null; r0++) if (/^unit$/i.test(String(cellVal(sd, r0, 1) || '').trim())) H = r0; if (H != null){ var m0 = 0; for (var r1 = H + 1; r1 <= sd.maxR; r1++){ var u0 = cellVal(sd, r1, 1); if (u0 != null && u0 !== '' && !isNaN(+u0)) m0++; } return m0 + (m0 === 1 ? ' Rail' : ' Rails'); } }
     Object.keys(sd.cells).forEach(function(k){ var v = sd.cells[k].v, m = typeof v === 'string' && /^\s*total\s*=\s*(\d+)/i.exec(v); if (m && +k.split(':')[1] === 1) n = +m[1]; });
     if (n == null){ n = 0; for (var r = 9; r <= sd.maxR; r++){ var t = cellVal(sd, r, 1); if (t != null && t !== '' && !/total/i.test(String(t))) n++; } }
     return n + (n === 1 ? ' Rail' : ' Rails');
@@ -976,7 +978,7 @@ function railLabel(book){
 }
 function rememberInfo(f, book, count){
   return Promise.resolve(railLabel(book)).then(function(label){
-    lsSet('shop-info:' + f.id, { u: f.updated, label: label });
+    lsSet('shop-info:' + f.id, { u: f.updated, label: label, lv: 2 });
     if (!count || book.raw) return;
     // the job list's ring needs the job's total box count, even on a tablet that hasn't opened the job yet
     return shopSheets(book).then(function(items){
@@ -996,7 +998,7 @@ function prefetch(){
     var f = todo.shift(); if (!f){ prefetching = false; return; }
     var info = lsGet('shop-info:' + f.id);
     fileGet(f.id).then(function(local){
-      if (local && local.updated >= f.updated && info && info.u === f.updated && (lsGet(SUM + f.id) || {}).total && lsGet(WSUM + f.id)) return next();
+      if (local && local.updated >= f.updated && info && info.u === f.updated && info.lv === 2 && (lsGet(SUM + f.id) || {}).total && lsGet(WSUM + f.id)) return next();
       var got = local && local.updated >= f.updated ? Promise.resolve(local.b64) : apiNew('fabopen2', 'fabopen', { id: f.id }).then(function(r){ filePut({ id: f.id, name: f.name, updated: f.updated, b64: r.b64 }); return r.b64; });
       return got.then(function(b64){ return parseBook(b64); }).then(function(book){ return rememberInfo(f, book, true); }).then(function(){ if (!cur) renderList(false); next(); }, function(){ next(); });
     });
