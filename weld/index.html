@@ -378,7 +378,7 @@ table.sheet.laytab{margin-bottom:10px}
 .pushbtn{margin-right:8px;background:#FFF3E6;border-color:#E8590C;color:#8A3205;font-weight:900}
 .pushbtn.on{background:#EEF6EC;border-color:#2E6B2A;color:#1F4D1C}
 @media (max-width:640px){.pushbtn{font-size:14px;padding-left:10px;padding-right:10px}}
-.cnts{display:flex;flex-direction:column;gap:6px;flex-shrink:0}
+.cnts{display:flex;flex-direction:row;align-items:stretch;gap:8px;flex-shrink:0}
 .cnt.pcnt{background:#FFF0E3;color:#8A3205}
 @media (max-width:640px){.cnts{flex-direction:row;flex-wrap:wrap;margin-left:56px}.cnts .cnt{margin-left:0}}
 </style>
@@ -906,7 +906,7 @@ function wId(id){ return id + '.w'; }
 var el = function(id){ return document.getElementById(id); };
 function esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 // a short notice at the bottom of the screen
-var VERSION = '11.18.712', toastT = null;
+var VERSION = '11.18.715', toastT = null;
 function toast(t){ var b = el('toast'); b.textContent = t; b.hidden = false; b.classList.remove('out'); clearTimeout(toastT); toastT = setTimeout(function(){ b.classList.add('out'); setTimeout(function(){ b.hidden = true; }, 400); }, 3200); }
 function msg(t, ok){ var m = el('msg'); m.hidden = !t; m.className = 'msg ' + (ok ? 'ok' : 'err'); m.textContent = t || ''; }
 function lsGet(k){ try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
