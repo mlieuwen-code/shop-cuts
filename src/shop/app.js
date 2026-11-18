@@ -1067,7 +1067,7 @@ function renderSheet(book, item, done){
           // red only when the block height shown isn't the standard 38 5/16
           if (hiNext === 'block' && !/^38\s+(5\/16|10\/32)\b/.test(t.trim())) cls.push('hicustom');
           hiNext = null;
-        } else if (/^\s*(post|block)\s*(height|ht)\.?\s*$/i.test(t)){ cls.push('hilab'); hiNext = /block/i.test(t) ? 'block' : 'post'; }
+        } else if (/^\s*(post|block|bracket)\s*(height|ht)\.?\s*$/i.test(t)){ cls.push('hilab'); hiNext = /block/i.test(t) ? 'block' : 'post'; }   // bracket height joins the yellow block too
       }
       if (tick[c]) cls.push('cut');
       if (divC != null && c === divC && r >= L.hdr) cls.push('divl');
