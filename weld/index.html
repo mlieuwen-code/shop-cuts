@@ -394,6 +394,7 @@ table + .bpnote{margin-top:14px}
 .pkban small{display:block;font-size:15px;font-weight:700;opacity:.85}
 table.sheet td.pkno2{background:#9C0006!important;color:#fff!important;font-size:26px!important}
 table.sheet td.pkyes{background:var(--doneink, #2E6B2A)!important;color:#fff!important;font-size:26px!important}
+.pkwrap{margin:12px 0}
 </style>
 </head><body>
 
@@ -919,7 +920,7 @@ function wId(id){ return id + '.w'; }
 var el = function(id){ return document.getElementById(id); };
 function esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 // a short notice at the bottom of the screen
-var VERSION = '11.18.927', toastT = null;
+var VERSION = '11.18.932', toastT = null;
 function toast(t){ var b = el('toast'); b.textContent = t; b.hidden = false; b.classList.remove('out'); clearTimeout(toastT); toastT = setTimeout(function(){ b.classList.add('out'); setTimeout(function(){ b.hidden = true; }, 400); }, 3200); }
 function msg(t, ok){ var m = el('msg'); m.hidden = !t; m.className = 'msg ' + (ok ? 'ok' : 'err'); m.textContent = t || ''; }
 function lsGet(k){ try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
@@ -1844,9 +1845,10 @@ function renderSheet(book, item, done){
   });
   var plateRows = '';
   var rmk = cur && cur.f.remake && sh.name === 'CUT SHEET' ? cur.f.remake : null;
-  var h = (rmk ? '<div class="rmbanner"><b>↻ Remake · ' + esc(rmk.tags.join(', ')) + '</b>' + (rmk.note ? '<span>' + esc(rmk.note) + '</span>' : '') + '</div>' : '') + (L.fence ? fenceHead(book, item) : '') + (fenceTop(item) ? fencePlates(item) : '') + '<table class="sheet' + (L.fence ? ' fence' : '') + '">' + (L.fence ? '<tr class="sortrow"><td colspan="' + L.cols.length + '">' + pkBanner() + '</td></tr>' : '');
+  var h = (rmk ? '<div class="rmbanner"><b>↻ Remake · ' + esc(rmk.tags.join(', ')) + '</b>' + (rmk.note ? '<span>' + esc(rmk.note) + '</span>' : '') + '</div>' : '') + (L.fence ? fenceHead(book, item) : '') + (fenceTop(item) ? fencePlates(item) : '') + '<table class="sheet' + (L.fence ? ' fence' : '') + '">' + (L.fence ? '<tr hidden></tr>' : '');
   // fences: the layout sits in its own table just above the cut list, so the cut list's stripes still line up with Dave's tablet
-  if (L.fence && cur && cur.units && cur.units.Fence) h = h.replace('<table class="sheet fence">', '<table class="sheet laytab">' + layoutRow('Fence', 1) + '</table><table class="sheet fence">');   // stands in for Shop Cuts' sort row, so the stripes line up with Dave's tablet
+  // fences: Pickets cut by Fab (red / green) then the layout, above the cut list. The hidden row keeps the stripes in line with Dave's tablet, where his sort bar sits.
+  if (L.fence) h = h.replace('<table class="sheet fence">', '<div class="pkwrap">' + pkBanner() + '</div>' + (cur && cur.units && cur.units.Fence ? '<table class="sheet laytab">' + layoutRow('Fence', 1) + '</table>' : '') + '<table class="sheet fence">');   // stands in for Shop Cuts' sort row, so the stripes line up with Dave's tablet
   var isCut = sh.name === 'CUT SHEET' && cur && Object.keys(cur.units || {}).length, lastUnit = null;
   var hiSheet = /^(COVER|POST SHEET)$/.test(sh.name);
   // Cut Sheet: a black line between the float lengths (Left / Right) and the posts (L Post …), so the two groups read apart
