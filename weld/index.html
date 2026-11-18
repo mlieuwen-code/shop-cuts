@@ -387,6 +387,13 @@ table.sheet.fence tr.hdr td.wrapcell{max-width:96px}
 .pkro{font-size:18px;font-weight:900;padding:4px 12px;border-radius:10px;background:#9C0006;color:#fff}
 .pkro.on{background:var(--doneink)}
 table + .bpnote{margin-top:14px}
+.pkban{display:flex;align-items:center;gap:16px;border-radius:16px;padding:14px 18px;background:#9C0006;color:#fff}
+.pkban.yes{background:var(--doneink, #2E6B2A)}
+.pkban .pki{font-size:40px;font-weight:900;line-height:1;width:44px;text-align:center}
+.pkban b{display:block;font-size:24px;font-weight:900;letter-spacing:.01em}
+.pkban small{display:block;font-size:15px;font-weight:700;opacity:.85}
+table.sheet td.pkno2{background:#9C0006!important;color:#fff!important;font-size:26px!important}
+table.sheet td.pkyes{background:var(--doneink, #2E6B2A)!important;color:#fff!important;font-size:26px!important}
 </style>
 </head><body>
 
@@ -912,7 +919,7 @@ function wId(id){ return id + '.w'; }
 var el = function(id){ return document.getElementById(id); };
 function esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 // a short notice at the bottom of the screen
-var VERSION = '11.18.917', toastT = null;
+var VERSION = '11.18.927', toastT = null;
 function toast(t){ var b = el('toast'); b.textContent = t; b.hidden = false; b.classList.remove('out'); clearTimeout(toastT); toastT = setTimeout(function(){ b.classList.add('out'); setTimeout(function(){ b.hidden = true; }, 400); }, 3200); }
 function msg(t, ok){ var m = el('msg'); m.hidden = !t; m.className = 'msg ' + (ok ? 'ok' : 'err'); m.textContent = t || ''; }
 function lsGet(k){ try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
@@ -1350,6 +1357,12 @@ function fenceLabel(sd, re){
 // Shop Welds: a Pickets tab for fence jobs, built from the cut sheet (the workbook has no pickets sheet of its own).
 // The total and the picket lengths; when the job has more than one picket length, each opening is listed too.
 // View only: Pickets Cut by Fab is Dave's tick in Shop Cuts.
+
+// Pickets Cut by Fab (Dave's YES / NO in Shop Cuts), big enough to see from across the shop
+function pkBanner(){
+  var y = !!(cur && cur.done[PK_KEY]);
+  return '<div class="pkban' + (y ? ' yes' : '') + '"><span class="pki" aria-hidden="true">' + (y ? '✓' : '✗') + '</span><span><b>' + (y ? 'Pickets cut by Fab' : 'Pickets NOT cut by Fab yet') + '</b><small>' + (y ? 'Fab has marked the pickets cut in Shop Cuts' : 'Fab hasn’t marked the pickets cut in Shop Cuts') + '</small></span></div>';
+}
 function fencePicketsTab(book, item){
   var sd = item.sd, v = function(r, c){ var x = c == null ? null : cellVal(sd, r, c); return x == null ? '' : x; }, H = null, col = {};
   if (!/fence/i.test(String(v(1, 1)))) return null;
@@ -1831,7 +1844,7 @@ function renderSheet(book, item, done){
   });
   var plateRows = '';
   var rmk = cur && cur.f.remake && sh.name === 'CUT SHEET' ? cur.f.remake : null;
-  var h = (rmk ? '<div class="rmbanner"><b>↻ Remake · ' + esc(rmk.tags.join(', ')) + '</b>' + (rmk.note ? '<span>' + esc(rmk.note) + '</span>' : '') + '</div>' : '') + (L.fence ? fenceHead(book, item) : '') + (fenceTop(item) ? fencePlates(item) : '') + '<table class="sheet' + (L.fence ? ' fence' : '') + '">' + (L.fence ? '<tr class="sortrow"><td colspan="' + L.cols.length + '"><div class="sortbar"><span class="sgl">Pickets Cut by Fab</span><b class="pkro' + (cur && cur.done[PK_KEY] ? ' on' : '') + '">' + (cur && cur.done[PK_KEY] ? 'YES' : 'NO') + '</b></div></td></tr>' : '');
+  var h = (rmk ? '<div class="rmbanner"><b>↻ Remake · ' + esc(rmk.tags.join(', ')) + '</b>' + (rmk.note ? '<span>' + esc(rmk.note) + '</span>' : '') + '</div>' : '') + (L.fence ? fenceHead(book, item) : '') + (fenceTop(item) ? fencePlates(item) : '') + '<table class="sheet' + (L.fence ? ' fence' : '') + '">' + (L.fence ? '<tr class="sortrow"><td colspan="' + L.cols.length + '">' + pkBanner() + '</td></tr>' : '');
   // fences: the layout sits in its own table just above the cut list, so the cut list's stripes still line up with Dave's tablet
   if (L.fence && cur && cur.units && cur.units.Fence) h = h.replace('<table class="sheet fence">', '<table class="sheet laytab">' + layoutRow('Fence', 1) + '</table><table class="sheet fence">');   // stands in for Shop Cuts' sort row, so the stripes line up with Dave's tablet
   var isCut = sh.name === 'CUT SHEET' && cur && Object.keys(cur.units || {}).length, lastUnit = null;
@@ -1921,7 +1934,8 @@ function renderSheet(book, item, done){
       if (WELD && isTop() && sh.name === 'CUT SHEET' && r === L.hdr) t = t.replace(/^\s*L\s*Post\s*$/i, 'Left post').replace(/^\s*R\s*Post\s*$/i, 'Right post');
       // top mount: a centred plate's method reads WELD-ON Centered (the cut sheet says just "WELD-ON plate" for Mid-Cen)
       if (WELD && sh.name === 'POST SHEET' && isTop() && c === L.cols[0]) t = t.replace(/^\d+\s*[·.\-]\s*/, '');   // only the plates show, so no section number
-      if (t === '\u0001PK') t = cur && cur.done[PK_KEY] ? 'YES' : 'NO';
+      var pkc = '';
+      if (t === '\u0001PK'){ t = cur && cur.done[PK_KEY] ? '✓ YES' : '✗ NO'; pkc = cur && cur.done[PK_KEY] ? 'pkyes' : 'pkno2'; }
       if (sh.name === 'POST SHEET' && /^cj$/i.test(t.trim())) t = 'Joints';   // the template's bracket code CJ reads as Joints on the tablet
       if (L.fence && r === L.hdr) t = t.replace(/^1st space \(cut end to hole edge\)$/i, '1st space (to hole edge)').replace(/^picket cut$/i, 'Picket Length');
       if (L.fence && r > L.hdr && /^step$/i.test(L.txt(L.hdr, c))) t = t.replace(/\bLow\b/, 'Down').replace(/\bHigh\b/, 'Up');   // fence steps read Up / Down
@@ -1930,7 +1944,7 @@ function renderSheet(book, item, done){
       var attr = sp ? (sp.rs > 1 ? ' rowspan="' + sp.rs + '"' : '') + (sp.cs > 1 ? ' colspan="' + sp.cs + '"' : '') : '';
       if (L.vchk && L.vchk[c] && !L.chk[k]){ h += r === L.hdr ? '<td class="c b vhd' + (L.div && L.div[c] ? ' divl' : '') + '">' + esc((L.vhead && L.vhead[c]) || '✓') + '</td>' : '<td></td>'; return; }
       if (L.chk[k]){ var key = pre + 'c' + k; h += '<td class="chk' + (done[key] ? ' on' : '') + (WELD ? ' ro' : '') + '" data-key="' + esc(key) + '"' + attr + '><span class="box" role="checkbox" aria-checked="' + !!done[key] + '" aria-label="Done">✓</span></td>'; return; }
-      var cls = [];
+      var cls = pkc ? [pkc] : [];
       // Cover and Post Sheet: post height and block height stand out (label + the value beside it)
       if (hiSheet && (L.hdr == null || r < L.hdr)){
         if (hiNext){
