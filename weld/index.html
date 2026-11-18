@@ -395,6 +395,8 @@ table + .bpnote{margin-top:14px}
 table.sheet td.pkno2{background:#9C0006!important;color:#fff!important;font-size:26px!important}
 table.sheet td.pkyes{background:var(--doneink, #2E6B2A)!important;color:#fff!important;font-size:26px!important}
 .pkwrap{margin:12px 0}
+.pkban{width:100%;border:0;text-align:left;font:inherit;cursor:pointer;box-shadow:0 3px 0 rgba(0,0,0,.18)}
+.pkban:active{transform:translateY(2px);box-shadow:none}
 </style>
 </head><body>
 
@@ -920,7 +922,7 @@ function wId(id){ return id + '.w'; }
 var el = function(id){ return document.getElementById(id); };
 function esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 // a short notice at the bottom of the screen
-var VERSION = '11.18.932', toastT = null;
+var VERSION = '11.18.959', toastT = null;
 function toast(t){ var b = el('toast'); b.textContent = t; b.hidden = false; b.classList.remove('out'); clearTimeout(toastT); toastT = setTimeout(function(){ b.classList.add('out'); setTimeout(function(){ b.hidden = true; }, 400); }, 3200); }
 function msg(t, ok){ var m = el('msg'); m.hidden = !t; m.className = 'msg ' + (ok ? 'ok' : 'err'); m.textContent = t || ''; }
 function lsGet(k){ try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
@@ -1362,7 +1364,7 @@ function fenceLabel(sd, re){
 // Pickets Cut by Fab (Dave's YES / NO in Shop Cuts), big enough to see from across the shop
 function pkBanner(){
   var y = !!(cur && cur.done[PK_KEY]);
-  return '<div class="pkban' + (y ? ' yes' : '') + '"><span class="pki" aria-hidden="true">' + (y ? '✓' : '✗') + '</span><span><b>' + (y ? 'Pickets cut by Fab' : 'Pickets NOT cut by Fab yet') + '</b><small>' + (y ? 'Fab has marked the pickets cut in Shop Cuts' : 'Fab hasn’t marked the pickets cut in Shop Cuts') + '</small></span></div>';
+  return '<button type="button" class="pkban' + (y ? ' yes' : '') + '" data-pkt="' + (y ? '0' : '1') + '"><span class="pki" aria-hidden="true">' + (y ? '✓' : '✗') + '</span><span><b>' + (y ? 'Pickets cut' : 'Pickets NOT cut yet') + '</b><small>' + (y ? 'Shared with Dave’s tablet · tap if this was marked by mistake' : 'Shared with Dave’s tablet · tap when the pickets are cut (by Fab or by you)') + '</small></span></button>';
 }
 function fencePicketsTab(book, item){
   var sd = item.sd, v = function(r, c){ var x = c == null ? null : cellVal(sd, r, c); return x == null ? '' : x; }, H = null, col = {};
@@ -1397,7 +1399,7 @@ function fencePicketsTab(book, item){
   [['Job', /^job:?$/i], ['Picket', /^picket:?$/i], ['Punch on centre', /^punch on cent(re|er):?$/i]].forEach(function(a){ var x = fenceLabel(sd, a[1]); if (String(x).trim() !== '') info(a[0], typeof x === 'number' || /^\d+(\.\d+)?$/.test(String(x).trim()) ? len(+x) : x); });
   info('Number of pickets', total, 'hilab');
   info('Picket length', byLen.length === 1 ? (byLen[0].k || 'not on this cut sheet (older template)') : byLen.length + ' lengths · see below', 'hilab');
-  info('Pickets cut by Fab', '\u0001PK', 'hilab');   // filled in when the tab is drawn (YES / NO from Shop Cuts)
+  info('Pickets cut', '\u0001PK', 'hilab');   // filled in when the tab is drawn (YES / NO from Shop Cuts)
   R++;
   R++; put(1, '1 · Picket lengths');
   R++; ['Picket length', 'Number of pickets', 'Openings', ''].forEach(function(t, i){ put(i + 1, t, { c: 1, css: HD }); }); fake.merges.push({ r1: R, r2: R, c1: 3, c2: N });
@@ -2071,6 +2073,8 @@ function syncNow(){
     var remote = decodeProg(r.prog ? JSON.parse(r.prog) : null), mine = curState(), m = mergeProg(mine, remote), mJ = enc(m);
     if (mJ !== enc(mine)){ applyState(m); saveLocal(); changed = true; }
     if (!WELD && mJ !== enc(remote)) return api('progset', { id: id, prog: mJ });
+    if (WELD && lsGet('weld-pk-dirty:' + id) && mJ !== enc(remote)) return api('progset', { id: id, prog: mJ }).then(function(){ lsSet('weld-pk-dirty:' + id, null); });
+    if (WELD) lsSet('weld-pk-dirty:' + id, null);
   }).catch(function(){});
   // the weld record: Shop Welds merges both ways; Shop Cuts only reads it, once the job is assembled
   var wanted = WELD || cur.asm || cur.w.fin || Object.keys(cur.w.done).length;
@@ -2174,6 +2178,13 @@ el('sheet').addEventListener('click', function(e){
   if (!cur) return;
   var wt = e.target.closest('td.wchk');
   if (wt){ var wk = wt.getAttribute('data-wkey'); setWTick(wk, !cur.w.done[wk]); saveW(); var yw = window.scrollY; renderCur(); window.scrollTo(0, yw); return; }
+  var pkt = e.target.closest('[data-pkt]');
+  if (pkt && WELD){
+    var on = pkt.getAttribute('data-pkt') === '1';
+    return confirmBox(on ? 'Mark the pickets for ' + cur.f.name.replace(/\.xls[xm]$/i, '') + ' as cut? Dave’s tablet will show Pickets Cut: YES.' : 'Mark the pickets as NOT cut? Dave’s tablet will show Pickets Cut: NO.', function(){
+      setTick(PK_KEY, on); lsSet('weld-pk-dirty:' + cur.f.id, 1); saveProg(); var yp = window.scrollY; renderCur(); window.scrollTo(0, yp);
+    });
+  }
   if (WELD && !e.target.closest('.laybtn')) return;   // the welder's tablet only ticks welds (and opens layouts)
   var sbb = e.target.closest('[data-sort]');
   if (sbb){ cur.sort = sbb.getAttribute('data-sort'); lsSet('shop-sort:' + cur.f.id, cur.sort); msg(''); var y1 = window.scrollY; renderCur(); window.scrollTo(0, y1); return; }
