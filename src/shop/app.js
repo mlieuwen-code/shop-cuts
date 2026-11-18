@@ -527,17 +527,17 @@ function fenceHead(book, item){
   if (pc != null){
     var tot = 0, any = false;
     for (var rr = L.hdr + 1; rr <= (sd.maxR || 0); rr++){ var u = String(cellVal(sd, rr, 1) == null ? '' : cellVal(sd, rr, 1)).trim(), n = +cellVal(sd, rr, pc); if (u !== '' && !isNaN(+u) && n > 0){ tot += n; any = true; } }
-    if (any) got.push({ lab: 'Pickets', val: String(tot) });
+    if (any) got.push({ lab: 'Number of Pickets', val: String(tot) });
   }
   // the yellow block together, two to a row, after the first row (Job / Colour)
-  var HI = ['channel', 'pickets', 'picket length', 'post'], his = [];
+  var HI = ['channel', 'post', 'picket length', 'number of pickets'], his = [];
   HI.forEach(function(n){ got.forEach(function(g){ if (g.lab.toLowerCase() === n) his.push(g); }); });
   got = got.filter(function(g){ return his.indexOf(g) < 0; }); got.splice.apply(got, [Math.min(2, got.length), 0].concat(his));
   var h = '<table class="sheet finfo"><tr><td colspan="4" class="b">' + esc(show(book, sd.cells['1:1']).trim() || 'CUT SHEET') + '</td></tr>';
   for (var i = 0; i < got.length; i += 2){
     var z = (i / 2) % 2 ? '' : ' style="background:#FFF2CC"', p = got[i], q = got[i + 1];
     // the channel type (3/4 Punch …) stands out like post height on the railing sheets
-    var pair = function(x){ var hi = /^(channel|pickets|picket length|post)$/i.test(x.lab); return '<td class="c' + (hi ? ' hilab' : '') + '">' + esc(x.lab) + '</td><td class="c b' + (hi ? ' hival' : '') + '">' + esc(x.val) + '</td>'; };
+    var pair = function(x){ var hi = /^(channel|number of pickets|picket length|post)$/i.test(x.lab); return '<td class="c' + (hi ? ' hilab' : '') + '">' + esc(x.lab) + '</td><td class="c b' + (hi ? ' hival' : '') + '">' + esc(x.val) + '</td>'; };
     h += '<tr class="info"' + z + '>' + pair(p) + (q ? pair(q) : '<td></td><td></td>') + '</tr>';
   }
   return h + '</table>';
