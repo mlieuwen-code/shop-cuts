@@ -381,6 +381,11 @@ table.sheet.laytab{margin-bottom:10px}
 .cnts{display:flex;flex-direction:row;align-items:stretch;gap:8px;flex-shrink:0}
 .cnt.pcnt{background:#FFF0E3;color:#8A3205}
 @media (max-width:640px){.cnts{flex-direction:row;flex-wrap:wrap;margin-left:56px}.cnts .cnt{margin-left:0}}
+table.sheet.fence td{padding:6px 5px}
+table.sheet.fence tr.hdr td{font-size:13px;white-space:normal;line-height:1.2}
+table.sheet.fence tr.hdr td.wrapcell{max-width:96px}
+.pkro{font-size:18px;font-weight:900;padding:4px 12px;border-radius:10px;background:#9C0006;color:#fff}
+.pkro.on{background:var(--doneink)}
 </style>
 </head><body>
 
@@ -906,7 +911,7 @@ function wId(id){ return id + '.w'; }
 var el = function(id){ return document.getElementById(id); };
 function esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 // a short notice at the bottom of the screen
-var VERSION = '11.18.728', toastT = null;
+var VERSION = '11.18.852', toastT = null;
 function toast(t){ var b = el('toast'); b.textContent = t; b.hidden = false; b.classList.remove('out'); clearTimeout(toastT); toastT = setTimeout(function(){ b.classList.add('out'); setTimeout(function(){ b.hidden = true; }, 400); }, 3200); }
 function msg(t, ok){ var m = el('msg'); m.hidden = !t; m.className = 'msg ' + (ok ? 'ok' : 'err'); m.textContent = t || ''; }
 function lsGet(k){ try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
@@ -1327,9 +1332,10 @@ function shopSheets(book){
 // The fence Post Sheet lists every opening's left and right post, so a post shared by two openings looks like it's cut twice.
 // The tablet rebuilds it like the railing Post Sheet from the sheet's hidden one-row-per-post list (is post / type / cut / top blk / bot blk):
 // the job info with post height and block marks standing out, then 1 · Post cutting and 2 · Blocking, totals by post type.
-var FENCE_TYPES = { end: 'Ends', mid: 'Mids', cor: 'Corners', corner: 'Corners', incor: 'Inside corners' };
-function fenceType(t){ var k = String(t).trim().toLowerCase(); return FENCE_TYPES[k] || (k ? t.charAt(0).toUpperCase() + t.slice(1) + 's' : 'Posts'); }
-function fenceRank(t){ var i = ['end', 'mid', 'cor', 'corner', 'incor'].indexOf(String(t).trim().toLowerCase()); return i < 0 ? 9 : Math.min(i, 2); }
+var PK_KEY = 'FENCE|pickets';
+var FENCE_TYPES = { end: 'Ends', mid: 'Mids', cor: 'Corners', corner: 'Corners', incor: 'InCors' };
+function fenceType(t){ var k = String(t).trim().toLowerCase(); return FENCE_TYPES[k] || (k ? String(t).trim() : 'Posts'); }
+function fenceRank(t){ var k = String(t).trim().toLowerCase(), i = ['end', 'mid', 'cor', 'incor'].indexOf(k); return i >= 0 ? Math.min(i, 2) : /^tran/.test(k) ? 3 : /^float/.test(k) ? 4 : 9; }
 function fenceLabel(sd, re){
   for (var r = 1; r <= 12; r++) for (var c = 1; c <= 12; c++){
     if (!re.test(String(cellVal(sd, r, c) == null ? '' : cellVal(sd, r, c)).trim())) continue;
@@ -1347,23 +1353,29 @@ function fencePosts(book, item){
   var posts = [];
   for (var r = H + 1; r <= (sd.maxR || 0); r++){
     if (+v(r, col['is post']) !== 1) continue;
-    posts.push({ type: String(v(r, col.type)).trim(), cut: +v(r, col.cut) || 0, top: v(r, col['top blk']), bot: v(r, col['bot blk']), other: String(v(r, col['other side'])).trim() });
+    // a step post (Tran): standard blocks on the high side, the step added on the low side (helper columns low side / low top / low bot)
+    // two sheet layouts: 'low side / low top / low bot', or 'other top / other bot' (the next opening's side of the post, i.e. the right)
+    var ls = String(v(r, col['low side'])).trim(), lt = ls ? v(r, col['low top']) : '', lb = ls ? v(r, col['low bot']) : '';
+    if (!ls && col['other top'] != null && (String(v(r, col['other top'])).trim() !== '' || String(v(r, col['other bot'])).trim() !== '')){ ls = 'Right'; lt = v(r, col['other top']); lb = v(r, col['other bot']); }
+    posts.push({ type: String(v(r, col.type)).trim(), cut: +v(r, col.cut) || 0, top: v(r, col['top blk']), bot: v(r, col['bot blk']), other: ls ? '' : String(v(r, col['other side'])).trim(),
+      ls: ls, lt: lt, lb: lb });
   }
   if (!posts.length) return null;
   var len = function(x){ return x === '' || x == null ? '' : typeof x === 'number' ? fmt16(x) : String(x); };
   var group = function(keyf){ var out = []; posts.forEach(function(p){ var k = keyf(p), g = out.filter(function(x){ return x.k === k; })[0]; if (!g){ g = { k: k, p: p, n: 0 }; out.push(g); } g.n++; });
     return out.sort(function(a, b){ return fenceRank(a.p.type) - fenceRank(b.p.type) || (b.p.cut - a.p.cut); }); };
-  var cuts = group(function(p){ return p.type + '|' + p.cut; }), blks = group(function(p){ return p.type + '|' + p.top + '|' + p.bot + '|' + p.other; });
-  var hasOther = posts.some(function(p){ return p.other !== '' && p.other !== '0'; }), N = hasOther ? 6 : 5;
+  var cuts = group(function(p){ return p.type + '|' + p.cut; }), blks = group(function(p){ return p.type + '|' + p.top + '|' + p.bot + '|' + p.other + '|' + p.ls + '|' + p.lt + '|' + p.lb; });
+  var hasOther = posts.some(function(p){ return p.other !== '' && p.other !== '0'; }), hasLow = posts.some(function(p){ return p.ls; });
+  var N = 5 + (hasLow ? 3 : 0) + (hasOther ? 1 : 0);
   var fake = { cells: {}, hr: {}, hc: {}, w: {}, merges: [], maxR: 0, maxC: N }, R = 0, YEL = 'background:#FFF2CC;';
   var put = function(c, val, o){ fake.cells[R + ':' + c] = Object.assign({ v: val }, o || {}); };
   var same = function(f){ var a = posts.map(f).map(String); return a.every(function(x){ return x === a[0]; }) ? a[0] : null; };
   var info = function(lab, val, cls){ R++; var z = R % 2 ? '' : YEL; put(1, lab, { c: 1, css: z, cls: cls }); put(2, String(val), { c: 1, b: 1, css: z, cls: cls ? cls.replace('hilab', 'hival') : '' }); fake.merges.push({ r1: R, r2: R, c1: 2, c2: N }); };
   R++; put(1, 'POST SHEET', { b: 1 });
-  [['Job', /^job:?$/i], ['Colour', /^colou?r:?$/i], ['Mount', /^mount:?$/i], ['Post', /^post wall:?$/i]].forEach(function(a){ var x = fenceLabel(sd, a[1]); if (String(x).trim() !== '') info(a[0], x); });
+  [['Job', /^job:?$/i], ['Colour', /^colou?r:?$/i], ['Mount', /^mount:?$/i], ['Post', /^post( wall)?:?$/i]].forEach(function(a){ var x = fenceLabel(sd, a[1]); if (String(x).trim() !== '') info(a[0], x); });
   var ph = same(function(p){ return p.cut; });
   var stdH = fenceLabel(sd, /^std post ht:?$/i);
-  info('Post height', ph != null ? len(+ph) : stdH !== '' ? len(+stdH) + ' standard · see Post cutting' : 'see Post cutting');
+  info('Post height', ph != null ? len(+ph) : stdH !== '' ? len(+stdH) + ' · see Post cutting' : 'see Post cutting');
   var tb = same(function(p){ return p.top; }), bb = same(function(p){ return p.bot; });
   info('Top channel block', tb != null ? len(posts[0].top) : 'see Blocking', 'hilab');
   info('Bottom channel block', bb != null ? len(posts[0].bot) : 'see Blocking', 'hilab');
@@ -1374,8 +1386,11 @@ function fencePosts(book, item){
   cuts.forEach(function(g, i){ R++; var z = i % 2 ? YEL : ''; put(1, fenceType(g.p.type), { c: 1, b: 1, css: z }); put(2, String(g.n), { c: 1, b: 1, css: z }); put(3, '', { css: z }); put(4, len(g.p.cut), { c: 1, b: 1, css: z }); });
   R++;
   R++; put(1, '2 · Blocking');
-  R++; ['Category', 'Qty', '✓', 'Top channel', 'Bottom channel'].concat(hasOther ? ['Other side'] : []).forEach(function(t, i){ put(i + 1, t, { c: 1 }); });
-  blks.forEach(function(g, i){ R++; var z = i % 2 ? YEL : ''; put(1, fenceType(g.p.type), { c: 1, b: 1, css: z }); put(2, String(g.n), { c: 1, b: 1, css: z }); put(3, '', { css: z }); put(4, len(g.p.top), { c: 1, b: 1, css: z }); put(5, len(g.p.bot), { c: 1, b: 1, css: z }); if (hasOther) put(6, len(g.p.other), { c: 1, b: 1, css: z }); });
+  R++; ['Category', 'Qty', '✓', 'Top channel', 'Bottom channel'].concat(hasLow ? ['Step side', 'Step top channel', 'Step bottom channel'] : []).concat(hasOther ? ['Other side'] : []).forEach(function(t, i){ put(i + 1, t, { c: 1 }); });
+  blks.forEach(function(g, i){ R++; var z = i % 2 ? YEL : '', c = 6, lo = g.p.ls ? ' hival' : '';
+    put(1, fenceType(g.p.type), { c: 1, b: 1, css: z }); put(2, String(g.n), { c: 1, b: 1, css: z }); put(3, '', { css: z }); put(4, len(g.p.top), { c: 1, b: 1, css: z }); put(5, len(g.p.bot), { c: 1, b: 1, css: z });
+    if (hasLow){ put(c++, g.p.ls || '', { c: 1, b: 1, css: z }); put(c++, len(g.p.lt), { c: 1, b: 1, css: z, cls: lo.trim() }); put(c++, len(g.p.lb), { c: 1, b: 1, css: z, cls: lo.trim() }); }
+    if (hasOther) put(c, len(g.p.other), { c: 1, b: 1, css: z }); });
   // Shop Welds, top mount fences: 3 · Welding lists the base plates by type, like Bracketing on a railing Post Sheet
   // (ends offset with the plate reaching in under the fence; mids and corners centred; Cor turns right, Incor left)
   if (WELD && /^top/i.test(String(fenceLabel(sd, /^mount:?$/i)).trim())){
@@ -1412,7 +1427,8 @@ function fenceify(L, sd){
   var box = function(valC, head){ if (valC == null) return; var v = valC + 0.5; L.cols.splice(L.cols.indexOf(valC) + 1, 0, v); L.vchk[v] = 1; units.forEach(function(r){ if (L.txt(r, valC) !== '') L.chk[r + ':' + v] = { left: valC, head: head }; }); };
   var lp = colOf(/^left post$/i);
   box(L.cols[0], 'Rail tag'); box(colOf(/^top (channel|rail)$/i), 'Top channel'); box(colOf(/^bottom channel$/i), 'Bottom channel');
-  if (lp != null) L.div[lp] = 1;
+  // black lines before Left post, Right post and R post ht
+  [lp, colOf(/^right post$/i), colOf(/^r post ht$/i)].forEach(function(c){ if (c != null) L.div[c] = 1; });
 }
 function fenceHead(book, item){
   var sd = item.sd, L = item.L, got = [];
@@ -1422,15 +1438,26 @@ function fenceHead(book, item){
       if (sd.hc[c]) continue;
       var t = show(book, sd.cells[r + ':' + c]).trim(); if (!t) continue;
       if (/:$/.test(t)){ lab = t.replace(/:$/, '').trim(); lc = c; continue; }
-      if (lab){ got.push({ c: lc, r: r, lab: /^post top to rails?$/i.test(lab) ? 'Channel Block Heights' : lab, val: t }); lab = null; }
+      if (lab){ got.push({ c: lc, r: r, lab: /^post top to rails?$/i.test(lab) ? 'Channel Block Heights' : /^rails$/i.test(lab) ? 'Channels' : /^post wall$/i.test(lab) ? 'Post' : /^picket (cut|length)$/i.test(lab) ? 'Picket Length' : lab, val: t }); lab = null; }
     }
   }
   got.sort(function(a, b){ return a.c - b.c || a.r - b.r; });
+  // total pickets for the job (sum of the Pickets column), shown with the channel type so it's easy to find
+  var pc = null; for (var ci = 1; ci <= (sd.maxC || 20) && pc == null; ci++) if (/^pickets?$/i.test(show(book, sd.cells[L.hdr + ':' + ci]).trim())) pc = ci;
+  if (pc != null){
+    var tot = 0, any = false;
+    for (var rr = L.hdr + 1; rr <= (sd.maxR || 0); rr++){ var u = String(cellVal(sd, rr, 1) == null ? '' : cellVal(sd, rr, 1)).trim(), n = +cellVal(sd, rr, pc); if (u !== '' && !isNaN(+u) && n > 0){ tot += n; any = true; } }
+    if (any) got.push({ lab: 'Pickets', val: String(tot) });
+  }
+  // the yellow block together, two to a row, after the first row (Job / Colour)
+  var HI = ['channel', 'pickets', 'picket length', 'post'], his = [];
+  HI.forEach(function(n){ got.forEach(function(g){ if (g.lab.toLowerCase() === n) his.push(g); }); });
+  got = got.filter(function(g){ return his.indexOf(g) < 0; }); got.splice.apply(got, [Math.min(2, got.length), 0].concat(his));
   var h = '<table class="sheet finfo"><tr><td colspan="4" class="b">' + esc(show(book, sd.cells['1:1']).trim() || 'CUT SHEET') + '</td></tr>';
   for (var i = 0; i < got.length; i += 2){
     var z = (i / 2) % 2 ? '' : ' style="background:#FFF2CC"', p = got[i], q = got[i + 1];
     // the channel type (3/4 Punch …) stands out like post height on the railing sheets
-    var pair = function(x){ var hi = /^channel$/i.test(x.lab); return '<td class="c' + (hi ? ' hilab' : '') + '">' + esc(x.lab) + '</td><td class="c b' + (hi ? ' hival' : '') + '">' + esc(x.val) + '</td>'; };
+    var pair = function(x){ var hi = /^(channel|pickets|picket length|post)$/i.test(x.lab); return '<td class="c' + (hi ? ' hilab' : '') + '">' + esc(x.lab) + '</td><td class="c b' + (hi ? ' hival' : '') + '">' + esc(x.val) + '</td>'; };
     h += '<tr class="info"' + z + '>' + pair(p) + (q ? pair(q) : '<td></td><td></td>') + '</tr>';
   }
   return h + '</table>';
@@ -1751,7 +1778,7 @@ function renderSheet(book, item, done){
   });
   var plateRows = '';
   var rmk = cur && cur.f.remake && sh.name === 'CUT SHEET' ? cur.f.remake : null;
-  var h = (rmk ? '<div class="rmbanner"><b>↻ Remake · ' + esc(rmk.tags.join(', ')) + '</b>' + (rmk.note ? '<span>' + esc(rmk.note) + '</span>' : '') + '</div>' : '') + (L.fence ? fenceHead(book, item) : '') + (fenceTop(item) ? '<div class="bpnote"><b>Top mount fence · weld-on base plates</b><span class="bpkey">' + fencePlateSize(item) + ' plates for ' + esc(String(fenceLabel(item.sd, /^post wall:?$/i) || '2x2')) + ' posts, the same rules as top mount railings. <i>End</i> offset: the post sits at the outer end and the plate reaches in under the fence · <i>Mid</i> and corners centered (<i>Cor</i> turns right, <i>Incor</i> turns left) · <i>Open</i> no post on that side (the next opening’s post)</span>The Left post and Right post columns show which plate goes on each post.</div>' + fencePlates(item) : '') + (WELD && isTop() && /^(CUT SHEET|POST SHEET)$/.test(sh.name) ? '<div class="bpnote"><b>Top mount · weld-on base plates</b><span class="bpkey">4x4 plates for 2x2 posts. Offset: the post sits at the outer end and the plate reaches in under the rail. Reverse offset: the plate sticks out past the end. End corners turn right with the run, inside corners turn left.</span>' + (sh.name === 'POST SHEET' ? 'Left and right ends are welded the same, and so are end corners and inside corners, so they’re listed together with the total quantity. The Cut sheet tab shows which plate goes on each rail end.' : 'The Left post and Right post columns show which base plate goes on each end of the rail.') + '</div>' : '') + '<table class="sheet' + (L.fence ? ' fence' : '') + '">' + (L.fence ? '<tr hidden></tr>' : '');
+  var h = (rmk ? '<div class="rmbanner"><b>↻ Remake · ' + esc(rmk.tags.join(', ')) + '</b>' + (rmk.note ? '<span>' + esc(rmk.note) + '</span>' : '') + '</div>' : '') + (L.fence ? fenceHead(book, item) : '') + (fenceTop(item) ? '<div class="bpnote"><b>Top mount fence · weld-on base plates</b><span class="bpkey">' + fencePlateSize(item) + ' plates for ' + esc(String(fenceLabel(item.sd, /^post wall:?$/i) || '2x2')) + ' posts, the same rules as top mount railings. <i>End</i> offset: the post sits at the outer end and the plate reaches in under the fence · <i>Mid</i> and corners centered (<i>Cor</i> turns right, <i>Incor</i> turns left) · <i>Open</i> no post on that side (the next opening’s post)</span>The Left post and Right post columns show which plate goes on each post.</div>' + fencePlates(item) : '') + (WELD && isTop() && /^(CUT SHEET|POST SHEET)$/.test(sh.name) ? '<div class="bpnote"><b>Top mount · weld-on base plates</b><span class="bpkey">4x4 plates for 2x2 posts. Offset: the post sits at the outer end and the plate reaches in under the rail. Reverse offset: the plate sticks out past the end. End corners turn right with the run, inside corners turn left.</span>' + (sh.name === 'POST SHEET' ? 'Left and right ends are welded the same, and so are end corners and inside corners, so they’re listed together with the total quantity. The Cut sheet tab shows which plate goes on each rail end.' : 'The Left post and Right post columns show which base plate goes on each end of the rail.') + '</div>' : '') + '<table class="sheet' + (L.fence ? ' fence' : '') + '">' + (L.fence ? '<tr class="sortrow"><td colspan="' + L.cols.length + '"><div class="sortbar"><span class="sgl">Pickets Cut</span><b class="pkro' + (cur && cur.done[PK_KEY] ? ' on' : '') + '">' + (cur && cur.done[PK_KEY] ? 'YES' : 'NO') + '</b></div></td></tr>' : '');
   // fences: the layout sits in its own table just above the cut list, so the cut list's stripes still line up with Dave's tablet
   if (L.fence && cur && cur.units && cur.units.Fence) h = h.replace('<table class="sheet fence">', '<table class="sheet laytab">' + layoutRow('Fence', 1) + '</table><table class="sheet fence">');   // stands in for Shop Cuts' sort row, so the stripes line up with Dave's tablet
   var isCut = sh.name === 'CUT SHEET' && cur && Object.keys(cur.units || {}).length, lastUnit = null;
@@ -1821,7 +1848,7 @@ function renderSheet(book, item, done){
       var tg = L.txt(r, L.cols[0]), un = /^\S+\.\d+$/.test(tg) ? unitOf(tg) : null;
       if (un && un !== lastUnit){ h += layoutRow(un, NC); lastUnit = un; }
     }
-    var rc = L.cols.filter(function(c){ return L.chk[r + ':' + c]; });
+    var rc = L.cols.filter(function(c){ return L.chk[r + ':' + c] && !L.chk[r + ':' + c].opt; });
     var main = L.vchk ? [] : rc.filter(function(c){ return /top rail|channel/i.test(L.chk[r + ':' + c].head); });
     var need = (main.length ? main : rc).map(function(c){ return pre + 'c' + r + ':' + c; });
     var rowDone = (need.length && need.every(function(k){ return done[k]; })) || (L.rowTap[r] && done[pre + 'r' + r]);
@@ -1842,6 +1869,8 @@ function renderSheet(book, item, done){
       // top mount: a centred plate's method reads WELD-ON Centered (the cut sheet says just "WELD-ON plate" for Mid-Cen)
       if (WELD && sh.name === 'POST SHEET' && isTop() && c === L.cols[0]) t = t.replace(/^\d+\s*[·.\-]\s*/, '');   // only the plates show, so no section number
       if (sh.name === 'POST SHEET' && /^cj$/i.test(t.trim())) t = 'Joints';   // the template's bracket code CJ reads as Joints on the tablet
+      if (L.fence && r === L.hdr) t = t.replace(/^1st space \(cut end to hole edge\)$/i, '1st space (to hole edge)').replace(/^picket cut$/i, 'Picket Length');
+      if (L.fence && r > L.hdr && /^step$/i.test(L.txt(L.hdr, c))) t = t.replace(/\bLow\b/, 'Down').replace(/\bHigh\b/, 'Up');   // fence steps read Up / Down
       if (sh.name === 'POST SHEET' && /^MIDS$/.test(t.trim())) t = 'Mids';     // and MIDS (in capitals in the template) reads as Mids
       if (sh.name === 'POST SHEET' && isTop() && /^weld-on plate$/i.test(t.trim()) && /^(Mid|EC|IC|Joint|E)-Cen(-[LR])?$/i.test(L.txt(r, L.cols[0]).trim())) t = 'WELD-ON Centered';
       var attr = sp ? (sp.rs > 1 ? ' rowspan="' + sp.rs + '"' : '') + (sp.cs > 1 ? ' colspan="' + sp.cs + '"' : '') : '';
