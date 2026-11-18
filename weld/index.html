@@ -378,6 +378,9 @@ table.sheet.laytab{margin-bottom:10px}
 .pushbtn{margin-right:8px;background:#FFF3E6;border-color:#E8590C;color:#8A3205;font-weight:900}
 .pushbtn.on{background:#EEF6EC;border-color:#2E6B2A;color:#1F4D1C}
 @media (max-width:640px){.pushbtn{font-size:14px;padding-left:10px;padding-right:10px}}
+.cnts{display:flex;flex-direction:column;gap:6px;flex-shrink:0}
+.cnt.pcnt{background:#FFF0E3;color:#8A3205}
+@media (max-width:640px){.cnts{flex-direction:row;flex-wrap:wrap;margin-left:56px}.cnts .cnt{margin-left:0}}
 </style>
 </head><body>
 
@@ -903,7 +906,7 @@ function wId(id){ return id + '.w'; }
 var el = function(id){ return document.getElementById(id); };
 function esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 // a short notice at the bottom of the screen
-var VERSION = '11.17.1532', toastT = null;
+var VERSION = '11.18.712', toastT = null;
 function toast(t){ var b = el('toast'); b.textContent = t; b.hidden = false; b.classList.remove('out'); clearTimeout(toastT); toastT = setTimeout(function(){ b.classList.add('out'); setTimeout(function(){ b.hidden = true; }, 400); }, 3200); }
 function msg(t, ok){ var m = el('msg'); m.hidden = !t; m.className = 'msg ' + (ok ? 'ok' : 'err'); m.textContent = t || ''; }
 function lsGet(k){ try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
@@ -1079,7 +1082,8 @@ function renderWeldList(box, have, done){
     if (f.remake && !x.ws.fin){ var rt = rmTicks(f.id); st = (isReady ? '<span class="signoff">Ready to weld</span> · remake finished ' + day(f.rmGone) : 'Remake being cut · ' + (rt.tot ? rt.n + ' of ' + rt.tot + ' ticked' : 'not started')) + (f.remake.note ? ' · “' + esc(f.remake.note) + '”' : ''); }
     return '<button type="button" class="job' + (x.ws.fin ? ' done' : '') + (isReady ? '' : ' wait') + '" data-w="' + i + '">' + (x.ws.fin ? '<span class="ring donering" aria-hidden="true">✓</span>' : WELD_BOXES && (isReady || x.ws.d) ? ring(x.p) : isReady ? '<span class="ring wring" aria-hidden="true">' + SPARK + '</span>' : '<span class="ring waitring" aria-hidden="true">…</span>') +
       '<span class="t"><b>' + (pr < Infinity ? '<span class="pri">#' + (pr + 1) + '</span>' : '') + esc(f.name.replace(/\.xls[xm]$/i, '')) + (isNew(f.id) ? '<span class="newtag">New</span>' : '') + '</b><span class="s">' + st + (on ? ' · <span class="offline">✓ on tablet</span>' : '') + '</span></span>' +
-      (tag ? '<span class="cnt' + (/^\d/.test(tag) ? '' : ' warn') + '">' + (/^(\d+) (.+)$/.test(tag) ? '<b>' + tag.replace(/ .*/, '') + '</b>' + esc(tag.replace(/^\d+ /, '')) : esc(tag)) + '</span>' : '') +
+      (tag ? '<span class="cnts"><span class="cnt' + (/^\d/.test(tag) ? '' : ' warn') + '">' + (/^(\d+) (.+)$/.test(tag) ? '<b>' + tag.replace(/ .*/, '') + '</b>' + esc(tag.replace(/^\d+ /, '')) : esc(tag)) + '</span>' +
+        (inf && inf.posts > 0 ? '<span class="cnt pcnt" title="Posts getting a weld-on base plate or bracket"><b>' + inf.posts + '</b>' + (inf.posts === 1 ? 'Post' : 'Posts') + '</span>' : '') + '</span>' : '') +
       (isReady && !x.ws.fin ? '<span class="wdone" data-weld="' + i + '" role="button" aria-label="Mark ' + esc(f.name.replace(/\.xls[xm]$/i, '')) + ' welded"><span class="box"></span><small>Welded</small></span>' : '') + '</button>';
   };
   var anyPriReady = ready.some(function(x){ return prioRank(x.f.id) < Infinity || x.f.remake; });
@@ -1103,9 +1107,43 @@ function railLabel(book){
   if (scr.length) return Promise.all(scr.map(function(sh){ return parseSheet(book, sh).then(function(sd){ var n = 0; for (var r = 7; r <= sd.maxR; r++){ var v = cellVal(sd, r, 1); if (v != null && v !== '' && !isNaN(+v)) n++; } return n; }); })).then(function(a){ var n = a.reduce(function(x, y){ return x + y; }, 0); return n + (n === 1 ? ' Screen' : ' Screens'); });
   return '';
 }
+
+// Shop Welds: how many posts Ian welds a base plate or bracket onto. Railings: the Post Sheet's Bracketing section,
+// adding up every bracket code whose method is WELD-ON (top mount base plates, weld-on fascia brackets). Screw-on doesn't count.
+// Top mount fences: every End, Mid, Cor and Incor post on the cut sheet. Returns 0 when there's nothing to weld on.
+function weldPostCount(book){
+  if (book.raw) return Promise.resolve(0);
+  var ps = book.sheets.filter(function(s){ return s.name === 'POST SHEET'; })[0], cut = book.sheets.filter(function(s){ return s.name === 'CUT SHEET'; })[0];
+  var fromPosts = ps ? parseSheet(book, ps).then(function(sd){
+    var n = 0, inSec = false, head = false;
+    for (var r = 1; r <= sd.maxR; r++){
+      var a = String(cellVal(sd, r, 1) == null ? '' : cellVal(sd, r, 1)).trim();
+      if (/^\d\s*·/.test(a)){ inSec = /bracket|plate/i.test(a); head = false; continue; }
+      if (!inSec) continue;
+      if (!head){ if (/^bracket code$/i.test(a)) head = true; continue; }
+      if (a === '') break;
+      if (/weld/i.test(String(cellVal(sd, r, 4) || ''))) n += +cellVal(sd, r, 2) || 0;
+    }
+    return n;
+  }) : Promise.resolve(0);
+  return fromPosts.then(function(n){
+    if (n || !cut) return n;
+    return parseSheet(book, cut).then(function(sd){
+      if (!/^top/i.test(String(fenceLabel(sd, /^mount:?$/i)).trim())) return 0;
+      var H = null, cs = [];
+      for (var r = 1; r <= Math.min(sd.maxR, 40) && H == null; r++) for (var c = 1; c <= 20; c++){ var t = String(cellVal(sd, r, c) || '').trim(); if (/^(left|right) post$/i.test(t)){ H = r; cs.push(c); } }
+      if (H == null) return 0;
+      for (var c2 = 1; c2 <= 20; c2++){ if (cs.indexOf(c2) < 0 && /^(left|right) post$/i.test(String(cellVal(sd, H, c2) || '').trim())) cs.push(c2); }
+      var m = 0;
+      for (var r2 = H + 1; r2 <= sd.maxR; r2++) cs.forEach(function(c){ if (/^(end|mid|cor|corner|incor|incorner)$/i.test(String(cellVal(sd, r2, c) || '').trim())) m++; });
+      return m;
+    });
+  }).catch(function(){ return 0; });
+}
 function rememberInfo(f, book, count){
-  return Promise.resolve(railLabel(book)).then(function(label){
-    lsSet('shop-info:' + f.id, { u: f.updated, label: label });
+  return Promise.all([railLabel(book), WELD ? weldPostCount(book) : 0]).then(function(a){
+    var label = a[0];
+    lsSet('shop-info:' + f.id, { u: f.updated, label: label, posts: a[1], pv: 2 });
     if (!count || book.raw) return;
     // the job list's ring needs the job's total box count, even on a tablet that hasn't opened the job yet
     return shopSheets(book).then(function(items){
@@ -1125,7 +1163,7 @@ function prefetch(){
     var f = todo.shift(); if (!f){ prefetching = false; return; }
     var info = lsGet('shop-info:' + f.id);
     fileGet(f.id).then(function(local){
-      if (local && local.updated >= f.updated && info && info.u === f.updated && (lsGet(SUM + f.id) || {}).total && lsGet(WSUM + f.id)) return next();
+      if (local && local.updated >= f.updated && info && info.u === f.updated && (!WELD || info.pv === 2) && (lsGet(SUM + f.id) || {}).total && lsGet(WSUM + f.id)) return next();
       var got = local && local.updated >= f.updated ? Promise.resolve(local.b64) : apiNew('fabopen2', 'fabopen', { id: f.id }).then(function(r){ filePut({ id: f.id, name: f.name, updated: f.updated, b64: r.b64 }); return r.b64; });
       return got.then(function(b64){ return parseBook(b64); }).then(function(book){ return rememberInfo(f, book, true); }).then(function(){ if (!cur) renderList(false); next(); }, function(){ next(); });
     });
