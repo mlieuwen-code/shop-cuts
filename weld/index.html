@@ -912,7 +912,7 @@ function wId(id){ return id + '.w'; }
 var el = function(id){ return document.getElementById(id); };
 function esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 // a short notice at the bottom of the screen
-var VERSION = '11.18.859', toastT = null;
+var VERSION = '11.18.903', toastT = null;
 function toast(t){ var b = el('toast'); b.textContent = t; b.hidden = false; b.classList.remove('out'); clearTimeout(toastT); toastT = setTimeout(function(){ b.classList.add('out'); setTimeout(function(){ b.hidden = true; }, 400); }, 3200); }
 function msg(t, ok){ var m = el('msg'); m.hidden = !t; m.className = 'msg ' + (ok ? 'ok' : 'err'); m.textContent = t || ''; }
 function lsGet(k){ try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
@@ -1779,7 +1779,7 @@ function renderSheet(book, item, done){
   });
   var plateRows = '';
   var rmk = cur && cur.f.remake && sh.name === 'CUT SHEET' ? cur.f.remake : null;
-  var h = (rmk ? '<div class="rmbanner"><b>↻ Remake · ' + esc(rmk.tags.join(', ')) + '</b>' + (rmk.note ? '<span>' + esc(rmk.note) + '</span>' : '') + '</div>' : '') + (L.fence ? fenceHead(book, item) : '') + (fenceTop(item) ? fencePlates(item) : '') + '<table class="sheet' + (L.fence ? ' fence' : '') + '">' + (L.fence ? '<tr class="sortrow"><td colspan="' + L.cols.length + '"><div class="sortbar"><span class="sgl">Pickets Cut</span><b class="pkro' + (cur && cur.done[PK_KEY] ? ' on' : '') + '">' + (cur && cur.done[PK_KEY] ? 'YES' : 'NO') + '</b></div></td></tr>' : '');
+  var h = (rmk ? '<div class="rmbanner"><b>↻ Remake · ' + esc(rmk.tags.join(', ')) + '</b>' + (rmk.note ? '<span>' + esc(rmk.note) + '</span>' : '') + '</div>' : '') + (L.fence ? fenceHead(book, item) : '') + (fenceTop(item) ? fencePlates(item) : '') + '<table class="sheet' + (L.fence ? ' fence' : '') + '">' + (L.fence ? '<tr class="sortrow"><td colspan="' + L.cols.length + '"><div class="sortbar"><span class="sgl">Pickets Cut by Fab</span><b class="pkro' + (cur && cur.done[PK_KEY] ? ' on' : '') + '">' + (cur && cur.done[PK_KEY] ? 'YES' : 'NO') + '</b></div></td></tr>' : '');
   // fences: the layout sits in its own table just above the cut list, so the cut list's stripes still line up with Dave's tablet
   if (L.fence && cur && cur.units && cur.units.Fence) h = h.replace('<table class="sheet fence">', '<table class="sheet laytab">' + layoutRow('Fence', 1) + '</table><table class="sheet fence">');   // stands in for Shop Cuts' sort row, so the stripes line up with Dave's tablet
   var isCut = sh.name === 'CUT SHEET' && cur && Object.keys(cur.units || {}).length, lastUnit = null;
