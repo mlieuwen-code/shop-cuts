@@ -420,6 +420,8 @@ table.sheet td.pkyes{background:var(--doneink, #2E6B2A)!important;color:#fff!imp
 #job .apphead .bar{background:rgba(255,255,255,.18)}
 #job .apphead .bar i{background:var(--rblue)}
 @media (max-width:560px){ .brand.top>div:nth-child(2){border-left:0;padding-left:0} .brand.top b{font-size:15px} .brand.top .logo,.brand.top .logo img{height:28px} }
+/* Shop Welds has two header buttons (Alerts and Refresh), so on a phone the header tightens up to fit */
+@media (max-width:560px){ .brand.top{gap:8px} .brand.top .eyebrow{display:none} .brand.top .btn{padding:8px 10px;font-size:13px;min-height:0;min-width:0} .brand.top b{font-size:13px} }
 </style>
 </head><body>
 
@@ -942,7 +944,7 @@ function wId(id){ return id + '.w'; }
 var el = function(id){ return document.getElementById(id); };
 function esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 // a short notice at the bottom of the screen
-var VERSION = '11.19.1400', toastT = null;
+var VERSION = '11.19.1442', toastT = null;
 function toast(t){ var b = el('toast'); b.textContent = t; b.hidden = false; b.classList.remove('out'); clearTimeout(toastT); toastT = setTimeout(function(){ b.classList.add('out'); setTimeout(function(){ b.hidden = true; }, 400); }, 3200); }
 function msg(t, ok){ var m = el('msg'); m.hidden = !t; m.className = 'msg ' + (ok ? 'ok' : 'err'); m.textContent = t || ''; }
 function lsGet(k){ try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
@@ -1012,8 +1014,8 @@ function completedList(){
   (doneJobs || []).forEach(function(d){ if (d.doneAt >= cut && !ids[d.id] && !late[d.id]){ ids[d.id] = 1; out.push(d); } });
   if (WELD) rmGone.concat(rmCur).forEach(function(g){ var f = rmF(g, g.gone), w = wLoad(f.id); if (w.fin && w.fin.at >= cut && !ids[f.id]){ ids[f.id] = 1; out.push(Object.assign(f, { doneAt: w.fin.at, by: w.fin.by })); } });
   try { for (var i = 0; i < localStorage.length; i++){ var k = localStorage.key(i); if (k.indexOf(WPROG) !== 0) continue; var id = k.slice(WPROG.length);
-    if (ids[id] || late[id]) continue; var pp = lsGet(k); if (pp && pp.name && pp.fin && pp.fin.at >= cut){ ids[id] = 1; out.push({ id: id, name: pp.name, updated: 0, doneAt: pp.fin.at, by: pp.fin.by }); } } } catch (e) {}
-  if (WELD) gatesDone.forEach(function(g){ if (g.doneAt >= cut && !ids[g.id]){ ids[g.id] = 1; out.push({ id: g.id, name: g.name, updated: g.updated, doneAt: g.doneAt, by: g.by, gate: 1 }); } });
+    if (ids[id] || late[id]) continue; var pp = lsGet(k); if (pp && pp.name && pp.fin && pp.fin.at >= cut){ ids[id] = 1; out.push({ id: id, name: pp.name, updated: 0, doneAt: pp.fin.at, by: pp.fin.by, direct: pp.direct || gSheet(pp) ? 1 : 0 }); } } } catch (e) {}
+  if (WELD) gatesDone.forEach(function(g){ if (g.doneAt >= cut && !ids[g.id]){ ids[g.id] = 1; out.push(gSheet(g) ? { id: g.id, name: g.name, updated: g.updated, doneAt: g.doneAt, by: g.by, direct: 1 } : { id: g.id, name: g.name, updated: g.updated, doneAt: g.doneAt, by: g.by, gate: 1 }); } });
   return out.sort(function(a, b){ return b.doneAt - a.doneAt; });
 }
 // Shop Welds only: jobs an old Shop Cuts tablet moved to Completed at Assembly, before they were welded.
@@ -1050,7 +1052,7 @@ function renderList(cached){
     var done = !shownDone.length ? '<div class="donehead donenone"><span class="chev">✓</span>Completed (0) <span>· jobs show here for ' + DONE_DAYS + ' days once Welding complete is signed off</span></div>' : '<button type="button" class="donehead" data-act="donetoggle" aria-expanded="' + open + '"><span class="chev">' + (open ? '▾' : '▸') + '</span>Completed (' + shownDone.length + ') <span>· last ' + DONE_DAYS + ' days</span></button>' + (!open ? '' : '<div class="donesearch"><input type="search" id="doneQ" placeholder="Search completed jobs" autocomplete="off" aria-label="Search completed jobs" value="' + esc(doneQuery) + '"><span id="doneN"></span></div>' + shownDone.map(function(f, k){
       var on = have.indexOf(f.id) >= 0;
       return '<button type="button" class="job done fin-job" data-d="' + k + '" data-name="' + esc(f.name.toLowerCase()) + '"><span class="ring donering" aria-hidden="true">✓</span><span class="t"><b>' + esc(f.name.replace(/\.(xls[xm]|pdf)$/i, '')) + '</b>' +
-        '<span class="s"><span class="fin-tag">✓ ' + (f.gate ? 'Welded · gate drawing · ' : f.remake ? 'Welded · ' : 'Completed · ') + (f.by ? esc(f.by) + ' · ' : '') + esc(new Date(f.doneAt).toLocaleDateString([], { month: 'short', day: 'numeric' })) + '</span>' + (on ? ' · <span class="offline">✓ on tablet</span>' : '') + '</span></span></button>';
+        '<span class="s"><span class="fin-tag">✓ ' + (f.gate ? 'Welded · gate drawing · ' : f.direct ? 'Welded · straight to welding · ' : f.remake ? 'Welded · ' : 'Completed · ') + (f.by ? esc(f.by) + ' · ' : '') + esc(new Date(f.doneAt).toLocaleDateString([], { month: 'short', day: 'numeric' })) + '</span>' + (on ? ' · <span class="offline">✓ on tablet</span>' : '') + '</span></span></button>';
     }).join('') + '<div class="empty" id="doneNone" hidden>No completed jobs match.</div>');
     if (WELD){ renderWeldList(box, have, done); setTimeout(filterDone, 0); return; }
     if (!jobs.length){ box.innerHTML = '<div class="empty">No jobs in Ready to Fab yet. When a job is ready, it’s saved there from the office and shows up here.</div>' + done; return; }
@@ -1086,11 +1088,11 @@ var SPARK = '<svg width="24" height="24" viewBox="0 0 24 24" style="vertical-ali
 var shownW = [];
 function renderWeldList(box, have, done){
   var day = function(t){ return esc(new Date(t).toLocaleDateString([], { month: 'short', day: 'numeric' })); };
-  var all = jobs.concat(lateJobs(), rmItems()).filter(function(f){ return !wLoad(f.id).fin; });
-  if (!all.length && !gates.length){ box.innerHTML = '<div class="empty">No jobs in the shop yet. A job shows here once it’s in Ready to Fab, and moves up to Ready to weld when Assembly complete is signed off.</div>' + done; return; }
+  var all = jobs.concat(lateJobs(), rmItems(), directJobs()).filter(function(f){ return !wLoad(f.id).fin; });
+  if (!all.length && !pdfGates().length){ box.innerHTML = '<div class="empty">No jobs in the shop yet. A job shows here once it’s in Ready to Fab, and moves up to Ready to weld when Assembly complete is signed off.</div>' + done; return; }
   var info = all.map(function(f){
     var s = lsGet(SUM + f.id) || {}, ws = lsGet(WSUM + f.id) || {};
-    return { f: f, s: s, ws: ws, asm: s.asm || (f.late ? { by: f.by, at: f.doneAt } : f.rmGone ? { by: '', at: f.rmGone } : null), p: ws.n ? Math.min(1, (ws.d || 0) / ws.n) : 0 };
+    return { f: f, s: s, ws: ws, asm: s.asm || (f.direct ? { by: '', at: f.updated } : f.late ? { by: f.by, at: f.doneAt } : f.rmGone ? { by: '', at: f.rmGone } : null), p: ws.n ? Math.min(1, (ws.d || 0) / ws.n) : 0 };
   });
   // Priority card first, the same jobs in the same order as on Dave's tablet (wherever they're at), then Ready to weld (longest waiting first), then the rest
   var isReady = function(x){ return !!(x.asm || x.ws.fin); };
@@ -1115,6 +1117,7 @@ function renderWeldList(box, have, done){
     if (x.ws.fin) st = '<span class="fin-tag">✓ Welded · ' + esc(x.ws.fin.by) + ' · ' + day(x.ws.fin.at) + '</span>';
     else if (isReady) st = (x.ws.d ? '<span class="signoff">' + x.ws.d + ' of ' + x.ws.n + ' welded</span>' : WELD_BOXES ? 'Not started' : '<span class="signoff">Ready to weld</span>') + ' · assembled' + (x.asm.by ? ' by ' + esc(x.asm.by) : '') + ' ' + day(x.asm.at);
     else st = 'Still in the shop · ' + jobStatus(x.s.total ? x.s : null) + (x.ws.d ? ' · ' + x.ws.d + ' welded' : '');
+    if (f.direct && !x.ws.fin) st = (x.ws.d ? '<span class="signoff">' + x.ws.d + ' of ' + x.ws.n + ' welded</span>' : '<span class="signoff">Straight to welding</span>') + ' · skips Fab · in since ' + day(f.updated);
     if (f.remake && !x.ws.fin){ var rt = rmTicks(f.id); st = (isReady ? '<span class="signoff">Ready to weld</span> · remake finished ' + day(f.rmGone) : 'Remake being cut · ' + (rt.tot ? rt.n + ' of ' + rt.tot + ' ticked' : 'not started')) + (f.remake.note ? ' · “' + esc(f.remake.note) + '”' : ''); }
     return '<button type="button" class="job' + (x.ws.fin ? ' done' : '') + (isReady ? '' : ' wait') + '" data-w="' + i + '">' + (x.ws.fin ? '<span class="ring donering" aria-hidden="true">✓</span>' : WELD_BOXES && (isReady || x.ws.d) ? ring(x.p) : isReady ? '<span class="ring wring" aria-hidden="true">' + SPARK + '</span>' : '<span class="ring waitring" aria-hidden="true">…</span>') +
       '<span class="t"><b>' + (pr < Infinity ? '<span class="pri">#' + (pr + 1) + '</span>' : '') + esc(f.name.replace(/\.xls[xm]$/i, '')) + (isNew(f.id) ? '<span class="newtag">New</span>' : '') + '</b><span class="s">' + st + (on ? ' · <span class="offline">✓ on tablet</span>' : '') + '</span></span>' +
@@ -1124,7 +1127,7 @@ function renderWeldList(box, have, done){
   };
   var anyPriReady = ready.some(function(x){ return prioRank(x.f.id) < Infinity || x.f.remake; });
   box.innerHTML = (pri.length ? '<div class="prcard"><div class="prhead"><span class="prflame" aria-hidden="true">⚡</span>Priority coming up<span>· still in cutting or assembly, in the shop’s priority order</span></div>' + pri.map(function(x, i){ return card(x, i, false); }).join('') + '</div>' : '') +
-    (ready.length || gates.length ? '<div class="prcard rcard"><div class="prhead"><span class="prflame" aria-hidden="true">' + SPARK + '</span>Ready to weld<span>· ' + (anyPriReady ? 'priority and remakes first, then longest waiting' : 'longest waiting first') + '</span></div>' + ready.map(function(x, i){ return card(x, pri.length + i, true); }).join('') + gateCards() + '</div>'
+    (ready.length || pdfGates().length ? '<div class="prcard rcard"><div class="prhead"><span class="prflame" aria-hidden="true">' + SPARK + '</span>Ready to weld<span>· ' + (anyPriReady ? 'priority and remakes first, then longest waiting' : 'longest waiting first') + '</span></div>' + ready.map(function(x, i){ return card(x, pri.length + i, true); }).join('') + gateCards() + '</div>'
       : '<div class="empty">Nothing is waiting on welding right now.</div>') +
     (shop.length ? '<div class="prrest">Still in the shop · cutting and assembly</div>' + shop.map(function(x, i){ return card(x, pri.length + ready.length + i, false); }).join('') : '') + done;
   weldNotices(pri, ready);
@@ -1203,16 +1206,16 @@ function rememberInfo(f, book, count){
   });
 }
 // fetch new or changed jobs in the background: the list learns their rail counts, and they're on the tablet for when there's no signal
-var prefetching = false;
+var prefetching = false, prefetchAgain = false;
 function prefetch(){
-  if (prefetching) return; prefetching = true;
-  var todo = jobs.concat(lateJobs());
+  if (prefetching){ prefetchAgain = true; return; } prefetching = true;
+  var todo = jobs.concat(lateJobs(), WELD ? directJobs() : []);
   (function next(){
-    var f = todo.shift(); if (!f){ prefetching = false; return; }
+    var f = todo.shift(); if (!f){ prefetching = false; if (prefetchAgain){ prefetchAgain = false; prefetch(); } return; }
     var info = lsGet('shop-info:' + f.id);
     fileGet(f.id).then(function(local){
       if (local && local.updated >= f.updated && info && info.u === f.updated && (!WELD || info.pv === 3) && (lsGet(SUM + f.id) || {}).total && lsGet(WSUM + f.id)) return next();
-      var got = local && local.updated >= f.updated ? Promise.resolve(local.b64) : apiNew('fabopen2', 'fabopen', { id: f.id }).then(function(r){ filePut({ id: f.id, name: f.name, updated: f.updated, b64: r.b64 }); return r.b64; });
+      var got = local && local.updated >= f.updated ? Promise.resolve(local.b64) : jobFetch(f).then(function(r){ filePut({ id: f.id, name: f.name, updated: f.updated, b64: r.b64 }); return r.b64; });
       return got.then(function(b64){ return parseBook(b64); }).then(function(book){ return rememberInfo(f, book, true); }).then(function(){ if (!cur) renderList(false); next(); }, function(){ next(); });
     });
   })();
@@ -1228,7 +1231,7 @@ function loadList(){
     renderList(false); if (!el('mgr').hidden) renderMgr(); msg(''); prefetch(); pullAll(); flushPending();
     if (refreshAsked){ refreshAsked = false; toast('✓ Up to date · version ' + VERSION); }
     // forget files that are neither in Ready to Fab nor completed in the last 50 days
-    fileKeys().then(function(ks){ var keep = {}; jobs.concat(completedList(), lateCand()).forEach(function(f){ keep[f.id] = 1; }); ks.forEach(function(id){ if (!keep[id]) fileDel(id); }); });
+    fileKeys().then(function(ks){ var keep = {}; jobs.concat(completedList(), lateCand(), WELD ? directJobs() : []).forEach(function(f){ keep[f.id] = 1; }); ks.forEach(function(id){ if (!keep[id]) fileDel(id); }); });
   }, function(e){
     if (refreshAsked){ refreshAsked = false; toast('No signal, so this is the list from last time.'); }
     if (e.code === 'pin') return askPin(e.message === 'wrong PIN' ? 'That PIN didn’t work. Try again.' : 'Enter the crew PIN once on this tablet.', loadList);
@@ -2235,6 +2238,7 @@ el('sheet').addEventListener('click', function(e){
   }
   saveProg(); var y = window.scrollY; renderCur(); window.scrollTo(0, y); blockCheck(was);
 });
+function jobFetch(f, fid){ return f.direct ? api('weldopen', { id: fid || f.id }) : apiNew('fabopen2', 'fabopen', { id: fid || f.id }); }
 function openJob(f){
   msg('');
   var show = function(b64, note){
@@ -2275,7 +2279,7 @@ function openJob(f){
   fileGet(fid).then(function(local){
     if (local && local.updated >= f.updated && !f.remake) return show(local.b64);
     msg('Opening ' + f.name.replace(/\.xlsx$/i, '') + '…', true);
-    return apiNew('fabopen2', 'fabopen', { id: fid }).then(function(r){
+    return jobFetch(f, fid).then(function(r){
       filePut({ id: fid, name: f.remake ? f.remake.name : f.name, updated: f.remake ? (local && local.updated) || 0 : f.updated, b64: r.b64 });
       return show(r.b64, local ? 'A newer version came in from the office.' : '');
     }, function(e){
@@ -2297,7 +2301,7 @@ var STAGES = [
   { k: 'asm', kind: 'asm', title: 'Assembly complete', ask: 'Every rail tag is ticked. Who finished assembly?', un: 'Some rail tags were unticked after assembly was signed off.' }
 ];
 var WSTAGE = { k: 'wld', title: 'Welding complete', ask: WELD_BOXES ? 'Every rail is ticked. Who finished welding?' : 'Tap your name when this whole job is welded.', un: 'Some rails were unticked after welding was signed off.' };
-function asmOK(){ return !!(cur.asm || cur.f.late || isPreview()); }
+function asmOK(){ return !!(cur.asm || cur.f.late || cur.f.direct || isPreview()); }
 function stageCard(st, all, rec){
   var k = st.k;
   if (rec){
@@ -2350,13 +2354,14 @@ el('fin').addEventListener('click', function(e){
   if (a === 'name') signOff(k, b.getAttribute('data-n'));
   else if (a === 'other'){ var o = el('other_' + k); o.hidden = !o.hidden; }
   else if (a === 'otherok'){ var sel = el('sel_' + k); if (sel.value === '__new'){ var v = el('new_' + k).value.trim(); if (!v) return el('new_' + k).focus(); signOff(k, v); } else signOff(k, sel.value); }
-  else if (a === 'undo') confirmBox('Undo ' + st.title.toLowerCase() + ' for ' + cur.f.name.replace(/\.xls[xm]$/i, '') + '?', function(){ if (k === 'wld'){ cur.w.fin = null; cur.w.finX = Date.now(); saveW(); renderCur(); unComplete(cur.f.id); } else { cur[k] = null; cur[k + 'X'] = Date.now(); saveProg(); renderCur(); } });
+  else if (a === 'undo') confirmBox('Undo ' + st.title.toLowerCase() + ' for ' + cur.f.name.replace(/\.xls[xm]$/i, '') + '?', function(){ if (k === 'wld'){ cur.w.fin = null; cur.w.finX = Date.now(); saveW(); renderCur(); if (cur.f.direct) directMove(cur.f, 'u'); else unComplete(cur.f.id); } else { cur[k] = null; cur[k + 'X'] = Date.now(); saveProg(); renderCur(); } });
 });
 // ---------- completed jobs: PDF hard copy to Drive, file moved to Completed ----------
 // queued on the tablet when there's no signal (or Apps Script isn't updated yet) and sent next time the list loads
 function pending(){ return lsGet('shop-pending') || []; }
 function sendComplete(){
   if (!cur || !cur.w.fin) return;
+  if (cur.f.direct){ cur.w.direct = 1; cur.w.name = cur.f.name; saveW(); return directMove(cur.f, 'c', cur.w.fin.by, cur.w.fin.at); }
   var job = { id: cur.f.id, name: cur.f.name, by: cur.w.fin.by, at: cur.w.fin.at, html: printHtml() };
   lsSet('shop-pending', pending().filter(function(p){ return p.id !== job.id; }).concat([job]));
   flushPending(true);
@@ -2393,13 +2398,14 @@ function weldSign(f, name){
   if (!SHOP_CREW.concat(WELD_CREW, FIELD_CREW).some(function(n){ return n.toLowerCase() === name.toLowerCase(); })){
     var o = lsGet('shop-others') || []; if (!o.some(function(n){ return n.toLowerCase() === name.toLowerCase(); })){ o.push(name); lsSet('shop-others', o); }
   }
-  var w = wLoad(f.id); w.fin = { by: name, at: Date.now() }; w.name = f.name; w.t = Date.now(); wSave(f.id, w); writeWSum(f.id, w);
+  var w = wLoad(f.id); w.fin = { by: name, at: Date.now() }; w.name = f.name; w.t = Date.now(); if (f.direct) w.direct = 1; wSave(f.id, w); writeWSum(f.id, w);
+  if (f.direct) directMove(f, 'c', name, w.fin.at);
   renderList(false); toast('✓ ' + f.name.replace(/\.xls[xm]$/i, '') + ' welded · ' + name);
   // share the sign-off with the other tablets, then make the hard copy and move the job to Completed
   api('progget', { id: wId(f.id) }).then(function(r){
     var m = mergeProg(wLoad(f.id), decodeProg(r.prog ? JSON.parse(r.prog) : null)); wSave(f.id, m);
     return api('progset', { id: wId(f.id), prog: JSON.stringify(encodeProg(m)) });
-  }).catch(function(){}).then(function(){ catchUpCompleted(); });
+  }).catch(function(){}).then(function(){ if (!f.direct) catchUpCompleted(); });
 }
 function catchUpCompleted(){
   if (!WELD) return;
@@ -2575,6 +2581,15 @@ el('back').onclick = function(){ cur = null; try { localStorage.removeItem(UI + 
 var gates = lsGet('weld-gates') || [], gatesDone = lsGet('weld-gates-done') || [], gateBusy = false, curGate = null, gateZoom = 1, gateDoc = null;
 var GPEND = 'weld-gate-pending';
 function gateName(f){ return String(f.name || '').replace(/\.pdf$/i, ''); }
+// cut sheets dropped in Ready To Weld skip Fab: they show as jobs on Ian's list, and Welded moves them to Ready To Weld / Welded
+function gSheet(g){ return /\.xls[xm]$/i.test(g && g.name || ''); }
+function pdfGates(){ return gates.filter(function(g){ return !gSheet(g); }); }
+function directJobs(){ return gates.filter(gSheet).map(function(g){ return { id: g.id, name: g.name, updated: g.updated, direct: 1 }; }); }
+function directMove(f, a, by, at){
+  var p = gatePend().filter(function(x){ return x.id !== f.id; });
+  p.push({ k: Date.now() + ':' + f.id, id: f.id, a: a, at: at || Date.now(), by: by || '', f: { id: f.id, name: f.name, updated: f.updated } }); lsSet(GPEND, p);
+  gateApply(gates, gatesDone); flushGates().catch(function(){});
+}
 function gatePend(){ return lsGet(GPEND) || []; }
 function kvDel(k){ return store('kv', 'readwrite', function(s){ return s.delete(k); }).catch(function(){}); }
 function kvKeys(){ return store('kv', 'readonly', function(s){ return s.getAllKeys(); }).catch(function(){ return []; }); }
@@ -2610,11 +2625,12 @@ function loadGates(){
   flushGates().catch(function(){}).then(function(){ return api('weldlist'); }).then(function(r){
     gateBusy = false;
     gateApply(r.files || [], r.done || []);
+    if (directJobs().length) prefetch();   // so straight-to-welding jobs get their Rails and Posts counts
     if (!curGate && el('gate').hidden) renderList(false);
     // keep downloaded drawings only while they're listed
     var keep = {}; gates.concat(gatesDone).forEach(function(g){ keep['gate:' + g.id] = 1; });
     kvKeys().then(function(ks){ ks.forEach(function(k){ if (/^gate:/.test(k) && !keep[k]) kvDel(k); }); });
-    gates.forEach(function(g){ gateFile(g).catch(function(){}); });   // so they open with no signal
+    gates.forEach(function(g){ if (!gSheet(g)) gateFile(g).catch(function(){}); });   // so they open with no signal
   }, function(){ gateBusy = false; });
 }
 function gateFile(g){
@@ -2626,6 +2642,7 @@ function gateFile(g){
 function gateCards(start){
   var day = function(t){ return esc(new Date(t).toLocaleDateString([], { month: 'short', day: 'numeric' })); };
   return gates.map(function(g, i){
+    if (gSheet(g)) return '';
     var nm = gateName(g);
     return '<button type="button" class="job gjob" data-g="' + i + '"><span class="ring gring" aria-hidden="true">' + GATE_ICON + '</span>' +
       '<span class="t"><b>' + esc(nm) + '</b><span class="s"><span class="signoff">Gate drawing</span> · ready to weld' + (g.updated ? ' since ' + day(g.updated) : '') + '</span></span>' +
@@ -2781,8 +2798,8 @@ function weldNotices(pri, ready){
   st = st || { ready: {}, rm: {}, prio: null, since: now };
   // the first half-minute on a new tablet is quiet: the jobs' progress is still coming in, so everything would look new
   var first = !st.since || now - st.since < 30000;
-  ready.forEach(function(x){ var id = x.f.id; if (!st.ready[id]){ if (!first) msgs.push({ k: 'ready', t: (x.f.remake ? 'Remake ready to weld: ' : 'New job ready to weld: ') + noteName(x.f) }); st.ready[id] = now; } });
-  gates.forEach(function(g){ if (!st.ready[g.id]){ if (!first) msgs.push({ k: 'ready', t: 'New gate drawing ready to weld: ' + noteName(g) }); st.ready[g.id] = now; } });
+  ready.forEach(function(x){ var id = x.f.id; if (!st.ready[id]){ if (!first) msgs.push({ k: 'ready', t: (x.f.remake ? 'Remake ready to weld: ' : x.f.direct ? 'New job straight to welding: ' : 'New job ready to weld: ') + noteName(x.f) }); st.ready[id] = now; } });
+  pdfGates().forEach(function(g){ if (!st.ready[g.id]){ if (!first) msgs.push({ k: 'ready', t: 'New gate drawing ready to weld: ' + noteName(g) }); st.ready[g.id] = now; } });
   rmCur.forEach(function(rm){ var id = 'rm' + rm.id; if (!st.rm[id]){ if (!first) msgs.push({ k: 'rm', t: 'Remake coming up: ' + noteName(rmF(rm, 0)) }); st.rm[id] = now; } });
   // the priority list, as far as it covers jobs and remakes still on this tablet's list
   var on = {}; shownW.forEach(function(f){ on[f.id] = f; });
