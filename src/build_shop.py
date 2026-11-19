@@ -50,19 +50,19 @@ helpB='\n'.join(src[186:277])
 LAYMOD='var LAY = (function(){\n'+_esc+'\n'+helpB+'\nfunction unitSetup(u){ return { mount: u.mount }; }\nfunction secLabel(u, j){ return (u.secs[j] && u.secs[j].tag) || \'\'; }\n'+_h+_l+'return { svg: layoutSvg };\n})();\n'
 app=app.replace('/*__LAYOUT__*/', LAYMOD)
 meta=('<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">\n<meta name="theme-color" content="#0E2A3B">\n'
- '<link rel="manifest" href="app.webmanifest">\n<link rel="icon" href="icon-192.png">\n<link rel="apple-touch-icon" href="icon-192.png">\n'
+ '<link rel="manifest" href="app.webmanifest">\n<link rel="icon" href="ra-icon-192.png">\n<link rel="apple-touch-icon" href="ra-icon-180.png">\n'
  '<meta name="robots" content="noindex,nofollow">\n<meta name="apple-mobile-web-app-title" content="Shop Cuts">\n')
 import datetime as _dt
 app=app.replace('__BUILD__', _dt.datetime.now(_dt.timezone(_dt.timedelta(hours=-8))).strftime('%-m.%-d.%-I%M'))
 html='<!doctype html>\n<html lang="en"><head><meta charset="utf-8">\n'+meta+head+'</head><body>\n'+body+jszip+'\n<script>\n'+app+'\n</script>\n</body></html>\n'
 open(O+'index.html','w',encoding='utf-8').write(html)
 ver=hashlib.sha1(html.encode()).hexdigest()[:10]
-open(O+'app.webmanifest','w').write(json.dumps({"id":"/shop-cuts/?app=shopcuts2","name":"Shop Cuts","short_name":"Shop Cuts","start_url":"./","scope":"./","display":"standalone","orientation":"any","background_color":"#F4EFE7","theme_color":"#E8590C",
- "icons":[{"src":"icon-192.png","sizes":"192x192","type":"image/png"},{"src":"icon-512.png","sizes":"512x512","type":"image/png"},{"src":"icon-512.png","sizes":"512x512","type":"image/png","purpose":"maskable"}]},indent=1))
+open(O+'app.webmanifest','w').write(json.dumps({"id":"/shop-cuts/?app=shopcuts2","name":"Shop Cuts","short_name":"Shop Cuts","start_url":"./","scope":"./","display":"standalone","orientation":"any","background_color":"#0E2A3B","theme_color":"#0E2A3B",
+ "icons":[{"src":"ra-icon-192.png","sizes":"192x192","type":"image/png"},{"src":"ra-icon-512.png","sizes":"512x512","type":"image/png"},{"src":"ra-icon-512.png","sizes":"512x512","type":"image/png","purpose":"maskable"}]},indent=1))
 sw=open('deps/sw-shop.js').read().replace('VERSION', ver)
 open(O+'sw.js','w').write(sw)
 import shutil
-for _i in ('icon-192.png','icon-512.png'): shutil.copy('deps/'+_i, O+_i)
+for _i in ('icon-192.png','icon-512.png','ra-icon-180.png','ra-icon-192.png','ra-icon-512.png'): shutil.copy('deps/'+_i, O+_i)
 print('shop built', ver, len(html))
 
 # ---------- Claude artifact preview: reads Ready To Fab through the viewer's Google Drive connector ----------
