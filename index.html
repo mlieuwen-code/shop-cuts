@@ -797,7 +797,7 @@ function wId(id){ return id + '.w'; }
 var el = function(id){ return document.getElementById(id); };
 function esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 // a short notice at the bottom of the screen
-var VERSION = '11.19.752', toastT = null;
+var VERSION = '11.19.125', toastT = null;
 function toast(t){ var b = el('toast'); b.textContent = t; b.hidden = false; b.classList.remove('out'); clearTimeout(toastT); toastT = setTimeout(function(){ b.classList.add('out'); setTimeout(function(){ b.hidden = true; }, 400); }, 3200); }
 function msg(t, ok){ var m = el('msg'); m.hidden = !t; m.className = 'msg ' + (ok ? 'ok' : 'err'); m.textContent = t || ''; }
 function lsGet(k){ try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
@@ -1398,10 +1398,22 @@ function screenify(L, sd){
 }
 // privacy screen drawing for the Posts tab: which piece is Post A, B and C
 // A = upright at the deck edge against the railing · C = the horizontal post along the bottom (the bottom channel fastens to it) · B = upright standing on C at the wall
+// units with an extra Post B in the middle: the Post B amount is more than the usual (1 rail to wall, 2 wall to wall)
+function screenMid(sd, base){
+  var pb = 0, out = { mid: 0, reg: 0 };
+  for (var c = 1; c <= (sd.maxC || 30); c++) if (/^post b$/i.test(String(cellVal(sd, 6, c) || '').trim()) && /^amt$/i.test(String(cellVal(sd, 6, c + 1) || '').trim())) pb = c + 1;
+  if (!pb) return out;
+  for (var r = 7; r <= (sd.maxR || 60); r++){
+    var u = cellVal(sd, r, 1); if (u === null || u === '' || isNaN(+u) || !(+u > 0)) continue;
+    if (+cellVal(sd, r, pb) > base) out.mid++; else out.reg++;
+  }
+  return out;
+}
 function screenDiagram(kinds){
-  var one = function(rw){
+  var one = function(rw, midB){
     var W = 360, dk = 226, top = 34, ink = '#1F1B17', ch = '#E8590C', o = '';
-    var xA = rw ? 140 : null, wallR = 318, wallL = rw ? null : 26;   // rail to wall: drawn narrower, closer to a real screen's shape
+    // with a middle Post B the rail to wall drawing gets wider so both glass panels have room
+    var xA = rw ? (midB ? 84 : 140) : null, wallR = 318, wallL = rw ? null : 26;   // rail to wall: drawn narrower, closer to a real screen's shape
     // the top rail and Post C run right to the wall (their clips screw to it); Post B stands about 2 1/2" off the wall
     var G = 16, wfR = wallR, wfL = rw ? null : wallL + 14, xr = wfR - 5, xl = rw ? null : wfL + 5;
     var xB = wfR - G - 12, xBL = rw ? null : wfL + G, x0 = rw ? xA + 12 : xl;
@@ -1438,21 +1450,26 @@ function screenDiagram(kinds){
     var gap = function(a, b){ var y = 162; return '<g stroke="#6B6157" stroke-width="1.2"><line x1="' + a + '" y1="' + y + '" x2="' + b + '" y2="' + y + '"/><line x1="' + a + '" y1="' + (y - 4) + '" x2="' + a + '" y2="' + (y + 4) + '"/><line x1="' + b + '" y1="' + (y - 4) + '" x2="' + b + '" y2="' + (y + 4) + '"/></g><text x="' + ((a + b) / 2) + '" y="' + (y - 6) + '" text-anchor="middle" font-size="10" font-weight="800" fill="#6B6157">2½"</text>'; };
     o += clips(wfR, 1) + gap(xB + 12, wfR); if (!rw) o += clips(wfL, -1) + gap(wfL, xBL);
     var fl = function(x, y, t){ return '<circle cx="' + x + '" cy="' + y + '" r="9" fill="#2F5D50"/><text x="' + x + '" y="' + (y + 4) + '" text-anchor="middle" font-size="11" font-weight="900" fill="#fff">' + t + '</text>'; };
-    var gx0 = rw ? xA + 12 : xBL + 12, gx1 = xB, mid = 120;
-    o += '<rect x="' + gx0 + '" y="' + (top + tr + 2) + '" width="' + (gx1 - gx0) + '" height="' + (mid - top - tr - 4) + '" fill="#CFE3EE" stroke="#9DBBCB"/>';
-    o += '<rect x="' + gx0 + '" y="' + mid + '" width="' + (gx1 - gx0) + '" height="9" fill="' + ch + '"/>';                              // double channel
-    o += '<rect x="' + gx0 + '" y="' + (mid + 11) + '" width="' + (gx1 - gx0) + '" height="' + (yC - mid - 20) + '" fill="#CFE3EE" stroke="#9DBBCB"/>';
-    o += '<rect x="' + gx0 + '" y="' + (yC - 8) + '" width="' + (gx1 - gx0) + '" height="8" fill="' + ch + '"/>';                         // bottom channel
+    var gx0 = rw ? xA + 12 : xBL + 12, gx1 = xB, mid = 120, xM = midB ? Math.round((gx0 + gx1) / 2 - 6) : null;
+    var panel = function(a, b){
+      return '<rect x="' + a + '" y="' + (top + tr + 2) + '" width="' + (b - a) + '" height="' + (mid - top - tr - 4) + '" fill="#CFE3EE" stroke="#9DBBCB"/>' +
+        '<rect x="' + a + '" y="' + mid + '" width="' + (b - a) + '" height="9" fill="' + ch + '"/>' +                                       // double channel
+        '<rect x="' + a + '" y="' + (mid + 11) + '" width="' + (b - a) + '" height="' + (yC - mid - 20) + '" fill="#CFE3EE" stroke="#9DBBCB"/>' +
+        '<rect x="' + a + '" y="' + (yC - 8) + '" width="' + (b - a) + '" height="8" fill="' + ch + '"/>'; };                               // bottom channel
+    if (midB) o += panel(gx0, xM) + panel(xM + 12, gx1) + '<rect x="' + xM + '" y="' + (top + tr) + '" width="12" height="' + (yC - top - tr) + '" fill="' + ink + '"/>';
+    else o += panel(gx0, gx1);
     o += fl(xB - 12, top + 22, 'T') + fl(xB - 2, yC + 22, 'F'); if (!rw) o += fl(xBL + 24, top + 22, 'T') + fl(xBL + 14, yC + 22, 'F');
-    var cx = (gx0 + gx1) / 2;
+    var cx = midB ? (gx0 + xM) / 2 : (gx0 + gx1) / 2;
     o += '<text x="' + cx + '" y="' + (top - 5) + '" text-anchor="middle" font-size="11" font-weight="800" fill="#6B6157">TOP RAIL</text>';
-    o += '<text x="' + cx + '" y="' + (mid - 4) + '" text-anchor="middle" font-size="11" font-weight="800" fill="' + ch + '">DOUBLE CHANNEL</text>';
-    o += '<text x="' + cx + '" y="' + (yC - 12) + '" text-anchor="middle" font-size="11" font-weight="800" fill="' + ch + '">BOTTOM CHANNEL</text>';
+    var cfs = midB ? 9 : 11;   // narrower panels either side of a middle Post B
+    o += '<text x="' + cx + '" y="' + (mid - 4) + '" text-anchor="middle" font-size="' + cfs + '" font-weight="800" fill="' + ch + '">DOUBLE CHANNEL</text>';
+    o += '<text x="' + cx + '" y="' + (yC - 12) + '" text-anchor="middle" font-size="' + cfs + '" font-weight="800" fill="' + ch + '">BOTTOM CHANNEL</text>';
     if (rw) o += lbl(xA + 6, 72, 'A');
-    o += lbl(xB + 6, 72, 'B') + lbl(cx + 46, yC + 6, 'C');   // C label sits on the post
+    o += lbl(xB + 6, 72, 'B') + lbl(midB ? (xM + 12 + gx1) / 2 : cx + 46, yC + 6, 'C');   // C label sits on the post
     if (!rw) o += lbl(xBL + 6, 72, 'B');
-    return '<figure class="scrfig"><svg viewBox="0 0 360 250" role="img" aria-label="' + (rw ? 'Rail to wall' : 'Wall to wall') + ' privacy screen: which piece is Post A, B and C"><defs><pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="#EFE9E1"/><line x1="0" y1="0" x2="0" y2="6" stroke="#B9AFA4" stroke-width="2"/></pattern></defs>' + o + '</svg>' +
-      '<figcaption><b>' + (rw ? 'Rail to wall' : 'Wall to wall') + '</b>' + (rw ? '<span><i>A</i> upright at the deck edge, against the railing</span>' : '') + '<span><i>B</i> upright standing on Post C' + (rw ? ' at the wall' : ', one at each wall') + '</span><span><i>C</i> along the bottom, up off the deck; the bottom channel fastens to it</span><span><i>&#8593;</i>top rail runs over the uprights; top rail and Post C run right to the wall, Post B stands 2½" off it</span><span><i style="background:#2F5D50">T</i>top rail sleeve clip</span><span><i style="background:#2F5D50">F</i>screen foot</span></figcaption></figure>';
+    if (midB) o += lbl(xM + 6, 72, 'B');
+    return '<figure class="scrfig"><svg viewBox="0 0 360 250" role="img" aria-label="' + (rw ? 'Rail to wall' : 'Wall to wall') + ' privacy screen' + (midB ? ' with a middle Post B' : '') + ': which piece is Post A, B and C"><defs><pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="#EFE9E1"/><line x1="0" y1="0" x2="0" y2="6" stroke="#B9AFA4" stroke-width="2"/></pattern></defs>' + o + '</svg>' +
+      '<figcaption><b>' + (rw ? 'Rail to wall' : 'Wall to wall') + (midB ? ' · middle Post B' : '') + '</b>' + (rw ? '<span><i>A</i> upright at the deck edge, against the railing</span>' : '') + '<span><i>B</i> upright standing on Post C' + (rw ? ' at the wall' : ', one at each wall') + (midB ? ', plus one in the middle with a glass panel and channels on each side' : '') + '</span><span><i>C</i> along the bottom, up off the deck; the bottom channel fastens to it</span><span><i>&#8593;</i>top rail runs over the uprights; top rail and Post C run right to the wall, Post B stands 2½" off it</span><span><i style="background:#2F5D50">T</i>top rail sleeve clip</span><span><i style="background:#2F5D50">F</i>screen foot</span></figcaption></figure>';
   };
   // short rail to wall: too short for glass channel, so no Post A, no Post C and no channels. One wide Post B (6x2, 4x2 … from the sheet)
   // between two top rails, one along the top and one along the bottom; both run to the wall on clips like the others
@@ -1486,7 +1503,9 @@ function screenDiagram(kinds){
       '<figcaption><b>Short rail to wall</b><span><i>B</i>one post (' + esc(size || '6x2') + ' on this job), up against the railing, between the two top rails</span><span><i>&#8593;</i>two top rails from Post B to the wall: one along the top, one along the bottom up off the deck, both on clips at the wall</span><span><i>&#8212;</i>for a very small gap between the railing and the wall: no Post A, no Post C, no channels</span><span><i style="background:#2F5D50">T</i>top rail sleeve clip</span></figcaption></figure>';
   };
   var regRW = kinds.indexOf('Rail to Wall') >= 0 && !(kinds.short && !kinds.short.reg);
-  return '<div class="scrfigs">' + (regRW ? one(true) : '') + (kinds.short && kinds.short.short ? short(kinds.short.size) : '') + (kinds.indexOf('Wall to Wall') >= 0 ? one(false) : '') + '</div>';
+  var mRW = kinds.midRW || { mid: 0, reg: 1 }, mWW = kinds.midWW || { mid: 0, reg: 1 }, hasWW = kinds.indexOf('Wall to Wall') >= 0;
+  return '<div class="scrfigs">' + (regRW && (mRW.reg - (kinds.short ? kinds.short.short : 0) > 0 || !mRW.mid) ? one(true) : '') + (regRW && mRW.mid ? one(true, true) : '') +
+    (kinds.short && kinds.short.short ? short(kinds.short.size) : '') + (hasWW && (mWW.reg || !mWW.mid) ? one(false) : '') + (hasWW && mWW.mid ? one(false, true) : '') + '</div>';
 }
 // privacy screens: one Posts tab for the whole job, every post length with how many and which units, like the Post Sheet
 function screenPosts(list){
@@ -1879,6 +1898,9 @@ function renderSheet(book, item, done){
     kinds = scr ? [sh.name] : kinds;
     var rw = cur.items.filter(function(x){ return x.sh.name === 'Rail to Wall' && kinds.indexOf('Rail to Wall') >= 0; })[0];
     if (rw) kinds.short = screenShort(rw.sd);
+    if (rw) kinds.midRW = screenMid(rw.sd, 1);
+    var ww = cur.items.filter(function(x){ return x.sh.name === 'Wall to Wall' && kinds.indexOf('Wall to Wall') >= 0; })[0];
+    if (ww) kinds.midWW = screenMid(ww.sd, 2);
   }
   return h + '</table>' + (kinds && kinds.length ? '<div class="scrbelow">' + screenDiagram(kinds) + '</div>' : '');
 }
