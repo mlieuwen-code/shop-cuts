@@ -426,6 +426,30 @@ function shopSheets(book){
   });
 }
 
+// Screens on a railing cut sheet (top, inside or fascia mount): the info says "Secondary channels: 1 @ Double", meaning every glass
+// channel also gets a double channel the same length. The sheet has one Channels column, so add a Double channels column with its
+// own tick box right after it (it counts toward Cutting complete like the channel box).
+function dblify(L, sd){
+  var k = 0;
+  for (var r = 1; r < L.hdr; r++) for (var c = 1; c <= 8; c++){
+    if (!/^secondary channels?$/i.test(String(cellVal(sd, r, c) == null ? '' : cellVal(sd, r, c)).trim())) continue;
+    for (var c2 = c + 1; c2 <= c + 6; c2++){ var m = String(cellVal(sd, r, c2) == null ? '' : cellVal(sd, r, c2)).match(/(\d+)\s*@\s*double/i); if (m){ k = +m[1]; break; } }
+  }
+  if (!k) return;
+  var chC = L.cols.filter(function(c){ return /^channels?\b/i.test(L.txt(L.hdr, c)); })[0]; if (chC == null) return;
+  var tick = L.cols[L.cols.indexOf(chC) + 1], hasTick = tick != null && L.chk && Object.keys(L.chk).some(function(key){ return +key.split(':')[1] === tick; });
+  var after = hasTick ? tick : chC, dv = after + 0.3, db = after + 0.6, hc = sd.cells[L.hdr + ':' + chC] || {};
+  sd.cells[L.hdr + ':' + chC] = Object.assign({}, hc, { v: String(hc.v == null ? L.txt(L.hdr, chC) : hc.v).replace(/^channels?/i, 'Glass channels') });
+  sd.cells[L.hdr + ':' + dv] = Object.assign({}, hc, { v: 'Double channels' });
+  L.cols.splice(L.cols.indexOf(after) + 1, 0, dv, db); L.vchk = L.vchk || {}; L.vchk[db] = 1; L.div = L.div || {}; L.div[dv] = 1;
+  L.rows.forEach(function(r){
+    if (r <= L.hdr) return;
+    var t = L.txt(r, chC), m = t.match(/^\s*(\d+)\s*@\s*(.+)$/); if (!t || !m) return;
+    var src = sd.cells[r + ':' + chC] || {};
+    sd.cells[r + ':' + dv] = Object.assign({}, src, { v: (+m[1] * k) + '@ ' + m[2].trim(), t: 's', w: undefined, f: undefined });
+    L.chk[r + ':' + db] = { left: dv, head: 'Double channels' };
+  });
+}
 // ---------- fence jobs (CUT SHEET — OPEN TOP FENCE) ----------
 // The fence Post Sheet lists every opening's left and right post, so a post shared by two openings looks like it's cut twice.
 // The tablet rebuilds it like the railing Post Sheet from the sheet's hidden one-row-per-post list (is post / type / cut / top blk / bot blk):
@@ -585,6 +609,7 @@ function layout(book, item){
   var L = { a: a, rows: rows, cols: cols, chk: chk, rowTap: rowTap, txt: txt, hdr: hdr };
   if (SCREEN_RE.test(sh.name) && hdr != null) screenify(L, sd);
   if (isFenceCut(sh, sd)) fenceify(L, sd);
+  if (sh.name === 'CUT SHEET' && !L.fence && hdr != null) dblify(L, sd);
   return L;
 }
 // privacy screen sheets: posts are cut from the Posts tab, so they're left off here. Each screen needs a bottom channel
@@ -997,7 +1022,7 @@ function renderSheet(book, item, done){
   });
   var scr = SCREEN_RE.test(sh.name) && L.hdr != null;
   var rmk = cur && cur.f.remake && sh.name === 'CUT SHEET' ? cur.f.remake : null;
-  var h = (rmk ? '<div class="rmbanner"><b>↻ Remake · ' + esc(rmk.tags.join(', ')) + '</b>' + (rmk.note ? '<span>' + esc(rmk.note) + '</span>' : '') + '</div>' : '') + (scr ? screenHead(item) : '') + (L.fence ? fenceHead(book, item) : '') + (WELD && isTop() && /^(CUT SHEET|POST SHEET)$/.test(sh.name) ? '<div class="bpnote"><b>Top mount · weld-on base plates</b><span class="bpkey"><i>Cen</i> centred on the plate · <i>Off</i> offset: post at the outer end, plate reaches in under the rail · <i>Rev</i> reverse offset: plate sticks out past the end · <i>L / R</i> left / right end of the rail · <i>EC</i> corner turns right with the run, <i>IC</i> turns left · 4x4 plates for 2x2 posts</span>' + (sh.name === 'POST SHEET' ? 'Post lengths are in section 1. The plates to weld, and how many of each, are under Base plates. The Cuts tab shows which plate goes on each rail end.' : 'The L Post and R Post columns show which base plate goes on each end of the rail. The Posts tab has the post lengths and the plate totals.') + '</div>' : '') + '<table class="sheet' + (L.fence ? ' fence' : '') + '">';
+  var h = (rmk ? '<div class="rmbanner"><b>↻ Remake · ' + esc(rmk.tags.join(', ')) + '</b>' + (rmk.note ? '<span>' + esc(rmk.note) + '</span>' : '') + '</div>' : '') + (scr ? screenHead(item) : '') + (L.fence ? fenceHead(book, item) : '') + (WELD && isTop() && /^(CUT SHEET|POST SHEET)$/.test(sh.name) ? '<div class="bpnote"><b>Top mount · weld-on base plates</b><span class="bpkey"><i>Cen</i> centred on the plate · <i>Off</i> offset: post at the outer end, plate reaches in under the rail · <i>Rev</i> reverse offset: plate sticks out past the end · <i>L / R</i> left / right end of the rail · <i>EC</i> corner turns right with the run, <i>IC</i> turns left · 4x4 plates for 2x2 posts</span>' + (sh.name === 'POST SHEET' ? 'Post lengths are in section 1. The plates to weld, and how many of each, are under Base plates. The Cuts tab shows which plate goes on each rail end.' : 'The L Post and R Post columns show which base plate goes on each end of the rail. The Posts tab has the post lengths and the plate totals.') + '</div>' : '') + '<table class="sheet' + (L.fence ? ' fence' : '') + (sh.name === 'CUT SHEET' && !L.fence ? ' railcut' : '') + '">';
   var isCut = sh.name === 'CUT SHEET' && cur && Object.keys(cur.units || {}).length, lastUnit = null;
   var hiSheet = /^(COVER|POST SHEET)$/.test(sh.name);
   // Cut Sheet: a black line between the float lengths (Left / Right) and the posts (L Post …), so the two groups read apart
@@ -1094,6 +1119,7 @@ function renderSheet(book, item, done){
       if (divC != null && c === divC && r >= L.hdr) cls.push('divl');
       if (L.div && L.div[c] && r >= L.hdr) cls.push('divl');
       if (L.pnar && L.pnar[c]) cls.push('pnar');
+      if (sh.name === 'CUT SHEET' && r > L.hdr && t.length >= 8 && !/\d/.test(t)) cls.push('longtxt');   // e.g. SEE CUSTOM: smaller and wraps
       if (item.virt && r === L.hdr) cls.push('b', 'c');
       if (c === L.cols[0] && L.hdr != null && r > L.hdr && floatTag[t.trim()]) cls.push('floatrail');
       if (((bpC[c] && r > L.hdr) || (r > bpFrom && r < bpTo && c === L.cols[0] && !L.cols.some(function(cc){ return L.txt(r, cc) === '✓'; }))) && bpDesc(t)) cls.push('bp');
