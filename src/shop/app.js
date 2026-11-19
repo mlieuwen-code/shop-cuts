@@ -98,7 +98,7 @@ function applyPrio(){ jobs.sort(function(a, b){ var ra = prioRank(a.id), rb = pr
 function apiNew(a2, a1, extra){ return api(a2, extra).catch(function(e){ if (e && /unknown request|not available/i.test(e.message || '')) return api(a1, extra); throw e; }); }
 function ring(p){
   var r = 26, c = 2 * Math.PI * r, d = Math.max(0, Math.min(1, p)) * c;
-  return '<svg class="ring" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="' + r + '" fill="none" stroke="#EAE3D8" stroke-width="8"/>' +
+  return '<svg class="ring" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="' + r + '" fill="none" stroke="#E4EBF2" stroke-width="8"/>' +
     '<circle cx="32" cy="32" r="' + r + '" fill="none" stroke="' + (p >= 1 ? '#2E6B2A' : 'var(--accent)') + '" stroke-width="8" stroke-linecap="round" stroke-dasharray="' + d + ' ' + c + '" transform="rotate(-90 32 32)"/>' +
     '<text x="32" y="37" text-anchor="middle">' + Math.round(p * 100) + '%</text></svg>';
 }

@@ -49,7 +49,7 @@ _esc=src[176]
 helpB='\n'.join(src[186:277])
 LAYMOD='var LAY = (function(){\n'+_esc+'\n'+helpB+'\nfunction unitSetup(u){ return { mount: u.mount }; }\nfunction secLabel(u, j){ return (u.secs[j] && u.secs[j].tag) || \'\'; }\n'+_h+_l+'return { svg: layoutSvg };\n})();\n'
 app=app.replace('/*__LAYOUT__*/', LAYMOD)
-meta=('<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">\n<meta name="theme-color" content="#2F5D50">\n'
+meta=('<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">\n<meta name="theme-color" content="#0E2A3B">\n'
  '<link rel="manifest" href="app.webmanifest">\n<link rel="icon" href="icon-192.png">\n<link rel="apple-touch-icon" href="icon-192.png">\n'
  '<meta name="robots" content="noindex,nofollow">\n<meta name="apple-mobile-web-app-title" content="Shop Cuts">\n')
 import datetime as _dt

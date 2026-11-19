@@ -1,12 +1,13 @@
 <title>Shop Cuts</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lexend+Exa:wght@700;800&family=Nunito:wght@400;600;700;800;900&display=swap">
 <style>
 /* Shop tablet: read the finished cut sheets at the saw and tick off what's cut */
 :root{
-  --bg:#F4EFE7;--card:#FFFDF9;--ink:#2A2622;--muted:#6B635A;--line:#E3DACC;--field:#FAF6F0;
-  --chip:#EFE8DC;--chip2:#EAE3D8;--dash:#D8CDBC;
-  --amberbg:#FBEBD0;--amberink:#6B4210;--bad:#A12D22;--badbg:#FBE9E6;--onaccent:#FFFDF9;
-  --accent:#2F5D50;--tint:#EEF4F1;--tint2:#E4EDE9;--deep:#21443A;
+  /* Ridgeway Aluminum colours, same as the Crew Board */
+  --bg:#EDF1F5;--card:#FFFFFF;--ink:#0F1E29;--muted:#5A6B79;--line:#D5DEE7;--field:#F5F8FB;
+  --chip:#E4EBF2;--chip2:#DBE4ED;--dash:#C3CFDB;
+  --amberbg:#FBEBD0;--amberink:#6B4210;--bad:#A12D22;--badbg:#FBE9E6;--onaccent:#FFFFFF;
+  --accent:#16445F;--tint:#EAF2F8;--tint2:#DDEAF3;--deep:#0E2A3B;--rblue:#2289BB;--navy:#0E2A3B;
   --done:#DCEFD8;--doneink:#2E6B2A;--float:#9C0006;
   --font:'Nunito',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
   color-scheme:light;
@@ -55,7 +56,7 @@ button{cursor:pointer}
 .apphead h2{margin:0;font-size:26px;font-weight:900;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .bar{height:12px;border-radius:6px;background:var(--chip2);overflow:hidden;margin-top:6px}
 .bar i{display:block;height:100%;background:var(--accent);border-radius:6px;transition:width .2s}
-.jobtop{position:sticky;top:0;z-index:5;background:var(--bg);margin:-18px calc(-1 * max(16px,env(safe-area-inset-left,0px))) 0;padding:12px max(16px,env(safe-area-inset-left,0px)) 0;transition:transform .22s ease;will-change:transform}
+.jobtop{position:sticky;top:0;z-index:5;background:var(--bg);margin:-18px calc(-1 * max(16px,env(safe-area-inset-left,0px))) 0;padding:0 max(16px,env(safe-area-inset-left,0px)) 0;transition:transform .22s ease;will-change:transform}
 body.tuck .jobtop{transform:translateY(-100%)}
 body.tuck table.sheet tr.hdr td{top:0}
 .tabs{display:flex;gap:8px;overflow-x:auto;padding:6px 0 12px;background:var(--bg);scrollbar-width:none;height:76px;align-items:center}
@@ -67,13 +68,13 @@ body.tuck table.sheet tr.hdr td{top:0}
 .tab.full{border-color:var(--doneink)}
 .sheetwrap{background:var(--card);border-radius:20px;padding:10px;overflow-x:auto;box-shadow:0 2px 0 var(--line)}
 table.sheet{border-collapse:separate;border-spacing:0;min-width:100%;font-size:18px;font-variant-numeric:tabular-nums}
-table.sheet td{border-bottom:1px solid #E6DCC9;border-right:1px solid #EFE7DA;padding:7px 8px;vertical-align:middle;white-space:nowrap}
+table.sheet td{border-bottom:1px solid #DCE4EC;border-right:1px solid #E8EEF4;padding:7px 8px;vertical-align:middle;white-space:nowrap}
 table.sheet td.wrapcell{white-space:normal;min-width:150px;max-width:240px}
 table.sheet td.b{font-weight:900}
 table.sheet td.num{text-align:right}
 table.sheet td.c{text-align:center}
 table.sheet td.chk{width:66px;min-width:66px;text-align:center;padding:10px 6px;cursor:pointer}
-.box{display:inline-flex;align-items:center;justify-content:center;width:50px;height:50px;border-radius:14px;border:3px solid #B9AE9C;background:#fff;font-size:32px;font-weight:900;color:transparent}
+.box{display:inline-flex;align-items:center;justify-content:center;width:50px;height:50px;border-radius:14px;border:3px solid #A9B6C3;background:#fff;font-size:32px;font-weight:900;color:transparent}
 td.chk.on .box{background:var(--doneink);border-color:var(--doneink);color:#fff}
 /* every second line yellowish so rows are easy to follow; data lines get room for gloved fingers */
 table.sheet tr.data td{height:76px;font-size:26px;font-weight:800;letter-spacing:.2px}
@@ -99,12 +100,12 @@ table.sheet.fence tr.hdr td.wrapcell{max-width:96px}
 table.sheet.finfo{margin-bottom:6px}
 table.sheet.finfo td{font-size:16px;padding:6px 10px}
 table.sheet tr.info td{font-size:15px;padding:4px 8px;font-weight:700}
-table.sheet tr.hdr td{font-size:16px;position:sticky;top:calc(var(--toph,160px) / var(--z,1));transition:top .22s ease;z-index:2;background:#E7DFCF!important;box-shadow:0 2px 0 #D5CBB8}
+table.sheet tr.hdr td{font-size:16px;position:sticky;top:calc(var(--toph,160px) / var(--z,1));transition:top .22s ease;z-index:2;background:#DCE4EC!important;box-shadow:0 2px 0 #C3CFDB}
 .fr{display:inline-flex;flex-direction:column;align-items:center;vertical-align:middle;line-height:.9;margin-left:3px;font-size:.62em;font-weight:900}
 .fr sup,.fr sub{font-size:1em;line-height:1;vertical-align:baseline;position:static}
 .fr .sl{display:block;width:100%;height:0;border-top:2px solid currentColor;font-size:0;margin:2px 0}
 .at{color:var(--muted);font-weight:700;margin:0 4px 0 1px;font-size:.8em}
-table.sheet tr:nth-child(odd) td{background:#FFFDF8}
+table.sheet tr:nth-child(odd) td{background:#FFFFFF}
 table.sheet tr:nth-child(even) td{background:#FFF4D2}
 table.sheet tr.data:nth-child(even) td{background:#FFF1C4}
 /* a ticked box tints the value it belongs to; a finished line goes green but stays readable */
@@ -150,7 +151,7 @@ tr.tap{cursor:pointer}
 .ipcard .prhead{color:var(--deep)}
 .ipcard .prhead span:not(.prflame){color:var(--accent)}
 .prrest{font-size:18px;font-weight:900;color:var(--muted);margin:12px 4px 0}
-table.sheet tr.stickrow td{background:#2B2620;color:#fff;font-weight:800;font-size:17px;padding:9px 12px;border-color:#2B2620}
+table.sheet tr.stickrow td{background:#0F1E29;color:#fff;font-weight:800;font-size:17px;padding:9px 12px;border-color:#0F1E29}
 table.sheet tr.stickrow .sk{display:inline-block;background:#E8590C;border-radius:8px;padding:2px 10px;margin-right:10px;font-weight:900}
 table.sheet tr.stickrow .sk.warn{background:#9C0006}
 .mgrh4{font-size:17px;font-weight:900;color:var(--muted);margin:14px 2px 6px;text-transform:uppercase;letter-spacing:.04em}
@@ -167,7 +168,7 @@ table.sheet tr.stickrow .sk.warn{background:#9C0006}
 .scrfig svg{width:440px;max-width:55%;height:auto;flex-shrink:0}
 .scrfig figcaption{display:flex;flex-direction:column;gap:8px;font-size:16px;font-weight:700;line-height:1.3}
 .scrfig figcaption b{font-size:18px;font-weight:900}
-.scrfig figcaption i{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:#1F1B17;color:#fff;font-style:normal;font-weight:900;font-size:13px;margin-right:8px}
+.scrfig figcaption i{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:#0F1E29;color:#fff;font-style:normal;font-weight:900;font-size:13px;margin-right:8px}
 .rmcard{background:#F3E1DC;border-color:#9C0006}
 .rmcard .prhead{color:#9C0006}
 .rmcard .prhead span:not(.prflame){color:#9C0006}
@@ -189,7 +190,7 @@ table.sheet tr.stickrow .sk.warn{background:#9C0006}
 .mgrnote{color:var(--muted);font-weight:700;margin:0 0 14px}
 .mgrwrap{overflow-x:auto}
 table.mgr{width:100%;border-collapse:collapse;background:var(--card);border-radius:18px;overflow:hidden;font-size:18px}
-table.mgr th{text-align:left;background:#E7DFCF;padding:12px 14px;font-size:15px}
+table.mgr th{text-align:left;background:#DCE4EC;padding:12px 14px;font-size:15px}
 table.mgr td{padding:14px;border-top:1px solid var(--line);font-weight:700}
 table.mgr td.num{font-size:22px;white-space:nowrap}
 table.mgr .mut{color:var(--muted);font-weight:600}
@@ -197,7 +198,7 @@ table.sheet td.floatrail{color:#9C0006!important;font-weight:900}
 /* numbered section headings (1 · Post cutting, 2 · Blocking, 3 · Bracketing): all the same */
 table.sheet tr.sechead td{background:var(--tint2)!important;color:var(--deep)!important;font-size:20px!important;font-weight:900!important;text-align:left!important;padding:12px 14px!important;border-top:3px solid var(--accent)}
 table.sheet tr.sechead td.postsall{text-align:right!important;padding:6px 8px!important}
-table.sheet tr.subhdr td{background:#E7DFCF!important;font-size:16px;box-shadow:0 2px 0 #D5CBB8}
+table.sheet tr.subhdr td{background:#DCE4EC!important;font-size:16px;box-shadow:0 2px 0 #C3CFDB}
 table.sheet td.postsall{text-align:right;padding:6px 8px}
 .pcut{display:inline-flex;align-items:center;gap:12px;min-height:56px;padding:0 18px 0 10px;border-radius:14px;border:2px solid var(--line);background:var(--card);font-size:18px;font-weight:900;color:var(--ink)}
 .pcut .box{width:38px;height:38px;border-radius:10px;border:3px solid var(--dash);background:var(--field);display:inline-flex;align-items:center;justify-content:center;color:transparent;font-size:22px}
@@ -239,7 +240,7 @@ table.sheet td.hival.hicustom{background:#9C0006!important;color:#fff!important;
 #logo{touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 #logo svg{pointer-events:none}
 .ver{color:var(--muted);font-size:13px;font-weight:700;text-align:center;margin:28px 0 8px;opacity:.8}
-.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:60;background:#1F1B17;color:#fff;font-size:19px;font-weight:800;padding:16px 26px;border-radius:999px;box-shadow:0 8px 24px rgba(0,0,0,.25);transition:opacity .35s,transform .35s;white-space:nowrap}
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:60;background:#0F1E29;color:#fff;font-size:19px;font-weight:800;padding:16px 26px;border-radius:999px;box-shadow:0 8px 24px rgba(0,0,0,.25);transition:opacity .35s,transform .35s;white-space:nowrap}
 .updbar{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:61;display:flex;align-items:center;gap:12px;background:#E8590C;color:#fff;border:0;font-size:19px;font-weight:800;padding:16px 26px;border-radius:999px;box-shadow:0 8px 24px rgba(0,0,0,.3);white-space:nowrap;cursor:pointer}
 .updbar[hidden]{display:none}
 .updbar .ud{font-size:14px;animation:udp 1.4s ease-in-out infinite}
@@ -247,7 +248,7 @@ table.sheet td.hival.hicustom{background:#9C0006!important;color:#fff!important;
 @keyframes udp{50%{opacity:.25}}
 .toast.out{opacity:0;transform:translate(-50%,12px)}
 .signoff{color:#8A4B00;font-weight:900;background:#FFE8A3;border-radius:8px;padding:2px 8px}
-table.sheet td.divl{border-left:3px solid #1F1B17!important}
+table.sheet td.divl{border-left:3px solid #0F1E29!important}
 .legend{display:flex;flex-wrap:wrap;gap:8px 18px;margin:12px 4px 0;color:var(--muted);font-size:15px;font-weight:700}
 .offline{display:inline-flex;align-items:center;gap:6px;font-size:14px;font-weight:800;color:var(--muted)}
 .modal{position:fixed;inset:0;z-index:40;background:rgba(42,38,34,.45);display:flex;align-items:center;justify-content:center;padding:16px}
@@ -256,11 +257,11 @@ table.sheet td.divl{border-left:3px solid #1F1B17!important}
 .modal .row{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
 .modal input{height:60px;border-radius:16px;border:2px solid var(--line);background:var(--field);padding:0 16px;font-size:22px;font-weight:800;width:100%}
 /* unit layout drawings on the Cut Sheet */
-table.sheet tr.unitbar td{background:#EAF1EE!important;padding:6px 8px;border-top:3px solid #CFE0D8}
+table.sheet tr.unitbar td{background:#EAF2F8!important;padding:6px 8px;border-top:3px solid #CFE0EC}
 .laybtn{display:inline-flex;align-items:center;gap:12px;min-height:52px;padding:0 16px;border:0;border-radius:14px;background:transparent;font-size:19px;font-weight:900;color:var(--deep)}
-.laybtn .lb{width:34px;height:34px;border-radius:10px;border:3px solid #9FB8AE;background:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:22px;color:#fff}
+.laybtn .lb{width:34px;height:34px;border-radius:10px;border:3px solid #9FB6D3;background:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:22px;color:#fff}
 .laybtn .lb.on{background:var(--accent);border-color:var(--accent)}
-table.sheet tr.layrow td{background:#F7FAF8!important;white-space:normal;padding:10px}
+table.sheet tr.layrow td{background:#F5F8FB!important;white-space:normal;padding:10px}
 .layout{max-width:900px;margin:0 auto}
 svg.laysvg{width:100%;max-height:440px;display:block}
 .laykey{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:14px;font-weight:700;color:var(--muted);margin-top:6px}
@@ -274,10 +275,10 @@ svg.laysvg{width:100%;max-height:440px;display:block}
 .atweld{color:#8A3205;font-weight:800}
 .wcard{background:#FFF3E6;border-color:#E8590C;margin-top:6px}
 .job.wait{background:transparent;box-shadow:none;border:2px dashed var(--line)}
-.waitring{display:flex;align-items:center;justify-content:center;border-radius:50%;border:8px solid #EAE3D8;color:var(--muted);font-weight:900;font-size:20px}
+.waitring{display:flex;align-items:center;justify-content:center;border-radius:50%;border:8px solid #E4EBF2;color:var(--muted);font-weight:900;font-size:20px}
 table.sheet td.wh{font-weight:900;text-align:center;color:#8A3205}
-table.sheet td.chk.wchk{width:92px;min-width:92px;padding:8px 10px;border-right:3px solid #1F1B17}
-table.sheet td.wh,table.sheet td.wpad{border-right:3px solid #1F1B17}
+table.sheet td.chk.wchk{width:92px;min-width:92px;padding:8px 10px;border-right:3px solid #0F1E29}
+table.sheet td.wh,table.sheet td.wpad{border-right:3px solid #0F1E29}
 td.wchk .box{width:64px;height:64px;border-radius:16px;border:4px solid #E8590C;font-size:40px}
 td.wchk.on .box{background:var(--doneink);border-color:var(--doneink);color:#fff}
 table.sheet td.chk.ro{width:40px;min-width:40px;padding:4px;cursor:default}
@@ -296,4 +297,20 @@ table.sheet td.bp small.bpd{display:block;font-size:14px;font-weight:800;color:#
 table.sheet td.bp .bpw{display:inline-flex;align-items:center;gap:10px;text-align:left}
 table.sheet td.bp svg.bpi{width:76px;height:49px;flex-shrink:0}
 table.sheet td.bp svg.bpi.tall{height:70px}
+
+/* ---- Ridgeway brand header (matches the Crew Board) ---- */
+.brand.top{background:linear-gradient(160deg,#184A66 0%,#0E2A3B 100%);color:#fff;margin:-18px calc(-1 * max(16px,env(safe-area-inset-right,0px))) 0 calc(-1 * max(16px,env(safe-area-inset-left,0px)));padding:max(14px,env(safe-area-inset-top)) 16px 14px;border-bottom:4px solid var(--rblue);gap:16px}
+.brand.top .logo{width:auto;height:40px;border-radius:0;background:none;overflow:visible}
+.brand.top .logo img{height:40px;width:auto;display:block;pointer-events:none}
+.brand.top>div:nth-child(2){border-left:2px solid rgba(255,255,255,.18);padding-left:16px}
+.brand.top .eyebrow{color:#8FBBD6;font-size:13px}
+.brand.top b{font-family:'Lexend Exa',var(--font);font-weight:800;text-transform:uppercase;font-size:20px;letter-spacing:.01em;margin-top:3px;background:linear-gradient(180deg,#F2F6FA 15%,#9FB6D3 95%);-webkit-background-clip:text;background-clip:text;color:transparent}
+.brand.top .btn{background:rgba(255,255,255,.12);color:#fff}
+#job .apphead{background:linear-gradient(160deg,#184A66 0%,#0E2A3B 100%);color:#fff;margin:0 calc(-1 * max(16px,env(safe-area-inset-right,0px))) 12px calc(-1 * max(16px,env(safe-area-inset-left,0px)));padding:12px 16px 12px;border-bottom:4px solid var(--rblue)}
+#job .apphead .round,#mgr .apphead .round{color:var(--ink)}
+#job .apphead .round{background:rgba(255,255,255,.14);color:#fff}
+#job .apphead .eyebrow{color:#8FBBD6}
+#job .apphead .bar{background:rgba(255,255,255,.18)}
+#job .apphead .bar i{background:var(--rblue)}
+@media (max-width:560px){ .brand.top>div:nth-child(2){border-left:0;padding-left:0} .brand.top b{font-size:15px} .brand.top .logo,.brand.top .logo img{height:28px} }
 </style>
