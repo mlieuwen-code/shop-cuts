@@ -1104,7 +1104,7 @@ function renderSheet(book, item, done){
       var attr = sp ? (sp.rs > 1 ? ' rowspan="' + sp.rs + '"' : '') + (sp.cs > 1 ? ' colspan="' + sp.cs + '"' : '') : '';
       if (L.vchk && L.vchk[c] && !L.chk[k]){ h += r === L.hdr ? '<td class="c b vhd' + (L.div && L.div[c] ? ' divl' : '') + '">' + esc((L.vhead && L.vhead[c]) || '✓') + '</td>' : '<td></td>'; return; }
       if (L.chk[k]){ var key = pre + 'c' + k; h += '<td class="chk' + (done[key] ? ' on' : '') + (WELD ? ' ro' : '') + '" data-key="' + esc(key) + '"' + attr + '><span class="box" role="checkbox" aria-checked="' + !!done[key] + '" aria-label="Done">✓</span></td>'; return; }
-      var cls = [];
+      var cls = [], blkParts = null;
       // Cover and Post Sheet: post height and block height stand out (label + the value beside it)
       if (hiSheet && (L.hdr == null || r < L.hdr)){
         if (hiNext){
@@ -1112,6 +1112,8 @@ function renderSheet(book, item, done){
           if (hiNext === 'block' && !t.trim()) t = cur && cur.block && cur.block.custom ? cur.block.text : '38 5/16 (standard)';
           // red only when the block height shown isn't the standard 38 5/16
           if (hiNext === 'block' && !/^38\s+(5\/16|10\/32)\b/.test(t.trim())) cls.push('hicustom');
+          // two block heights (a secondary channel, e.g. "3, 38 5/16"): each in its own box so they don't read as one number
+          if (hiNext === 'block' && /,/.test(t)) blkParts = t.split(/\s*,\s*/).filter(Boolean);
           hiNext = null;
         } else if (/^\s*(post|block|bracket)\s*(height|ht)\.?\s*$/i.test(t)){ cls.push('hilab'); hiNext = /block/i.test(t) ? 'block' : 'post'; }   // bracket height joins the yellow block too
       }
@@ -1129,6 +1131,7 @@ function renderSheet(book, item, done){
       if (xf && xf.h === 'center') cls.push('c');
       if ((xf && xf.wrap) || t.length > 22) cls.push('wrapcell');
       var style = (cell ? (cell.css || '') + ((L.fence || scr) && r > L.hdr ? '' : fillCss(book, cell.s)) : '') + (f && f.rgb && /^FF[0-9A-F]{6}$/i.test(f.rgb) && f.rgb.slice(2).toUpperCase() !== '000000' ? 'color:#' + f.rgb.slice(2) + ';' : '');
+      if (blkParts){ h += '<td class="' + cls.join(' ') + ' blksplit"' + attr + '><span class="blkw">' + blkParts.map(function(x){ return '<span class="blkp">' + measure(x) + '</span>'; }).join('') + '</span></td>'; return; }
       var bd = cls.indexOf('bp') >= 0 ? bpDesc(t) : '';
       h += '<td' + (cls.length ? ' class="' + cls.join(' ') + '"' : '') + (style ? ' style="' + style + '"' : '') + attr + '>' + (bd ? '<span class="bpw">' + bpIcon(t, bpC[c] || '') + '<span>' + (big ? measure(t) : esc(t)) + '<small class="bpd">' + esc(bd) + '</small></span></span>' : (big ? measure(t) : esc(t))) + '</td>';
     });

@@ -242,6 +242,10 @@ table.sheet td.hilab,table.sheet td.hival{background:#FFD43B!important;color:#1A
 table.sheet td.hilab{font-size:19px!important;text-transform:uppercase;letter-spacing:.03em}
 table.sheet td.hival{font-size:26px!important}
 table.sheet td.hival.hicustom{background:#9C0006!important;color:#fff!important;border-color:#6E0004!important}
+/* two block heights (secondary channel): separate boxes with a clear gap */
+td.blksplit .blkw{display:flex;justify-content:center;align-items:center;gap:18px;flex-wrap:wrap}
+td.blksplit .blkp{display:inline-flex;align-items:center;justify-content:center;min-width:110px;padding:4px 16px;border-radius:12px;border:2px solid rgba(255,255,255,.75);background:rgba(255,255,255,.12)}
+td.blksplit:not(.hicustom) .blkp{border-color:#E0A800;background:rgba(255,255,255,.5)}
 .donehead{display:flex;align-items:center;gap:12px;width:100%;min-height:64px;margin-top:14px;padding:0 20px;border-radius:18px;border:2px solid var(--line);background:var(--card);font-size:22px;font-weight:900;color:var(--ink);text-align:left}
 .donesearch{display:flex;align-items:center;gap:12px;margin:4px 0 2px}
 .donesearch input{flex:1;min-height:60px;font-size:20px;font-weight:700;border-radius:16px;border:2px solid var(--line);background:var(--field);padding:0 18px}
