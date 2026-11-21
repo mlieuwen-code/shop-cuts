@@ -823,7 +823,7 @@ function wId(id){ return id + '.w'; }
 var el = function(id){ return document.getElementById(id); };
 function esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 // a short notice at the bottom of the screen
-var VERSION = '11.21.655', toastT = null;
+var VERSION = '11.21.709', toastT = null;
 function toast(t){ var b = el('toast'); b.textContent = t; b.hidden = false; b.classList.remove('out'); clearTimeout(toastT); toastT = setTimeout(function(){ b.classList.add('out'); setTimeout(function(){ b.hidden = true; }, 400); }, 3200); }
 function msg(t, ok){ var m = el('msg'); m.hidden = !t; m.className = 'msg ' + (ok ? 'ok' : 'err'); m.textContent = t || ''; }
 function lsGet(k){ try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
@@ -2005,7 +2005,7 @@ function customDiagram(rail){
   var gpx = gaps.map(function(g){ return known.length === gaps.length ? Math.max(40, g * hs) : 116; });
   pw = Math.round(2 * hs);   // posts on the same scale as the gaps and pickets
   var x0 = 96, xs = [x0]; gpx.forEach(function(g, i){ xs.push(xs[i] + pw + g); });
-  var W = xs[xs.length - 1] + pw + 96, yT = 78, deck = yT + ref * s;
+  var th = 2.5 * s, W = xs[xs.length - 1] + pw + 96, yT = 50 + th + 8, deck = yT + ref * s;
   var maxB = Math.max.apply(null, P.map(function(p){ return yT + (p.cut || ref) * s; }).concat(deck + 12));
   var H = maxB + 44, o = '', tx = function(x, y, t, a, sz, w, f){ return '<text x="' + x + '" y="' + y + '" text-anchor="' + (a || 'middle') + '" font-size="' + (sz || 12) + '" font-weight="' + (w || 700) + '" fill="' + (f || mut) + '">' + esc(t) + '</text>'; };
   // the deck: stops short of a float post (it hangs past the edge), with the edge face shown
@@ -2029,10 +2029,10 @@ function customDiagram(rail){
   });
   // top rail across the posts, end labels outside
   var xr0 = xs[0] - 4, xr1 = xs[xs.length - 1] + pw + 4;
-  o += '<rect x="' + xr0 + '" y="' + (yT - 12) + '" width="' + (xr1 - xr0) + '" height="12" rx="2" fill="#7D8C99"/>';
-  if (ln.top) o += tx((xr0 + xr1) / 2, yT - 20, 'Top rail ' + fmtIn(ln.top), 'middle', 13, 800, ink);
-  if (ln.left) o += tx(xr0 - 6, yT - 2, ln.left, 'end', 12, 800, ink);
-  if (ln.right) o += tx(xr1 + 6, yT - 2, ln.right, 'start', 12, 800, ink);
+  o += '<rect x="' + xr0 + '" y="' + (yT - th) + '" width="' + (xr1 - xr0) + '" height="' + th + '" rx="2" fill="#7D8C99"/>';
+  if (ln.top) o += tx((xr0 + xr1) / 2, yT - th - 8, 'Top rail ' + fmtIn(ln.top), 'middle', 13, 800, ink);
+  if (ln.left) o += tx(xr0 - 6, yT - th / 2 + 4, ln.left, 'end', 12, 800, ink);
+  if (ln.right) o += tx(xr1 + 6, yT - th / 2 + 4, ln.right, 'start', 12, 800, ink);
   // posts: cut length to scale from the top, blocks drawn on the side the sheet gives them
   P.forEach(function(p, i){
     var x = xs[i], cut = p.cut || ref, yb = yT + cut * s, fl = isFl(p);
@@ -2043,7 +2043,7 @@ function customDiagram(rail){
       if (g != null && g < 130) return '<rect x="' + bx + '" y="' + by + '" width="5" height="9" fill="#2289BB"/>';
       return '<rect x="' + bx + '" y="' + by + '" width="5" height="9" fill="#2289BB"/>' + tx(side < 0 ? x - 7 : x + pw + 7, by - (side < 0 ? 32 : 14), fmtIn(v), side < 0 ? 'end' : 'start', 12, 800, '#16445F').replace('<text ', '<text paint-order="stroke" stroke="#fff" stroke-width="4" '); };
     o += blk(p.bl, -1) + blk(p.br, 1);
-    o += tx(x + pw / 2, yT - 52, p.n.replace(/^post\s*/i, 'Post '), 'middle', 13, 900, ink) + tx(x + pw / 2, yT - 38, p.type, 'middle', 12, 800, '#2289BB');
+    o += tx(x + pw / 2, yT - th - 42, p.n.replace(/^post\s*/i, 'Post '), 'middle', 13, 900, ink) + tx(x + pw / 2, yT - th - 28, p.type, 'middle', 12, 800, '#2289BB');
     var ly = Math.max(yb, deck + 12) + 18;
     o += tx(x + pw / 2, ly, fmtIn(cut), 'middle', 14, 900, ink);
     if (fl) o += tx(x + pw / 2, ly + 15, cut > ref + 1 / 32 ? 'float · ' + fmtIn(cut - ref) + ' below deck' : 'float · not fastened', 'middle', 11, 700);
