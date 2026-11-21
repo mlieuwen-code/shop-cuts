@@ -1153,7 +1153,9 @@ function renderSheet(book, item, done){
     var ww = cur.items.filter(function(x){ return x.sh.name === 'Wall to Wall' && kinds.indexOf('Wall to Wall') >= 0; })[0];
     if (ww) kinds.midWW = screenMid(ww.sd, 2);
   }
-  var cps = sh.name === 'CUSTOM POST CUT' ? customRails(sd) : [];
+  // custom rails: drawn under the Custom posts table, and under the Cuts table too
+  var cpIt = sh.name === 'CUT SHEET' && cur ? cur.items.filter(function(x){ return x.sh.name === 'CUSTOM POST CUT'; })[0] : null;
+  var cps = sh.name === 'CUSTOM POST CUT' ? customRails(sd) : cpIt ? customRails(cpIt.sd) : [];
   return h + '</table>' + (kinds && kinds.length ? '<div class="scrbelow">' + screenDiagram(kinds) + '</div>' : '') + (cps.length ? '<div class="cpbelow">' + cps.map(customDiagram).join('') + '</div>' : '');
 }
 
