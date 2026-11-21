@@ -1197,11 +1197,13 @@ function customDiagram(rail){
   var gaps = P.slice(1).map(function(p, i){ return ln.ch.length === P.length - 1 ? ln.ch[i] : null; });
   // channel gaps drawn in proportion to each other: the shortest gets just enough room for its label, capped so long rails still fit
   var known = gaps.filter(function(g){ return g; }), gmin = known.length ? Math.min.apply(null, known) : 12, gsum = known.reduce(function(a, b){ return a + b; }, 0) || 12;
-  var hs = Math.min(Math.max(s, 52 / gmin), Math.max(s, 900 / gsum));
-  var gpx = gaps.map(function(g){ return known.length === gaps.length ? Math.max(40, g * hs) : 116; });
-  pw = Math.round(2 * hs);   // posts on the same scale as the gaps and pickets
+  // one scale both ways, so posts, pickets and the top rail keep their true shapes; long rails shrink to fit
+  s = Math.min(10, 820 / (gsum + 2 * P.length)); var hs = s;
+  var gpx = gaps.map(function(g){ return known.length === gaps.length ? Math.max(12, g * hs) : 12 * hs; });
+  pw = 2 * s;
   var x0 = 96, xs = [x0]; gpx.forEach(function(g, i){ xs.push(xs[i] + pw + g); });
-  var th = 2.5 * s, W = xs[xs.length - 1] + pw + 96, yT = 50 + th + 8, deck = yT + ref * s;
+  var th = 2.5 * s, W = xs[xs.length - 1] + pw + 96, up = xs.map(function(x, i){ return i > 0 && x - xs[i - 1] < 76; }), yT = 50 + th + 8 + (up.some(Boolean) ? 30 : 0), deck = yT + ref * s, ov = '';
+  up.forEach(function(u, i){ if (u && up[i - 1]) up[i] = false; });   // only every other crowded post moves up
   var maxB = Math.max.apply(null, P.map(function(p){ return yT + (p.cut || ref) * s; }).concat(deck + 12));
   var H = maxB + 44, o = '', tx = function(x, y, t, a, sz, w, f){ return '<text x="' + x + '" y="' + y + '" text-anchor="' + (a || 'middle') + '" font-size="' + (sz || 12) + '" font-weight="' + (w || 700) + '" fill="' + (f || mut) + '">' + esc(t) + '</text>'; };
   // the deck: stops short of a float post (it hangs past the edge), with the edge face shown
@@ -1220,8 +1222,8 @@ function customDiagram(rail){
     for (var k = 0; k < np; k++){ var px0 = a + sp * (k + 1) + pk * k; o += '<rect x="' + px0 + '" y="' + yT + '" width="' + pk + '" height="' + (by - 7 - yT) + '" fill="#9AA8B4"/>'; }
     o += '<rect x="' + a + '" y="' + (by - 7) + '" width="' + (b - a) + '" height="7" fill="#E8590C"/>';
     if (b - a < 130){ var bv = [P[i].br, p.bl].filter(function(v){ return v; }).map(fmtIn).filter(function(v, k, arr){ return arr.indexOf(v) === k; });
-      if (bv.length) o += tx((a + b) / 2, by - 14, bv.join(' / '), 'middle', 12, 800, '#16445F').replace('<text ', '<text paint-order="stroke" stroke="#fff" stroke-width="4" '); }
-    if (gaps[i] != null) o += '<rect x="' + ((a + b) / 2 - Math.min(30, (b - a - 8) / 2)) + '" y="' + (ym - 14) + '" width="' + Math.min(60, b - a - 8) + '" height="24" rx="12" fill="#fff" stroke="#E8590C" stroke-width="2"/>' + tx((a + b) / 2, ym + 3, fmtIn(gaps[i]), 'middle', 14, 900, ink);
+      if (bv.length) ov += tx((a + b) / 2, by - 14, bv.join(' / '), 'middle', 12, 800, '#16445F').replace('<text ', '<text paint-order="stroke" stroke="#fff" stroke-width="4" '); }
+    if (gaps[i] != null) ov += '<rect x="' + ((a + b) / 2 - 24) + '" y="' + (ym - 14) + '" width="48" height="24" rx="12" fill="#fff" stroke="#E8590C" stroke-width="2"/>' + tx((a + b) / 2, ym + 3, fmtIn(gaps[i]), 'middle', 14, 900, ink);
   });
   // top rail across the posts, end labels outside
   var xr0 = xs[0] - 4, xr1 = xs[xs.length - 1] + pw + 4;
@@ -1239,13 +1241,15 @@ function customDiagram(rail){
       if (g != null && g < 130) return '<rect x="' + bx + '" y="' + by + '" width="5" height="9" fill="#2289BB"/>';
       return '<rect x="' + bx + '" y="' + by + '" width="5" height="9" fill="#2289BB"/>' + tx(side < 0 ? x - 7 : x + pw + 7, by - (side < 0 ? 32 : 14), fmtIn(v), side < 0 ? 'end' : 'start', 12, 800, '#16445F').replace('<text ', '<text paint-order="stroke" stroke="#fff" stroke-width="4" '); };
     o += blk(p.bl, -1) + blk(p.br, 1);
-    o += tx(x + pw / 2, yT - th - 42, p.n.replace(/^post\s*/i, 'Post '), 'middle', 13, 900, ink) + tx(x + pw / 2, yT - th - 28, p.type, 'middle', 12, 800, '#2289BB');
+    var lu = up[i] ? 30 : 0;
+    o += tx(x + pw / 2, yT - th - 42 - lu, p.n.replace(/^post\s*/i, 'Post '), 'middle', 13, 900, ink) + tx(x + pw / 2, yT - th - 28 - lu, p.type, 'middle', 12, 800, '#2289BB');
     var ly = Math.max(yb, deck + 12) + 18;
     o += tx(x + pw / 2, ly, fmtIn(cut), 'middle', 14, 900, ink);
     if (fl) o += tx(x + pw / 2, ly + 15, cut > ref + 1 / 32 ? 'float · ' + fmtIn(cut - ref) + ' below deck' : 'float · not fastened', 'middle', 11, 700);
   });
+  o += ov;   // channel bubbles and shared block labels sit over the posts in narrow sections
   var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" xmlns="http://www.w3.org/2000/svg" font-family="Lexend,sans-serif"><defs><pattern id="cphatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" stroke="#9AA8B4" stroke-width="2"/></pattern></defs>' + o + '</svg>';
-  var caps = '<b>Rail ' + esc(rail.tag) + ' · side view</b><span>Seen from the deck side, left end on the left. Heights to scale from the post tops; widths to scale with each other.</span>' +
+  var caps = '<b>Rail ' + esc(rail.tag) + ' · side view</b><span>Seen from the deck side, left end on the left. Drawn to scale.</span>' +
     '<span><i class="k pst"></i>Post, cut length under it</span><span><i class="k blk"></i>Block, height from the post top</span><span><i class="k chn"></i>Bottom channel, length in the bubble</span><span><i class="k pkt"></i>Pickets, 3/4&quot; wide, gaps under 4&quot;</span>';
   return '<figure class="cpfig">' + svg + '<figcaption>' + caps + '</figcaption></figure>';
 }
