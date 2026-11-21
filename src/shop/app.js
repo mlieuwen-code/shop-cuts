@@ -1237,7 +1237,8 @@ function customDiagram(rail){
   P.forEach(function(p, i){
     var x = xs[i], cut = p.cut || ref, yb = yT + cut * s, fl = isFl(p);
     o += '<rect x="' + x + '" y="' + yT + '" width="' + pw + '" height="' + (cut * s) + '" fill="' + ink + '"/>';
-    if (!fl){ var off = /off-?r/i.test(p.type) ? 1 : /off-?l/i.test(p.type) ? -1 : 0, pl = 2 * pw, px = x + pw / 2 - pl / 2 + off * (pl / 2 - pw / 2);
+    if (!fl){ // offset plates: E-Off-R's plate runs in under the rail (to the left), E-Off-L's to the right; Rev offsets the other way
+      var off = /off-?r/i.test(p.type) ? -1 : /off-?l/i.test(p.type) ? 1 : /rev-?r/i.test(p.type) ? 1 : /rev-?l/i.test(p.type) ? -1 : 0, pl = 2 * pw, px = x + pw / 2 - pl / 2 + off * (pl / 2 - pw / 2);
       o += '<rect x="' + px + '" y="' + (yb - 4) + '" width="' + pl + '" height="4" fill="#3B5566"/>'; }
     var blk = function(v, side){ if (!v) return ''; var by = yT + v * s, bx = side < 0 ? x - 5 : x + pw, g = side < 0 ? gpx[i - 1] : gpx[i];
       if (g != null && g < 130) return '<rect x="' + bx + '" y="' + by + '" width="5" height="9" fill="#2289BB"/>';
