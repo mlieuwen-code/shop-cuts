@@ -1153,9 +1153,93 @@ function renderSheet(book, item, done){
     var ww = cur.items.filter(function(x){ return x.sh.name === 'Wall to Wall' && kinds.indexOf('Wall to Wall') >= 0; })[0];
     if (ww) kinds.midWW = screenMid(ww.sd, 2);
   }
-  return h + '</table>' + (kinds && kinds.length ? '<div class="scrbelow">' + screenDiagram(kinds) + '</div>' : '');
+  var cps = sh.name === 'CUSTOM POST CUT' ? customRails(sd) : [];
+  return h + '</table>' + (kinds && kinds.length ? '<div class="scrbelow">' + screenDiagram(kinds) + '</div>' : '') + (cps.length ? '<div class="cpbelow">' + cps.map(customDiagram).join('') + '</div>' : '');
 }
 
+// ---------- custom posts: a side view of each custom rail, drawn from CUSTOM POST CUT + the rail's CUT SHEET line ----------
+function cpNum(v){ return typeof v === 'number' ? v : (v != null && String(v).trim() !== '' && !isNaN(+v) ? +v : null); }
+function customRails(sd){
+  var hdr = null, col = {}, rails = [], r, c, t = function(r, c){ var x = cellVal(sd, r, c); return x == null ? '' : String(x).trim(); };
+  for (r = 1; r <= (sd.maxR || 80) && hdr == null; r++) if (/^post\s*#$/i.test(t(r, 1))) hdr = r;
+  if (hdr == null) return rails;
+  for (c = 1; c <= 12; c++){ var h = t(hdr, c).toLowerCase(); if (h) col[h] = c; }
+  var get = function(r, k){ return col[k] ? cellVal(sd, r, col[k]) : null; };
+  for (r = hdr + 1; r <= (sd.maxR || 80); r++){
+    var a = t(r, 1), m = /^(\S+)\s*·\s*([^·]*)·/.exec(a);
+    if (m){ rails.push({ tag: m[1], posts: [] }); continue; }
+    if (/^post\s*\d+/i.test(a) && rails.length) rails[rails.length - 1].posts.push({
+      n: a, pos: String(get(r, 'position') || ''), type: String(get(r, 'type') || '').trim(), mount: String(get(r, 'mount') || '').trim(),
+      cut: cpNum(get(r, 'post cut')), bl: cpNum(get(r, 'block l')), br: cpNum(get(r, 'block r'))
+    });
+  }
+  return rails.filter(function(x){ return x.posts.length; });
+}
+// the rail's line on the CUT SHEET: channel pieces (L→R), top rail and the end labels
+function cutLine(tag){
+  var it = cur && cur.items.filter(function(x){ return x.sh.name === 'CUT SHEET'; })[0]; if (!it) return null;
+  var sd = it.sd, t = function(r, c){ var x = cellVal(sd, r, c); return x == null ? '' : String(x).trim(); }, hdr = null, col = {}, r, c;
+  for (r = 1; r <= (sd.maxR || 200) && hdr == null; r++) if (/^rail\s*tag$/i.test(t(r, 1))) hdr = r;
+  if (hdr == null) return null;
+  for (c = 1; c <= (sd.maxC || 30); c++){ var h = t(hdr, c).toLowerCase(); if (h && !col[h]) col[h] = c; }
+  for (r = hdr + 1; r <= (sd.maxR || 200); r++) if (t(r, 1) === String(tag)){
+    var chK = Object.keys(col).filter(function(k){ return /^channels?/.test(k); })[0], pcs = [], re = /(\d+)\s*@\s*(\d+(?:\.\d+)?)(?:\s+(\d+)\s*\/\s*(\d+))?/g, mm, txt = chK ? t(r, col[chK]) : '';
+    while ((mm = re.exec(txt))) for (var i = 0; i < +mm[1]; i++) pcs.push(+mm[2] + (mm[3] ? mm[3] / mm[4] : 0));
+    return { ch: pcs, top: cpNum(cellVal(sd, r, col['top rail'])), left: col.left ? t(r, col.left) : '', right: col.right ? t(r, col.right) : '' };
+  }
+  return null;
+}
+function customDiagram(rail){
+  var P = rail.posts, ln = cutLine(rail.tag) || { ch: [], left: '', right: '' }, ink = '#0F1E29', mut = '#5B6B78', s = 8, pw = 2 * s;
+  var isFl = function(p){ return /^fl\b|float/i.test(p.type); };
+  var cuts = P.filter(function(p){ return !isFl(p) && p.cut; }).map(function(p){ return p.cut; }).sort();
+  var ref = cuts.length ? cuts[Math.floor(cuts.length / 2)] : 40.5;
+  var gaps = P.slice(1).map(function(p, i){ return ln.ch.length === P.length - 1 ? ln.ch[i] : null; });
+  var gpx = gaps.map(function(g){ return Math.max(116, (g || 12) * s); });
+  var x0 = 96, xs = [x0]; gpx.forEach(function(g, i){ xs.push(xs[i] + pw + g); });
+  var W = xs[xs.length - 1] + pw + 96, yT = 78, deck = yT + ref * s;
+  var maxB = Math.max.apply(null, P.map(function(p){ return yT + (p.cut || ref) * s; }).concat(deck + 12));
+  var H = maxB + 44, o = '', tx = function(x, y, t, a, sz, w, f){ return '<text x="' + x + '" y="' + y + '" text-anchor="' + (a || 'middle') + '" font-size="' + (sz || 12) + '" font-weight="' + (w || 700) + '" fill="' + (f || mut) + '">' + esc(t) + '</text>'; };
+  // the deck: stops short of a float post (it hangs past the edge), with the edge face shown
+  var dL = x0 - 40, dR = W - 30;
+  if (isFl(P[0]) && P.length > 1) dL = xs[1] - Math.min(36, gpx[0] * .4);
+  if (isFl(P[P.length - 1]) && P.length > 1) dR = xs[P.length - 2] + pw + Math.min(36, gpx[gpx.length - 1] * .4);
+  o += '<rect x="' + dL + '" y="' + deck + '" width="' + (dR - dL) + '" height="12" fill="#C9D3DC"/>';
+  if (isFl(P[0])) o += '<rect x="' + (dL - 6) + '" y="' + deck + '" width="6" height="40" fill="url(#cphatch)" stroke="#9AA8B4"/>';
+  o += tx(dR - 6, deck + 26, 'DECK', 'end', 11);
+  if (isFl(P[P.length - 1])) o += '<rect x="' + dR + '" y="' + deck + '" width="6" height="40" fill="url(#cphatch)" stroke="#9AA8B4"/>';
+  // pickets / infill between the posts, the bottom channel sitting on the blocks
+  P.slice(1).forEach(function(p, i){
+    var a = xs[i] + pw, b = xs[i + 1], bl = P[i].br || P[i].bl || p.bl || p.br || 0, by = yT + bl * s, ym = (yT + by) / 2;
+    for (var x = a + 9; x < b - 4; x += 11) o += '<line x1="' + x + '" y1="' + (yT + 2) + '" x2="' + x + '" y2="' + (by - 7) + '" stroke="#B8C4CE" stroke-width="3"/>';
+    o += '<rect x="' + a + '" y="' + (by - 7) + '" width="' + (b - a) + '" height="7" fill="#E8590C"/>';
+    if (gaps[i] != null) o += '<rect x="' + ((a + b) / 2 - 30) + '" y="' + (ym - 14) + '" width="60" height="24" rx="12" fill="#fff" stroke="#E8590C" stroke-width="2"/>' + tx((a + b) / 2, ym + 3, fmtIn(gaps[i]), 'middle', 14, 900, ink);
+  });
+  // top rail across the posts, end labels outside
+  var xr0 = xs[0] - 4, xr1 = xs[xs.length - 1] + pw + 4;
+  o += '<rect x="' + xr0 + '" y="' + (yT - 12) + '" width="' + (xr1 - xr0) + '" height="12" rx="2" fill="#7D8C99"/>';
+  if (ln.top) o += tx((xr0 + xr1) / 2, yT - 20, 'Top rail ' + fmtIn(ln.top), 'middle', 13, 800, ink);
+  if (ln.left) o += tx(xr0 - 6, yT - 2, ln.left, 'end', 12, 800, ink);
+  if (ln.right) o += tx(xr1 + 6, yT - 2, ln.right, 'start', 12, 800, ink);
+  // posts: cut length to scale from the top, blocks drawn on the side the sheet gives them
+  P.forEach(function(p, i){
+    var x = xs[i], cut = p.cut || ref, yb = yT + cut * s, fl = isFl(p);
+    o += '<rect x="' + x + '" y="' + yT + '" width="' + pw + '" height="' + (cut * s) + '" fill="' + ink + '"/>';
+    if (!fl){ var off = /off-?r/i.test(p.type) ? 1 : /off-?l/i.test(p.type) ? -1 : 0, pl = 4 * s, px = x + pw / 2 - pl / 2 + off * (pl / 2 - pw / 2);
+      o += '<rect x="' + px + '" y="' + (yb - 4) + '" width="' + pl + '" height="4" fill="#3B5566"/>'; }
+    var blk = function(v, side){ if (!v) return ''; var by = yT + v * s, bx = side < 0 ? x - 5 : x + pw;
+      return '<rect x="' + bx + '" y="' + by + '" width="5" height="9" fill="#2289BB"/>' + tx(side < 0 ? x - 7 : x + pw + 7, by - 14, fmtIn(v), side < 0 ? 'end' : 'start', 12, 800, '#16445F').replace('<text ', '<text paint-order="stroke" stroke="#fff" stroke-width="4" '); };
+    o += blk(p.bl, -1) + blk(p.br, 1);
+    o += tx(x + pw / 2, yT - 52, p.n.replace(/^post\s*/i, 'Post '), 'middle', 13, 900, ink) + tx(x + pw / 2, yT - 38, p.type, 'middle', 12, 800, '#2289BB');
+    var ly = Math.max(yb, deck + 12) + 18;
+    o += tx(x + pw / 2, ly, fmtIn(cut), 'middle', 14, 900, ink);
+    if (fl) o += tx(x + pw / 2, ly + 15, cut > ref + 1 / 32 ? 'float · ' + fmtIn(cut - ref) + ' below deck' : 'float · not fastened', 'middle', 11, 700);
+  });
+  var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" xmlns="http://www.w3.org/2000/svg" font-family="Lexend,sans-serif"><defs><pattern id="cphatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" stroke="#9AA8B4" stroke-width="2"/></pattern></defs>' + o + '</svg>';
+  var caps = '<b>Rail ' + esc(rail.tag) + ' · side view</b><span>Seen from the deck side, left end on the left. Heights to scale from the post tops; spacing is not.</span>' +
+    '<span><i class="k pst"></i>Post, cut length under it</span><span><i class="k blk"></i>Block, height from the post top</span><span><i class="k chn"></i>Bottom channel, length in the bubble</span>';
+  return '<figure class="cpfig">' + svg + '<figcaption>' + caps + '</figcaption></figure>';
+}
 // ---------- a job ----------
 var cur = null;   // { f, book, items, tab, done, t }
 function progKey(id){ return PROG + id; }
