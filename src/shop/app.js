@@ -1199,6 +1199,7 @@ function customDiagram(rail){
   var known = gaps.filter(function(g){ return g; }), gmin = known.length ? Math.min.apply(null, known) : 12, gsum = known.reduce(function(a, b){ return a + b; }, 0) || 12;
   var hs = Math.min(Math.max(s, 52 / gmin), Math.max(s, 900 / gsum));
   var gpx = gaps.map(function(g){ return known.length === gaps.length ? Math.max(40, g * hs) : 116; });
+  pw = Math.round(2 * hs);   // posts on the same scale as the gaps and pickets
   var x0 = 96, xs = [x0]; gpx.forEach(function(g, i){ xs.push(xs[i] + pw + g); });
   var W = xs[xs.length - 1] + pw + 96, yT = 78, deck = yT + ref * s;
   var maxB = Math.max.apply(null, P.map(function(p){ return yT + (p.cut || ref) * s; }).concat(deck + 12));
@@ -1214,7 +1215,9 @@ function customDiagram(rail){
   // pickets / infill between the posts, the bottom channel sitting on the blocks
   P.slice(1).forEach(function(p, i){
     var a = xs[i] + pw, b = xs[i + 1], bl = P[i].br || P[i].bl || p.bl || p.br || 0, by = yT + bl * s, ym = (yT + by) / 2;
-    for (var x = a + 9; x < b - 4; x += 11) o += '<line x1="' + x + '" y1="' + (yT + 2) + '" x2="' + x + '" y2="' + (by - 7) + '" stroke="#B8C4CE" stroke-width="3"/>';
+    // pickets to scale: 3/4" wide, as few as keep every gap under 4" (a 3" section gets none)
+    var G = gaps[i] != null ? gaps[i] : (b - a) / hs, np = Math.max(0, Math.ceil((G - 4) / 4.75)), pk = .75 * (b - a) / G, sp = (b - a - np * pk) / (np + 1);
+    for (var k = 0; k < np; k++){ var px0 = a + sp * (k + 1) + pk * k; o += '<rect x="' + px0 + '" y="' + yT + '" width="' + pk + '" height="' + (by - 7 - yT) + '" fill="#9AA8B4"/>'; }
     o += '<rect x="' + a + '" y="' + (by - 7) + '" width="' + (b - a) + '" height="7" fill="#E8590C"/>';
     if (b - a < 130){ var bv = [P[i].br, p.bl].filter(function(v){ return v; }).map(fmtIn).filter(function(v, k, arr){ return arr.indexOf(v) === k; });
       if (bv.length) o += tx((a + b) / 2, by - 14, bv.join(' / '), 'middle', 12, 800, '#16445F').replace('<text ', '<text paint-order="stroke" stroke="#fff" stroke-width="4" '); }
@@ -1230,7 +1233,7 @@ function customDiagram(rail){
   P.forEach(function(p, i){
     var x = xs[i], cut = p.cut || ref, yb = yT + cut * s, fl = isFl(p);
     o += '<rect x="' + x + '" y="' + yT + '" width="' + pw + '" height="' + (cut * s) + '" fill="' + ink + '"/>';
-    if (!fl){ var off = /off-?r/i.test(p.type) ? 1 : /off-?l/i.test(p.type) ? -1 : 0, pl = 4 * s, px = x + pw / 2 - pl / 2 + off * (pl / 2 - pw / 2);
+    if (!fl){ var off = /off-?r/i.test(p.type) ? 1 : /off-?l/i.test(p.type) ? -1 : 0, pl = 2 * pw, px = x + pw / 2 - pl / 2 + off * (pl / 2 - pw / 2);
       o += '<rect x="' + px + '" y="' + (yb - 4) + '" width="' + pl + '" height="4" fill="#3B5566"/>'; }
     var blk = function(v, side){ if (!v) return ''; var by = yT + v * s, bx = side < 0 ? x - 5 : x + pw, g = side < 0 ? gpx[i - 1] : gpx[i];
       if (g != null && g < 130) return '<rect x="' + bx + '" y="' + by + '" width="5" height="9" fill="#2289BB"/>';
@@ -1242,8 +1245,8 @@ function customDiagram(rail){
     if (fl) o += tx(x + pw / 2, ly + 15, cut > ref + 1 / 32 ? 'float · ' + fmtIn(cut - ref) + ' below deck' : 'float · not fastened', 'middle', 11, 700);
   });
   var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" xmlns="http://www.w3.org/2000/svg" font-family="Lexend,sans-serif"><defs><pattern id="cphatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" stroke="#9AA8B4" stroke-width="2"/></pattern></defs>' + o + '</svg>';
-  var caps = '<b>Rail ' + esc(rail.tag) + ' · side view</b><span>Seen from the deck side, left end on the left. Heights to scale from the post tops; channel gaps to scale with each other.</span>' +
-    '<span><i class="k pst"></i>Post, cut length under it</span><span><i class="k blk"></i>Block, height from the post top</span><span><i class="k chn"></i>Bottom channel, length in the bubble</span>';
+  var caps = '<b>Rail ' + esc(rail.tag) + ' · side view</b><span>Seen from the deck side, left end on the left. Heights to scale from the post tops; widths to scale with each other.</span>' +
+    '<span><i class="k pst"></i>Post, cut length under it</span><span><i class="k blk"></i>Block, height from the post top</span><span><i class="k chn"></i>Bottom channel, length in the bubble</span><span><i class="k pkt"></i>Pickets, 3/4&quot; wide, gaps under 4&quot;</span>';
   return '<figure class="cpfig">' + svg + '<figcaption>' + caps + '</figcaption></figure>';
 }
 // ---------- a job ----------
