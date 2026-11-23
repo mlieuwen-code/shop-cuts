@@ -1238,9 +1238,9 @@ function customDiagram(rail){
     var x = xs[i], cut = p.cut || ref, yb = yT + cut * s, fl = isFl(p);
     o += '<rect x="' + x + '" y="' + yT + '" width="' + pw + '" height="' + (cut * s) + '" fill="' + ink + '"/>';
     if (!fl){ // end offset plates always run in under the channel; a reverse offset (Rev) runs out the other way.
-      // mid plates (Centered / Offset L / Offset R → M, M-Off-L, M-Off-R) run the way the letter says
+      // mid plates (Centered / Offset L / Offset R → M, M-Off-L, M-Off-R): the letter is the side the POST sits on, so Offset L's plate runs right
       var inward = i === 0 ? 1 : i === P.length - 1 ? -1 : 0, isEnd = inward !== 0,
-          off = isEnd ? (/rev/i.test(p.type) ? -inward : /off/i.test(p.type) ? inward : 0) : (/off-?l\b/i.test(p.type) ? -1 : /off-?r\b/i.test(p.type) ? 1 : 0), pl = 2 * pw, px = x + pw / 2 - pl / 2 + off * (pl / 2 - pw / 2);
+          off = isEnd ? (/rev/i.test(p.type) ? -inward : /off/i.test(p.type) ? inward : 0) : (/off-?l\b/i.test(p.type) ? 1 : /off-?r\b/i.test(p.type) ? -1 : 0), pl = 2 * pw, px = x + pw / 2 - pl / 2 + off * (pl / 2 - pw / 2);
       o += '<rect x="' + px + '" y="' + (yb - 4) + '" width="' + pl + '" height="4" fill="#3B5566"/>'; }
     var blk = function(v, side){ if (!v) return ''; var by = yT + v * s, bx = side < 0 ? x - 5 : x + pw, g = side < 0 ? gpx[i - 1] : gpx[i];
       if (g != null && g < 130) return '<rect x="' + bx + '" y="' + by + '" width="5" height="9" fill="#2289BB"/>';
