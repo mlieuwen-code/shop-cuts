@@ -308,6 +308,11 @@ svg.laysvg{width:100%;max-height:440px;display:block}
 .laykey i.k-mid{width:7px;height:7px;outline:2px solid var(--card)}
 /* welding: the At welding / Ready to weld card, and the weld tablet's Cut Sheet */
 .atweld{color:#8A3205;font-weight:800}
+.holdcard{background:#EEF1F4;border-color:#7D8C99;margin-top:6px}
+.holdcard .prhead{color:#3B4A56}.holdcard .prhead span:not(.prflame){color:#5B6B78}
+.holdcard .job{opacity:.92}.holdring{display:flex;align-items:center;justify-content:center;width:64px;height:64px;border-radius:50%;background:#DDE3E9;color:#5B6B78;flex:none}
+.holdtag{color:#5B6B78;font-weight:800}
+.holdnote{display:inline-flex;align-items:center;gap:8px;color:#3B4A56;font-weight:800;background:#EEF1F4;border:2px solid #7D8C99;border-radius:12px;padding:6px 12px}
 .wcard{background:#FFF3E6;border-color:#E8590C;margin-top:6px}
 .job.wait{background:transparent;box-shadow:none;border:2px dashed var(--line)}
 .waitring{display:flex;align-items:center;justify-content:center;border-radius:50%;border:8px solid #E4EBF2;color:var(--muted);font-weight:900;font-size:20px}
@@ -823,7 +828,7 @@ function wId(id){ return id + '.w'; }
 var el = function(id){ return document.getElementById(id); };
 function esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 // a short notice at the bottom of the screen
-var VERSION = '11.23.611', toastT = null;
+var VERSION = '11.25.1036', toastT = null;
 function toast(t){ var b = el('toast'); b.textContent = t; b.hidden = false; b.classList.remove('out'); clearTimeout(toastT); toastT = setTimeout(function(){ b.classList.add('out'); setTimeout(function(){ b.hidden = true; }, 400); }, 3200); }
 function msg(t, ok){ var m = el('msg'); m.hidden = !t; m.className = 'msg ' + (ok ? 'ok' : 'err'); m.textContent = t || ''; }
 function lsGet(k){ try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
@@ -872,7 +877,7 @@ function api(action, extra){
 }
 
 // ---------- job list ----------
-var jobs = [], doneJobs = null, DONE_DAYS = 50;
+var jobs = [], doneJobs = null, DONE_DAYS = 50, holdJobs = lsGet('shop-hold') || [];
 // priority order set from the manager screen (file ids, most urgent first); other jobs follow, newest first
 var prio = lsGet('shop-prio') || [];
 // the office's own order for the other jobs (manager screen); used inside In progress and Not started, ahead of the automatic order
@@ -941,6 +946,18 @@ function jobStatus(s){
   if (s && s.fin) return '<span class="fin-tag">✓ Cut · ' + esc(s.fin.by) + ' · ' + day(s.fin.at) + '</span>';
   return s && s.total ? s.done + ' of ' + s.total + ' ticked' : 'Not started';
 }
+// On hold: jobs the office has ready (Ready To Fab / On Hold) but doesn't want started yet. They open to look at, with no ticking.
+function holdCard(have){
+  if (WELD || !holdJobs.length) return '';
+  return '<div class="prcard holdcard"><div class="prhead"><span class="prflame" aria-hidden="true">' + LOCK + '</span>On hold<span>· ready, but don’t start these yet</span></div>' +
+    holdJobs.map(function(f, k){
+      var on = have.indexOf(f.id) >= 0, info = lsGet('shop-info:' + f.id), tag = info && info.u === f.updated ? info.label : '';
+      return '<button type="button" class="job holdjob" data-h="' + k + '"><span class="ring holdring" aria-hidden="true">' + LOCK + '</span><span class="t"><b>' + esc(f.name.replace(/\.xls[xm]$/i, '')) + '</b>' +
+        '<span class="s"><span class="holdtag">On hold · look only</span> · saved ' + esc(new Date(f.updated).toLocaleDateString([], { month: 'short', day: 'numeric' })) + (on ? ' · <span class="offline">✓ on tablet</span>' : '') + '</span></span>' +
+        (tag && /^\d/.test(tag) ? '<span class="cnt"><b>' + tag.replace(/ .*/, '') + '</b>' + esc(tag.replace(/^\d+ /, '')) + '</span>' : '') + '</button>';
+    }).join('') + '</div>';
+}
+var LOCK = '<svg width="24" height="24" viewBox="0 0 24 24" style="vertical-align:-4px"><rect x="4.5" y="10.5" width="15" height="11" rx="2.5" fill="currentColor"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="2.6"/></svg>';
 function renderList(cached){
   var box = el('jobs');
   fileKeys().then(function(have){
@@ -953,7 +970,7 @@ function renderList(cached){
         '<span class="s"><span class="fin-tag">✓ Completed · ' + (f.by ? esc(f.by) + ' · ' : '') + esc(new Date(f.doneAt).toLocaleDateString([], { month: 'short', day: 'numeric' })) + '</span>' + (on ? ' · <span class="offline">✓ on tablet</span>' : '') + '</span></span></button>';
     }).join('') + '<div class="empty" id="doneNone" hidden>No completed jobs match.</div>');
     if (WELD){ renderWeldList(box, have, done); setTimeout(filterDone, 0); return; }
-    if (!jobs.length){ box.innerHTML = '<div class="empty">No jobs in Ready to Fab yet. When a job is ready, it’s saved there from the office and shows up here.</div>' + done; return; }
+    if (!jobs.length){ box.innerHTML = '<div class="empty">No jobs in Ready to Fab yet. When a job is ready, it’s saved there from the office and shows up here.</div>' + holdCard(have) + done; return; }
     setTimeout(filterDone, 0);
     var pct = [], cards = jobs.map(function(f, k){
       var s = lsGet(SUM + f.id), p = s && s.total ? s.done / s.total : 0, on = have.indexOf(f.id) >= 0; if (s) s.id = f.id;
@@ -982,7 +999,7 @@ function renderList(cached){
     }).join('');
     box.innerHTML = (rmc ? '<div class="prcard rmcard"><div class="prhead"><span class="prflame" aria-hidden="true">↻</span>Remakes<span>· just these rails, cut and assemble</span></div>' + rmc + '</div>' : '') + (priHtml ? '<div class="prcard"><div class="prhead"><span class="prflame" aria-hidden="true">⚡</span>Priority<span>· rush these first, in this order</span></div>' + priHtml + '</div>' : '') +
       (prog.length ? '<div class="prcard ipcard"><div class="prhead"><span class="prflame" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" style="vertical-align:-4px"><circle cx="12" cy="12" r="9.5" fill="none" stroke="currentColor" stroke-width="3"/><path d="M12 5.5A6.5 6.5 0 0 1 18.5 12H12z" fill="currentColor"/></svg></span>In progress' + (ordered ? '' : '<span>· most done first</span>') + '</div>' + pick(prog) + '</div>' : '') +
-      (rest.length && (pri.length || prog.length) ? '<div class="prrest">Not started</div>' : '') + pick(rest) +
+      (rest.length && (pri.length || prog.length) ? '<div class="prrest">Not started</div>' : '') + pick(rest) + holdCard(have) +
       (atw.length ? '<div class="prcard wcard"><div class="prhead"><span class="prflame" aria-hidden="true">' + SPARK + '</span>At welding<span>· cut and assembled, waiting on the welder</span></div>' + pick(atw) + '</div>' : '') + done;
   });
   el('listNote').hidden = !cached;
@@ -1066,11 +1083,11 @@ var listFresh = false;   // once the backend has answered, the copy saved on the
 function loadList(){
   kvGet('list').then(function(l){ kvGet('donelist').then(function(d){ if (listFresh) return; if (d && !doneJobs) doneJobs = d; if (l && !jobs.length){ jobs = l; renderList(true); } }); });
   apiNew('fablist2', 'fablist', {}).then(function(r){
-    listFresh = true; jobs = r.files || []; doneJobs = r.done || null; if (Array.isArray(r.prio)){ prio = r.prio; lsSet('shop-prio', prio); } if (Array.isArray(r.order)){ jorder = r.order; lsSet('shop-order', jorder); } if (Array.isArray(r.remakes)){ remakes = r.remakes; lsSet('shop-remakes', remakes); } applyPrio(); kvSet('list', jobs); if (doneJobs) kvSet('donelist', doneJobs);
+    listFresh = true; jobs = r.files || []; doneJobs = r.done || null; if (Array.isArray(r.hold)){ holdJobs = r.hold; lsSet('shop-hold', holdJobs); } if (Array.isArray(r.prio)){ prio = r.prio; lsSet('shop-prio', prio); } if (Array.isArray(r.order)){ jorder = r.order; lsSet('shop-order', jorder); } if (Array.isArray(r.remakes)){ remakes = r.remakes; lsSet('shop-remakes', remakes); } applyPrio(); kvSet('list', jobs); if (doneJobs) kvSet('donelist', doneJobs);
     renderList(false); if (!el('mgr').hidden) renderMgr(); msg(''); prefetch(); pullAll(); flushPending();
     if (refreshAsked){ refreshAsked = false; toast('✓ Up to date · version ' + VERSION); }
     // forget files that are neither in Ready to Fab nor completed in the last 50 days
-    fileKeys().then(function(ks){ var keep = {}; jobs.concat(completedList(), lateCand()).forEach(function(f){ keep[f.id] = 1; }); ks.forEach(function(id){ if (!keep[id]) fileDel(id); }); });
+    fileKeys().then(function(ks){ var keep = {}; jobs.concat(completedList(), lateCand(), holdJobs).forEach(function(f){ keep[f.id] = 1; }); ks.forEach(function(id){ if (!keep[id]) fileDel(id); }); });
   }, function(e){
     if (refreshAsked){ refreshAsked = false; toast('No signal, so this is the list from last time.'); }
     if (e.code === 'pin') return askPin(e.message === 'wrong PIN' ? 'That PIN didn’t work. Try again.' : 'Enter the crew PIN once on this tablet.', loadList);
@@ -1078,7 +1095,7 @@ function loadList(){
     else renderList(true);
   });
 }
-el('jobs').addEventListener('click', function(e){ if (e.target.closest('[data-act="donetoggle"]')){ lsSet(UI + 'done-open', lsGet(UI + 'done-open') === 1 ? 0 : 1); return renderList(false); } var rb = e.target.closest('[data-rm]'); if (rb) return openJob(remakeJob(remakes[+rb.getAttribute('data-rm')])); var b = e.target.closest('[data-k]'); if (b) return openJob(jobs[+b.getAttribute('data-k')]); var wj = e.target.closest('[data-w]'); if (wj) return openJob(shownW[+wj.getAttribute('data-w')]); var d = e.target.closest('[data-d]'); if (d) openJob(shownDone[+d.getAttribute('data-d')]); });
+el('jobs').addEventListener('click', function(e){ if (e.target.closest('[data-act="donetoggle"]')){ lsSet(UI + 'done-open', lsGet(UI + 'done-open') === 1 ? 0 : 1); return renderList(false); } var rb = e.target.closest('[data-rm]'); if (rb) return openJob(remakeJob(remakes[+rb.getAttribute('data-rm')])); var b = e.target.closest('[data-k]'); if (b) return openJob(jobs[+b.getAttribute('data-k')]); var wj = e.target.closest('[data-w]'); if (wj) return openJob(shownW[+wj.getAttribute('data-w')]); var h = e.target.closest('[data-h]'); if (h) return openJob(Object.assign({}, holdJobs[+h.getAttribute('data-h')], { hold: 1 })); var d = e.target.closest('[data-d]'); if (d) openJob(shownDone[+d.getAttribute('data-d')]); });
 // Refresh list: also checks for a newer version of the app (if one arrives, the app reloads and says so)
 el('reload').onclick = function(){
   refreshAsked = true; updAsked = true; loadList();
@@ -2212,8 +2229,9 @@ function renderCur(){
   el('sheet').innerHTML = renderSheet(cur.book, it, cur.done);
   fitSheet();
   var c = counts(it);
-  renderFin();
-  if (WELD && !WELD_BOXES) el('legend').innerHTML = '<span>This tablet is for looking: the small boxes show what the shop has cut and assembled. When the whole job is welded, sign off Welding complete.</span>';
+  renderFin(); if (cur.f.hold) el('fin').hidden = true;
+  if (cur.f.hold) el('legend').innerHTML = '<span class="holdnote">' + LOCK + ' On hold: the office has this ready, but don’t start it yet. Look only, nothing ticks.</span>';
+  else if (WELD && !WELD_BOXES) el('legend').innerHTML = '<span>This tablet is for looking: the small boxes show what the shop has cut and assembled. When the whole job is welded, sign off Welding complete.</span>';
   else if (WELD) el('legend').innerHTML = c.n ? '<span>Tap a rail’s Weld box when it’s welded. Tap again to undo. The small boxes show what the shop has cut and assembled.</span>' : '<span>Here to look at. Welds are ticked on the Welds tab.</span>';
   else el('legend').innerHTML = it.view ? '<span>Totals for the job. Nothing to tick here.</span>' : (c.n ? '<span>Tap a box when it’s cut. Tap again to undo.</span>' : '');
   renderTabs();
@@ -2249,6 +2267,7 @@ window.addEventListener('resize', function(){ if (cur) fitSheet(); });
 el('tabs').addEventListener('click', function(e){ var b = e.target.closest('[data-tab]'); if (!b) return; cur.tab = +b.getAttribute('data-tab'); lsSet(UI + 'tab:' + cur.f.id, cur.tab); renderCur(); window.scrollTo(0, 0); });
 el('sheet').addEventListener('click', function(e){
   if (!cur) return;
+  if (cur.f.hold && !e.target.closest('.laybtn,[data-sort],[data-act="laysall"]')){ if (e.target.closest('td.chk,td.wchk,tr[data-row],[data-pk],[data-act="secall"]')) msg('This job is on hold. Look only, don’t start it yet.', true); return; }
   var wt = e.target.closest('td.wchk');
   if (wt){ var wk = wt.getAttribute('data-wkey'); setWTick(wk, !cur.w.done[wk]); saveW(); var yw = window.scrollY; renderCur(); window.scrollTo(0, yw); return; }
   if (WELD && !e.target.closest('.laybtn')) return;   // the welder's tablet only ticks welds (and opens layouts)
@@ -2682,7 +2701,7 @@ if (WELD){
   if (!getPin()) askPin('Enter the crew PIN once on this tablet.', loadList); else loadList();
   // came back after a refresh: reopen the job that was open
   var open = null; try { open = localStorage.getItem(UI + 'open'); } catch (e) {}
-  if (open) kvGet('list').then(function(l){ var f = (l || []).filter(function(x){ return x.id === open; })[0]; if (f) openJob(f); });
+  if (open) kvGet('list').then(function(l){ var f = (l || []).filter(function(x){ return x.id === open; })[0]; if (f) return openJob(f); var h = holdJobs.filter(function(x){ return x.id === open; })[0]; if (h) openJob(Object.assign({}, h, { hold: 1 })); });
 })();
 try { if (sessionStorage.getItem('shop-updated')){ sessionStorage.removeItem('shop-updated'); setTimeout(function(){ toast('✓ Updated to version ' + VERSION); }, 600); } } catch (e) {}
 if ('serviceWorker' in navigator) window.addEventListener('load', function(){

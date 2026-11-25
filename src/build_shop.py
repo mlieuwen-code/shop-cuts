@@ -91,7 +91,11 @@ function api(action, extra){
     if (!mcp) throw { code: 'nomcp', message: 'Google Drive isn’t available in this view' };
     if (action === 'fablist') return mcp.callTool('Google Drive', 'search_files', { query: "parentId = '" + FAB_FOLDER + "' and trashed = false", excludeContentSnippets: true, pageSize: 100 }, { cache: false }).then(function(r){
       var fs = (r.payload && r.payload.files) || [];
-      return { ok: true, files: fs.filter(function(f){ return /\.xls[xm]$/i.test(f.title || '') && !/^~\$/.test(f.title || ''); }).map(function(f){ return { id: f.id, name: f.title, updated: Date.parse(f.modifiedTime) || 0 }; }).sort(function(a, b){ return b.updated - a.updated; }) };
+      var pick = function(list){ return list.filter(function(f){ return /\.xls[xm]$/i.test(f.title || '') && !/^~\$/.test(f.title || ''); }).map(function(f){ return { id: f.id, name: f.title, updated: Date.parse(f.modifiedTime) || 0 }; }).sort(function(a, b){ return b.updated - a.updated; }); };
+      var out = { ok: true, files: pick(fs), hold: [] }, hf = fs.filter(function(f){ return /folder/.test(f.mimeType || '') && /^on hold$/i.test((f.title || '').trim()); })[0];
+      if (!hf) return out;
+      return mcp.callTool('Google Drive', 'search_files', { query: "parentId = '" + hf.id + "' and trashed = false", excludeContentSnippets: true, pageSize: 100 }, { cache: false })
+        .then(function(h){ out.hold = pick((h.payload && h.payload.files) || []); return out; }, function(){ return out; });
     });
     if (action === 'fabopen') return mcp.callTool('Google Drive', 'download_file_content', { fileId: extra.id }, { cache: false }).then(function(r){
       var p = r.payload || {}; if (!p.content) throw { code: 'script', message: 'Drive sent no file' }; return { ok: true, b64: p.content };
