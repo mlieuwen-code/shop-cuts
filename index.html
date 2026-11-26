@@ -215,6 +215,8 @@ table.sheet tr.stickrow .sk.warn{background:#9C0006}
 .pnoteed{margin:-4px 0 10px;background:#FFF8E1;border:2px solid #E8A200;border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:8px}
 .pnoteed textarea{font:inherit;font-size:16px;border:1px solid #D9C28A;border-radius:8px;padding:8px;resize:vertical}
 .pnoterow{display:flex;gap:10px;align-items:center}
+.pc{display:block;white-space:nowrap;line-height:1.25}.pc+.pc{margin-top:4px}
+.mw{white-space:nowrap}
 .rmbanner{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 18px;background:#9C0006;color:#fff;border-radius:16px;padding:14px 18px;margin-bottom:12px;font-size:22px}
 .rmbanner b{font-weight:900}
 .rmbanner span{font-size:20px;font-weight:800;background:rgba(255,255,255,.18);border-radius:10px;padding:4px 12px}
@@ -871,7 +873,7 @@ function wId(id){ return id + '.w'; }
 var el = function(id){ return document.getElementById(id); };
 function esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 // a short notice at the bottom of the screen
-var VERSION = '11.26.1026', toastT = null;
+var VERSION = '11.26.1032', toastT = null;
 function toast(t){ var b = el('toast'); b.textContent = t; b.hidden = false; b.classList.remove('out'); clearTimeout(toastT); toastT = setTimeout(function(){ b.classList.add('out'); setTimeout(function(){ b.hidden = true; }, 400); }, 3200); }
 function msg(t, ok){ var m = el('msg'); m.hidden = !t; m.className = 'msg ' + (ok ? 'ok' : 'err'); m.textContent = t || ''; }
 function lsGet(k){ try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
@@ -1873,7 +1875,15 @@ function screenPosts(list){
 function itemKeys(item){ var L = item.L; return Object.keys(L.chk).filter(function(k){ return !L.chk[k].opt; }).map(function(k){ return 'c' + k; }).concat(Object.keys(L.rowTap).map(function(r){ return 'r' + r; })); }
 // measurements: big whole numbers with a small stacked fraction, like reading a tape
 function measure(t){
-  return esc(t).replace(/(\d+)\s*\/\s*(\d+)/g, '<span class="fr"><sup>$1</sup><span class="sl">/</span><sub>$2</sub></span>').replace(/@\s*/g, '<span class="at">@</span>');
+  // several pieces on one line (1@ 19 1/2, 1@ 36 1/4): one piece per line, each kept whole, so a fraction never wraps away from its number
+  var ps = String(t == null ? '' : t).split(/\s*,\s*(?=\d+\s*@)/);
+  if (ps.length > 1) return ps.map(function(p){ return '<span class="pc">' + measure1(p) + '</span>'; }).join('');
+  return measure1(t);
+}
+function measure1(t){
+  return esc(t).replace(/(\d+)\s*\/\s*(\d+)/g, '<span class="fr"><sup>$1</sup><span class="sl">/</span><sub>$2</sub></span>')
+    .replace(/(\d+)\s+(<span class="fr">)/g, '<span class="mw">$1 $2').replace(/(<span class="mw">[^]*?<\/sub><\/span>)/g, '$1</span>')
+    .replace(/@\s*/g, '<span class="at">@</span>');
 }
 // units as entered in the field (INPUT tab), for the layout drawings
 // a remake: only the rows (and boxes) of the chosen rail tags are kept

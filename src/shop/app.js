@@ -1021,7 +1021,15 @@ function screenPosts(list){
 function itemKeys(item){ var L = item.L; return Object.keys(L.chk).filter(function(k){ return !L.chk[k].opt; }).map(function(k){ return 'c' + k; }).concat(Object.keys(L.rowTap).map(function(r){ return 'r' + r; })); }
 // measurements: big whole numbers with a small stacked fraction, like reading a tape
 function measure(t){
-  return esc(t).replace(/(\d+)\s*\/\s*(\d+)/g, '<span class="fr"><sup>$1</sup><span class="sl">/</span><sub>$2</sub></span>').replace(/@\s*/g, '<span class="at">@</span>');
+  // several pieces on one line (1@ 19 1/2, 1@ 36 1/4): one piece per line, each kept whole, so a fraction never wraps away from its number
+  var ps = String(t == null ? '' : t).split(/\s*,\s*(?=\d+\s*@)/);
+  if (ps.length > 1) return ps.map(function(p){ return '<span class="pc">' + measure1(p) + '</span>'; }).join('');
+  return measure1(t);
+}
+function measure1(t){
+  return esc(t).replace(/(\d+)\s*\/\s*(\d+)/g, '<span class="fr"><sup>$1</sup><span class="sl">/</span><sub>$2</sub></span>')
+    .replace(/(\d+)\s+(<span class="fr">)/g, '<span class="mw">$1 $2').replace(/(<span class="mw">[^]*?<\/sub><\/span>)/g, '$1</span>')
+    .replace(/@\s*/g, '<span class="at">@</span>');
 }
 // units as entered in the field (INPUT tab), for the layout drawings
 // a remake: only the rows (and boxes) of the chosen rail tags are kept
