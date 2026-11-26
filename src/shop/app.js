@@ -614,17 +614,20 @@ function dblify(L, sd){
   var kinds = [];
   for (var r = 1; r < L.hdr; r++) for (var c = 1; c <= 8; c++){
     if (!/^secondary channels?$/i.test(String(cellVal(sd, r, c) == null ? '' : cellVal(sd, r, c)).trim())) continue;
-    for (var c2 = c + 1; c2 <= c + 6; c2++){ var t2 = String(cellVal(sd, r, c2) == null ? '' : cellVal(sd, r, c2)), re = /(\d+)\s*@\s*(double|relief)/ig, m;
-      while ((m = re.exec(t2))) if (!kinds.some(function(k){ return k.name === m[2].toLowerCase(); })) kinds.push({ k: +m[1], name: m[2].toLowerCase() }); }
+    // any "N @ kind": Double, Relief, or a channel size like 5/8 (a second channel under the first, read as relief)
+    for (var c2 = c + 1; c2 <= c + 6; c2++){ var t2 = String(cellVal(sd, r, c2) == null ? '' : cellVal(sd, r, c2)), re = /(\d+)\s*@\s*([A-Za-z]+|\d+\s*\/\s*\d+(?:\s*[A-Za-z]+)?)/g, m;
+      while ((m = re.exec(t2))) { var nm0 = m[2].trim().toLowerCase(); if (!kinds.some(function(k){ return k.name === nm0; })) kinds.push({ k: +m[1], name: nm0 }); } }
   }
   if (!kinds.length) return;
   var chC = L.cols.filter(function(c){ return /^channels?\b/i.test(L.txt(L.hdr, c)); })[0]; if (chC == null) return;
   var tick = L.cols[L.cols.indexOf(chC) + 1], hasTick = tick != null && L.chk && Object.keys(L.chk).some(function(key){ return +key.split(':')[1] === tick; });
   var after = hasTick ? tick : chC, hc = sd.cells[L.hdr + ':' + chC] || {};
-  sd.cells[L.hdr + ':' + chC] = Object.assign({}, hc, { v: String(hc.v == null ? L.txt(L.hdr, chC) : hc.v).replace(/^channels?/i, 'Glass channels') });
+  // the main channel reads Glass channels only on glass jobs (the info block's Channel says glass)
+  var glass = false; for (var r3 = 1; r3 < L.hdr; r3++) for (var c3 = 1; c3 <= 10; c3++) if (/^channel$/i.test(String(cellVal(sd, r3, c3) == null ? '' : cellVal(sd, r3, c3)).trim()) && /glass/i.test(String(cellVal(sd, r3, c3 + 2) || '') + String(cellVal(sd, r3, c3 + 1) || ''))) glass = true;
+  if (glass) sd.cells[L.hdr + ':' + chC] = Object.assign({}, hc, { v: String(hc.v == null ? L.txt(L.hdr, chC) : hc.v).replace(/^channels?/i, 'Glass channels') });
   L.vchk = L.vchk || {}; L.div = L.div || {};
   kinds.forEach(function(kd, n){
-    var dv = after + 0.3 + n * 0.02, db = dv + 0.01, head = kd.name === 'double' ? 'Double channels' : 'Relief channels';
+    var dv = after + 0.3 + n * 0.02, db = dv + 0.01, head = kd.name === 'double' ? 'Double channels' : kd.name === 'relief' ? 'Relief channels' : 'Relief channels (' + kd.name + ')';
     sd.cells[L.hdr + ':' + dv] = Object.assign({}, hc, { v: head });
     L.cols.splice(L.cols.indexOf(after) + 1, 0, dv, db); after = db; L.vchk[db] = 1; L.div[dv] = 1;
     L.rows.forEach(function(r){
