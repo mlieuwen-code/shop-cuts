@@ -621,15 +621,15 @@ function shopSheets(book){
   })).then(function(a){
     list = a.filter(Boolean).map(function(it){ var fp = it.sh.name === 'POST SHEET' ? fencePosts(book, it) : null; return fp ? Object.assign({}, it, { sd: fp, sh: Object.assign({}, it.sh, { pa: '' }), fence: 1 }) : it; });
     var cpi = list.map(function(x){ return x.sh.name; }).indexOf('CUSTOM POST CUT');
-    if (cpi >= 0){ var ctx = list.filter(function(x){ return x.sh.name === 'CUT SHEET'; })[0], cf = customFake(list[cpi].sd, ctx && /fascia/i.test(String(sheetInfo(ctx.sd, /^mount$/i)))); if (cf) list[cpi] = Object.assign({}, list[cpi], { sd: cf, sh: Object.assign({}, list[cpi].sh, { pa: '' }), cpFake: 1 }); }
+    if (cpi >= 0){ var ctx = list.filter(function(x){ return x.sh.name === 'CUT SHEET'; })[0], cf = customFake(list[cpi].sd, ctx && /fascia/i.test(String(sheetInfo(ctx.sd, /^mount$/i)))); if (cf) list[cpi] = Object.assign({}, list[cpi], { sd: cf, sh: Object.assign({}, list[cpi].sh, { pa: '' }), cpFake: 1 }); else list.splice(cpi, 1); }   // no custom posts: no tab
     var sp = screenPosts(list); if (sp) list.push(sp);
     // any other tab that's been un-hidden for this job and has a print area
     var extra = book.sheets.filter(function(s){ return s.state === 'visible' && s.pa && !SKIP.test(s.name) && !SHOP.some(function(d){ return d.n === s.name; }); });
     return Promise.all(extra.map(function(sh){ return parseSheet(book, sh).then(function(sd){
       // SCREENS (privacy screens on a railing job): rebuilt as a clean cut list with tick boxes, and those rails come off the Cuts tab
-      if (sh.name === 'SCREENS'){ var rs = railScreens(sd); if (rs){ var ct = list.filter(function(x){ return x.sh.name === 'CUT SHEET'; })[0]; if (ct){ ct.scrTags = rs.tags; ct.scrDD = rs.dd; } return { sh: Object.assign({}, sh, { pa: '' }), sd: rs.fake, label: 'Screens', railScr: 1 }; } }
+      if (sh.name === 'SCREENS'){ var rs = railScreens(sd); if (rs){ var ct = list.filter(function(x){ return x.sh.name === 'CUT SHEET'; })[0]; if (ct){ ct.scrTags = rs.tags; ct.scrDD = rs.dd; } return { sh: Object.assign({}, sh, { pa: '' }), sd: rs.fake, label: 'Screens', railScr: 1 }; } return null; }   // no screen rails: no tab
       return { sh: sh, sd: sd, label: sh.name.charAt(0) + sh.name.slice(1).toLowerCase() };
-    }); })).then(function(b){ return list.concat(b); });
+    }); })).then(function(b){ return list.concat(b.filter(Boolean)); });
   });
 }
 
