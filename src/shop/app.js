@@ -1692,9 +1692,15 @@ function pullAll(then){
 function counts(it){
   if (WELD){ if (it.sh.name !== 'CUT SHEET') return { d: 0, n: 0 }; var wk = weldRows(it); return { d: wk.filter(function(x){ return cur.w.done[x.key]; }).length, n: wk.length }; }
   var ks = itemKeys(it), d = ks.filter(function(k){ return cur.done[it.sh.name + '|' + k]; }).length; return { d: d, n: ks.length }; }
+// tab badge: on the Screens and Custom posts tabs count whole screens / posts (a row is done when all its boxes are), not boxes
+function tabCounts(it){
+  if (WELD || !(it.railScr || it.cpFake)) return counts(it);
+  var rows = {}; Object.keys(it.L.chk).forEach(function(k){ var r = k.split(':')[0]; (rows[r] = rows[r] || []).push(it.sh.name + '|c' + k); });
+  var rs = Object.keys(rows); return { n: rs.length, d: rs.filter(function(r){ return rows[r].every(function(k){ return cur.done[k]; }); }).length };
+}
 function renderTabs(){
   el('tabs').innerHTML = cur.items.map(function(it, k){
-    var c = counts(it);
+    var c = tabCounts(it);
     return '<button type="button" class="tab' + (k === cur.tab ? ' on' : '') + (c.n && c.d === c.n ? ' full' : '') + '" data-tab="' + k + '" role="tab" aria-selected="' + (k === cur.tab) + '">' + esc(WELD && WELD_BOXES && it.sh.name === 'CUT SHEET' ? 'Welds' : it.label) + (c.n ? '<small>' + c.d + '/' + c.n + '</small>' : '') + '</button>';
   }).join('');
   var tot = 0, dn = 0; cur.items.forEach(function(it){ var c = counts(it); tot += c.n; dn += c.d; });
