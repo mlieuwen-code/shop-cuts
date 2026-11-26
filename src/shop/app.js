@@ -588,6 +588,31 @@ function railScreens(sd){
   fake.maxR = R;
   return { fake: fake, dd: +dd || 0, tags: rails.map(function(rr){ return String(v(rr, 1)).trim(); }) };
 }
+// a value from a sheet's info block: the first filled cell to the right of a label
+function sheetInfo(sd, re){
+  for (var r = 1; r <= 12; r++) for (var c = 1; c <= 10; c++) if (re.test(String(cellVal(sd, r, c) == null ? '' : cellVal(sd, r, c)).trim())){
+    for (var c2 = c + 1; c2 <= c + 5; c2++){ var x = cellVal(sd, r, c2); if (x != null && String(x).trim() !== '') return x; } }
+  return '';
+}
+// CUSTOM POST CUT rebuilt: one row per post with ✓ boxes for Cut, Blocked and (fascia jobs) Bracket. The Posts tab's
+// 4 · Custom posts, 5 · Custom post blocking and 6 · Custom post bracketing tick these same boxes.
+function customFake(sd, fas){
+  var rails = customRails(sd); if (!rails.length) return null;
+  var head = ['Post #', 'Position', 'Type', 'Post cut', '✓', 'Block L', 'Block R', '✓'].concat(fas ? ['Bracket', '✓'] : []), N = head.length;
+  var fake = { cells: {}, hr: {}, hc: {}, w: {}, merges: [], maxR: 0, maxC: N }, R = 0, YEL = 'background:#FFF2CC;';
+  var put = function(c, val, o){ fake.cells[R + ':' + c] = Object.assign({ v: val }, o || {}); };
+  var len = function(x){ return x ? fmt16(x) : '—'; };
+  R++; put(1, 'CUSTOM POSTS', { b: 1 });
+  R++; head.forEach(function(t, i){ put(i + 1, t, { c: 1 }); });
+  rails.forEach(function(rl){
+    R++; put(1, 'Rail ' + rl.tag + ' · ' + rl.posts.length + ' post' + (rl.posts.length === 1 ? '' : 's'), { b: 1, css: 'background:#E3EAF0;text-align:left;' }); fake.merges.push({ r1: R, r2: R, c1: 1, c2: N });
+    rl.posts.forEach(function(p, i){ R++; var z = i % 2 ? YEL : '', o = { c: 1, b: 1, css: z };
+      put(1, p.n, o); put(2, p.pos, o); put(3, p.type, o); put(4, len(p.cut), o); put(5, '', { css: z }); put(6, len(p.bl), o); put(7, len(p.br), o); put(8, '', { css: z });
+      if (fas){ put(9, fasBracket(p.type).label, Object.assign({}, o, { cls: 'cpbrcell' })); put(10, '', { css: z }); } });
+  });
+  fake.maxR = R;
+  return fake;
+}
 function shopSheets(book){
   var list = [];
   return Promise.all(SHOP.map(function(d){
@@ -595,6 +620,8 @@ function shopSheets(book){
     return parseSheet(book, sh).then(function(sd){ if (d.always || (d.has && d.has(sd)) || (sh.state === 'visible' && !(d.has === screenUnits))) return { sh: sh, sd: sd, label: d.label, view: d.view }; return null; });
   })).then(function(a){
     list = a.filter(Boolean).map(function(it){ var fp = it.sh.name === 'POST SHEET' ? fencePosts(book, it) : null; return fp ? Object.assign({}, it, { sd: fp, sh: Object.assign({}, it.sh, { pa: '' }), fence: 1 }) : it; });
+    var cpi = list.map(function(x){ return x.sh.name; }).indexOf('CUSTOM POST CUT');
+    if (cpi >= 0){ var ctx = list.filter(function(x){ return x.sh.name === 'CUT SHEET'; })[0], cf = customFake(list[cpi].sd, ctx && /fascia/i.test(String(sheetInfo(ctx.sd, /^mount$/i)))); if (cf) list[cpi] = Object.assign({}, list[cpi], { sd: cf, sh: Object.assign({}, list[cpi].sh, { pa: '' }), cpFake: 1 }); }
     var sp = screenPosts(list); if (sp) list.push(sp);
     // any other tab that's been un-hidden for this job and has a print area
     var extra = book.sheets.filter(function(s){ return s.state === 'visible' && s.pa && !SKIP.test(s.name) && !SHOP.some(function(d){ return d.n === s.name; }); });
@@ -1357,7 +1384,7 @@ function renderSheet(book, item, done){
 }
 
 // ---------- custom posts: a side view of each custom rail, drawn from CUSTOM POST CUT + the rail's CUT SHEET line ----------
-function cpNum(v){ return typeof v === 'number' ? v : (v != null && String(v).trim() !== '' && !isNaN(+v) ? +v : null); }
+function cpNum(v){ if (typeof v === 'number') return v; var t = String(v == null ? '' : v).trim(), m = /^(\d+(?:\.\d+)?)(?:\s+(\d+)\s*\/\s*(\d+))?$/.exec(t); if (m) return +m[1] + (m[2] ? m[2] / m[3] : 0); if (/^[—-]$/.test(t)) return 0; return null; }
 function customRails(sd){
   var hdr = null, col = {}, rails = [], r, c, t = function(r, c){ var x = cellVal(sd, r, c); return x == null ? '' : String(x).trim(); };
   for (r = 1; r <= (sd.maxR || 80) && hdr == null; r++) if (/^post\s*#$/i.test(t(r, 1))) hdr = r;
@@ -1365,10 +1392,10 @@ function customRails(sd){
   for (c = 1; c <= 12; c++){ var h = t(hdr, c).toLowerCase(); if (h) col[h] = c; }
   var get = function(r, k){ return col[k] ? cellVal(sd, r, col[k]) : null; };
   for (r = hdr + 1; r <= (sd.maxR || 80); r++){
-    var a = t(r, 1), m = /^(\S+)\s*·\s*([^·]*)·/.exec(a);
+    var a = t(r, 1), m = /^(?:Rail\s+)?(\S+)\s*·/.exec(a);
     if (m){ rails.push({ tag: m[1], posts: [] }); continue; }
     if (/^post\s*\d+/i.test(a) && rails.length) rails[rails.length - 1].posts.push({
-      n: a, pos: String(get(r, 'position') || ''), type: String(get(r, 'type') || '').trim(), mount: String(get(r, 'mount') || '').trim(),
+      row: r, n: a, pos: String(get(r, 'position') || ''), type: String(get(r, 'type') || '').trim(), mount: String(get(r, 'mount') || '').trim(),
       cut: cpNum(get(r, 'post cut')), bl: cpNum(get(r, 'block l')), br: cpNum(get(r, 'block r'))
     });
   }
@@ -1382,7 +1409,7 @@ function cutLine(tag){
   if (hdr == null) return null;
   for (c = 1; c <= (sd.maxC || 30); c++){ var h = t(hdr, c).toLowerCase(); if (h && !col[h]) col[h] = c; }
   for (r = hdr + 1; r <= (sd.maxR || 200); r++) if (t(r, 1) === String(tag)){
-    var chK = Object.keys(col).filter(function(k){ return /^channels?/.test(k); })[0], pcs = [], re = /(\d+)\s*@\s*(\d+(?:\.\d+)?)(?:\s+(\d+)\s*\/\s*(\d+))?/g, mm, txt = chK ? t(r, col[chK]) : '';
+    var chK = Object.keys(col).filter(function(k){ return /^(glass\s+)?channels?/.test(k); })[0], pcs = [], re = /(\d+)\s*@\s*(\d+(?:\.\d+)?)(?:\s+(\d+)\s*\/\s*(\d+))?/g, mm, txt = chK ? t(r, col[chK]) : '';
     while ((mm = re.exec(txt))) for (var i = 0; i < +mm[1]; i++) pcs.push(+mm[2] + (mm[3] ? mm[3] / mm[4] : 0));
     return { ch: pcs, top: cpNum(cellVal(sd, r, col['top rail'])), left: col.left ? t(r, col.left) : '', right: col.right ? t(r, col.right) : '' };
   }
@@ -1393,19 +1420,22 @@ function customPostRows(NC){
   var it = cur && cur.items.filter(function(x){ return x.sh.name === 'CUSTOM POST CUT'; })[0]; if (!it) return null;
   var P = []; customRails(it.sd).forEach(function(rl){ rl.posts.forEach(function(p){ P.push(Object.assign({ rail: rl.tag }, p)); }); });
   if (!P.length) return null;
-  var group = function(keyf){ var out = []; P.forEach(function(p){ var k = keyf(p), g = out.filter(function(x){ return x.k === k; })[0]; if (!g){ g = { k: k, p: p, n: 0, rails: [] }; out.push(g); } g.n++; if (g.rails.indexOf(p.rail) < 0) g.rails.push(p.rail); }); return out; };
+  var fas = /fascia/i.test(String((cur && cur.mount) || cutInfo(/^mount$/i) || ''));
+  // each post's boxes on the Custom posts tab (that tab's ✓ columns: 5 cut, 8 blocked, 10 bracket)
+  var key = function(p, c){ return it.cpFake && it.L && it.L.chk[p.row + ':' + c] ? 'CUSTOM POST CUT|c' + p.row + ':' + c : null; };
+  var group = function(keyf){ var out = []; P.forEach(function(p){ var k = keyf(p), g = out.filter(function(x){ return x.k === k; })[0]; if (!g){ g = { k: k, p: p, n: 0, rails: [], ps: [] }; out.push(g); } g.n++; g.ps.push(p); if (g.rails.indexOf(p.rail) < 0) g.rails.push(p.rail); }); return out; };
   var blk = function(p){ var l = p.bl || 0, r = p.br || 0; if (l && r && Math.abs(l - r) < 1 / 64) return fmt16(l); if (l && !r) return fmt16(l) + ' (L)'; if (r && !l) return fmt16(r) + ' (R)'; return l || r ? 'L ' + fmt16(l) + ' · R ' + fmt16(r) : '—'; };
   var last = NC - 3, tail = function(x){ return '<td class="c"' + (last > 1 ? ' colspan="' + last + '"' : '') + '>' + x + '</td>'; };
-  var head = function(t, lab){ return '<tr class="subhdr"><td class="c">' + t + '</td><td class="c">Qty</td><td class="c"></td>' + tail(lab) + '</tr>'; };
-  var row = function(g, i, val){ var z = i % 2 ? ' style="background:#FFF2CC"' : '';
-    return '<tr class="cprow"' + z + '><td class="c b cptype">' + esc(g.p.type || 'Post') + '<small>' + esc((g.rails.length > 1 ? 'Rails ' : 'Rail ') + g.rails.join(', ')) + '</small></td><td class="num c b">' + g.n + '</td><td class="c cpsee">Custom tab</td>' + tail('<b>' + measure(val) + '</b>') + '</tr>'; };
-  var h = '<tr class="sechead"><td class="c">4 · CUSTOM POSTS</td><td class="c"></td><td class="c"></td>' + tail('<span class="cpnote">See Custom posts tab</span>') + '</tr>';
-  h += head('Post type', 'Cut length') + group(function(p){ return p.type + '|' + p.cut; }).map(function(g, i){ return row(g, i, g.p.cut ? fmt16(g.p.cut) : '—'); }).join('');
-  h += head('Post type', 'Block height') + group(function(p){ return p.type + '|' + blk(p); }).map(function(g, i){ return row(g, i, blk(g.p)); }).join('');
-  if (/fascia/i.test(String((cur && cur.mount) || cutInfo(/^mount$/i) || ''))){
-    h += head('Post type', 'Bracket') + group(function(p){ return p.type + '|' + fasBracket(p.type).label; }).map(function(g, i){ var b = fasBracket(g.p.type);
-      return row(g, i, '').replace('<b></b>', '<b class="cpbr' + (b.weld ? ' weld' : '') + '">' + esc(b.label) + '</b>'); }).join('');
-  }
+  var head = function(t, lab){ return '<tr class="subhdr"><td class="c">' + t + '</td><td class="c">Qty</td><td class="c">✓</td>' + tail(lab) + '</tr>'; };
+  var box = function(g, c){ var ks = g.ps.map(function(p){ return key(p, c); }).filter(Boolean); if (!ks.length) return '<td class="c"></td>';
+    var on = ks.every(function(k){ return cur.done[k]; }); return '<td class="chk' + (on ? ' on' : '') + '" data-cpkeys="' + esc(ks.join(',')) + '"><span class="box" role="checkbox" aria-checked="' + on + '" aria-label="Done">✓</span></td>'; };
+  var row = function(g, i, val, c){ var z = i % 2 ? ' style="background:#FFF2CC"' : '', done = g.ps.every(function(p){ var k = key(p, c); return k && cur.done[k]; });
+    return '<tr class="cprow data' + (done ? ' rowdone' : '') + '"' + z + '><td class="c b cptype">' + esc(g.p.type || 'Post') + '<small>' + esc((g.rails.length > 1 ? 'Rails ' : 'Rail ') + g.rails.join(', ')) + '</small></td><td class="num c b">' + g.n + '</td>' + box(g, c) + tail(val) + '</tr>'; };
+  var sec = function(t){ return '<tr class="sechead"><td class="c">' + t + '</td><td class="c"></td><td class="c"></td>' + tail('<span class="cpnote">Also ticks on the Custom posts tab</span>') + '</tr>'; };
+  var h = sec('4 · CUSTOM POSTS') + head('Post type', 'Cut length') + group(function(p){ return p.type + '|' + p.cut; }).map(function(g, i){ return row(g, i, '<b>' + measure(g.p.cut ? fmt16(g.p.cut) : '—') + '</b>', 5); }).join('');
+  h += sec('5 · CUSTOM POST BLOCKING') + head('Post type', 'Block height') + group(function(p){ return p.type + '|' + blk(p); }).map(function(g, i){ return row(g, i, '<b>' + measure(blk(g.p)) + '</b>', 8); }).join('');
+  if (fas) h += sec('6 · CUSTOM POST BRACKETING') + head('Post type', 'Bracket') + group(function(p){ return p.type + '|' + fasBracket(p.type).label; }).map(function(g, i){ var b = fasBracket(g.p.type);
+    return row(g, i, '<b class="cpbr' + (b.weld ? ' weld' : '') + '">' + esc(b.label) + '</b>', 10); }).join('');
   return h;
 }
 // fascia brackets by post code (SPEC_EndTypes bracket_family, Fascia): df double flange, sf single flange, fc FC 5x3 angle flange.
@@ -1439,7 +1469,7 @@ function customDiagram(rail){
   // channel gaps drawn in proportion to each other: the shortest gets just enough room for its label, capped so long rails still fit
   var known = gaps.filter(function(g){ return g; }), gmin = known.length ? Math.min.apply(null, known) : 12, gsum = known.reduce(function(a, b){ return a + b; }, 0) || 12;
   // one scale both ways, so posts, pickets and the top rail keep their true shapes; long rails shrink to fit
-  s = Math.min(10, 820 / (gsum + 2 * P.length)); var hs = s;
+  s = Math.min(8, 1100 / (gsum + 3 * P.length)); var hs = s;   // the same scale on every rail (6 px to the inch), so a short rail draws short
   var gpx = gaps.map(function(g){ return known.length === gaps.length ? Math.max(12, g * hs) : 12 * hs; });
   pw = 2 * s;
   // post width in this view: 3x2 posts are 3" wide from here, the rest 2"
@@ -1450,7 +1480,7 @@ function customDiagram(rail){
   var th = 2.5 * s, W = xs[xs.length - 1] + PW[P.length - 1] + 96, up = xs.map(function(x, i){ return i > 0 && x - xs[i - 1] < 76; }), yT = 50 + th + 8 + (up.some(Boolean) ? 30 : 0), deck = yT + ref * s, ov = '';
   up.forEach(function(u, i){ if (u && up[i - 1]) up[i] = false; });   // only every other crowded post moves up
   var maxB = Math.max.apply(null, P.map(function(p){ return yT + (p.cut || ref) * s; }).concat(deck + 12));
-  var H = maxB + 44, o = '', tx = function(x, y, t, a, sz, w, f){ return '<text x="' + x + '" y="' + y + '" text-anchor="' + (a || 'middle') + '" font-size="' + (sz || 12) + '" font-weight="' + (w || 700) + '" fill="' + (f || mut) + '">' + esc(t) + '</text>'; };
+  var H = maxB + 80, o = '', tx = function(x, y, t, a, sz, w, f){ return '<text x="' + x + '" y="' + y + '" text-anchor="' + (a || 'middle') + '" font-size="' + (sz || 12) + '" font-weight="' + (w || 700) + '" fill="' + (f || mut) + '">' + esc(t) + '</text>'; };
   // the deck: stops short of a float post (it hangs past the edge), with the edge face shown
   var dL = x0 - 40, dR = W - 30;
   if (isFl(P[0]) && P.length > 1) dL = xs[0] + PW[0] + Math.min(gpx[0] * .25, 36);
@@ -1489,6 +1519,7 @@ function customDiagram(rail){
   if (ln.left) o += tx(xr0 - 6, yT - th / 2 + 4, ln.left, 'end', 12, 800, ink);
   if (ln.right) o += tx(xr1 + 6, yT - th / 2 + 4, ln.right, 'start', 12, 800, ink);
   // posts: cut length to scale from the top, blocks drawn on the side the sheet gives them
+  var cutLabs = [];
   P.forEach(function(p, i){
     var x = xs[i], cut = p.cut || ref, yb = yT + cut * s, fl = isFl(p), pw = PW[i];
     o += '<rect x="' + x + '" y="' + yT + '" width="' + pw + '" height="' + (cut * s) + '" fill="' + ink + '"/>';
@@ -1513,12 +1544,14 @@ function customDiagram(rail){
     o += (i > 0 ? blk(p.bl, -1) : '') + (i < P.length - 1 ? blk(p.br, 1) : '');   // end posts: only the block facing the channel (nothing hangs off the outside)
     var lu = up[i] ? 30 : 0;
     o += tx(x + pw / 2, yT - th - 42 - lu, p.n.replace(/^post\s*/i, 'Post '), 'middle', 13, 900, ink) + tx(x + pw / 2, yT - th - 28 - lu, p.type, 'middle', 12, 800, '#2289BB');
-    var ly = Math.max(yb, fas ? yb : deck + 12) + 18;
+    var ly = Math.max(yb, fas ? yb : deck + 12) + 18, lxc = x + pw / 2;
+    while (cutLabs.some(function(q){ return Math.abs(q.x - lxc) < 72 && Math.abs(q.y - ly) < 30; })) ly += 15;   // posts close together: the next cut length drops below, clear of the float note
+    cutLabs.push({ x: lxc, y: ly });
     o += tx(x + pw / 2, ly, fmtIn(cut), 'middle', 14, 900, ink);
     if (fl) o += tx(x + pw / 2, ly + 15, cut > ref + 1 / 32 ? 'float · ' + fmtIn(cut - ref) + ' below deck' : 'float · not fastened', 'middle', 11, 700);
   });
   o += ov;   // channel bubbles and shared block labels sit over the posts in narrow sections
-  var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" xmlns="http://www.w3.org/2000/svg" font-family="Lexend,sans-serif"><defs><pattern id="cphatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" stroke="#9AA8B4" stroke-width="2"/></pattern></defs>' + o + '</svg>';
+  var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" width="' + Math.round(W) + '" xmlns="http://www.w3.org/2000/svg" font-family="Lexend,sans-serif"><defs><pattern id="cphatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" stroke="#9AA8B4" stroke-width="2"/></pattern></defs>' + o + '</svg>';
   var caps = '<b>Rail ' + esc(rail.tag) + (scrRail ? ' · screen' : '') + ' · side view</b>' + (outside ? '<span>Seen from outside, facing the fascia, so the left end (standing on the deck) is on the right. Drawn to scale.</span>' : '<span>Seen from the deck side, left end on the left. Drawn to scale.</span>') + '' +
     '<span><i class="k pst"></i>Post, cut length under it</span><span><i class="k blk"></i>Block, height from the post top</span><span><i class="k chn"></i>Bottom channel, length in the bubble</span>' + (fas ? '<span><i class="k brk"></i>Fascia bracket, 5&quot; tall' + (bh ? ', ' + esc(fmtIn(bh)) + ' from the post bottom to its top' : '') + '</span><span><i class="k wld"></i>Weld line (weld-on bracket)</span>' : '') + (scrRail ? (ctI.scrDD ? '<span><i class="k dbl"></i>Double channel, ' + esc(fmtIn(ctI.scrDD)) + ' down from the post top</span>' : '') + '<span><i class="k gls"></i>Glass (privacy screen)</span>' : '<span><i class="k pkt"></i>Pickets, 3/4&quot; wide, gaps under 4&quot;</span>') + '';
   return '<figure class="cpfig">' + svg + '<figcaption>' + caps + '</figcaption></figure>';
@@ -1715,6 +1748,9 @@ el('sheet').addEventListener('click', function(e){
   var wt = e.target.closest('td.wchk');
   if (wt){ var wk = wt.getAttribute('data-wkey'); setWTick(wk, !cur.w.done[wk]); saveW(); var yw = window.scrollY; renderCur(); window.scrollTo(0, yw); return; }
   if (WELD && !e.target.closest('.laybtn')) return;   // the welder's tablet only ticks welds (and opens layouts)
+  var cpb = e.target.closest('[data-cpkeys]');
+  if (cpb && !WELD){ var ks = cpb.getAttribute('data-cpkeys').split(','), allOn = ks.every(function(k){ return cur.done[k]; });
+    ks.forEach(function(k){ if (allOn) setTick(k, false); else if (!cur.done[k]){ setTick(k, true); stamp(tickKind(k)); } }); saveProg(); var yc = window.scrollY; renderCur(); window.scrollTo(0, yc); return; }
   var pkb = e.target.closest('[data-pk]');
   if (pkb && cur){ setTick(PK_KEY, pkb.getAttribute('data-pk') === '1'); saveProg(); var y2 = window.scrollY; renderCur(); window.scrollTo(0, y2); return; }
   var sbb = e.target.closest('[data-sort]');
