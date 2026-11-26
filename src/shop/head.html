@@ -184,7 +184,7 @@ table.sheet tr.stickrow .sk.warn{background:#9C0006}
 .cpfig figcaption{display:flex;flex-direction:column;gap:8px;font-size:15px;font-weight:700;line-height:1.3;color:var(--muted)}
 .cpfig figcaption b{font-size:19px;font-weight:900;color:var(--ink,#0F1E29)}
 .cpfig .k{display:inline-block;width:14px;height:14px;border-radius:3px;margin-right:8px;vertical-align:-2px}
-.cpfig .k.pst{background:#0F1E29}.cpfig .k.blk{background:#2289BB}.cpfig .k.chn{background:#E8590C}.cpfig .k.pkt{background:#9AA8B4}
+.cpfig .k.pst{background:#0F1E29}.cpfig .k.blk{background:#2289BB}.cpfig .k.chn{background:#E8590C}.cpfig .k.pkt{background:#9AA8B4}.cpfig .k.gls{background:#CFE6F2;border:2px solid #8DBBD3}
 @media (max-width:820px){.cpfig{flex-direction:column;align-items:stretch}.cpfig svg{max-width:none}}
 .scrfig{margin:0;flex:1 1 420px;display:flex;gap:16px;align-items:center;background:var(--card);border:2px solid var(--line);border-radius:18px;padding:12px 16px}
 .scrfig svg{width:440px;max-width:55%;height:auto;flex-shrink:0}
@@ -299,6 +299,16 @@ svg.laysvg{width:100%;max-height:440px;display:block}
 .laykey i.k-mid{width:7px;height:7px;outline:2px solid var(--card)}
 /* welding: the At welding / Ready to weld card, and the weld tablet's Cut Sheet */
 .atweld{color:#8A3205;font-weight:800}
+table.sheet td.hwrap{white-space:normal!important;line-height:1.15}
+@media (max-width:900px){table.sheet td.hwrap{max-width:78px}}
+table.sheet tr.scrrail td{background:#EEF1F4;padding:14px 10px}
+table.sheet tr.scrrail td.scrtag{font-size:30px;font-weight:900;color:#5B6B78}
+table.sheet tr.scrrail td.scrnote{text-align:left;font-size:18px;font-weight:700;color:#3B4A56}
+table.sheet tr.scrrail td.scrnote b{display:inline-block;background:#3B4A56;color:#fff;border-radius:8px;padding:3px 10px;margin-right:6px;letter-spacing:.04em}
+table.sheet tr.cprow td{padding:12px 8px;font-size:24px}
+table.sheet tr.cprow td.cptype small{display:block;font-size:13px;font-weight:700;color:#5B6B78;margin-top:2px}
+table.sheet tr.cprow td.cpsee{font-size:12px;font-weight:700;color:#5B6B78}
+table.sheet .cpnote{display:inline-block;background:#16445F;color:#fff;border-radius:10px;padding:6px 12px;font-size:15px;font-weight:800}
 .holdcard{background:#EEF1F4;border-color:#7D8C99;margin-top:6px}
 .holdcard .prhead{color:#3B4A56}.holdcard .prhead span:not(.prflame){color:#5B6B78}
 .holdcard .job{opacity:.92}.holdring{display:flex;align-items:center;justify-content:center;width:64px;height:64px;border-radius:50%;background:#DDE3E9;color:#5B6B78;flex:none}

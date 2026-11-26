@@ -424,6 +424,42 @@ function screenHead(item){
     (parts ? '<div class="scrparts"><i>Small parts for the job</i>' + parts + '</div>' : '') + '</div>';
 }
 var SKIP = /^(INPUT|Inputs|GLASS ORDER.*|GLASS CALC|COST .*|CUSTOM POSTS|SPEC_.*|ENGINE.*|STICK CALC|LISTS|Lists|PAINT|PRICES|Paint .*|W-W Glass|R-W Glass|Sheet\d+)$/;
+// SCREENS sheet (screen rails inside a railing job): job info and the screen settings as a block, then one row per screen rail
+// with a ✓ for the top rail, glass channel and double channel. Posts are cut on the Custom posts tab.
+function railScreens(sd){
+  var v = function(r, c){ var x = cellVal(sd, r, c); return x == null ? '' : x; }, H = null, col = {}, r, c;
+  for (r = 1; r <= 40 && H == null; r++) if (/^rail$/i.test(String(v(r, 1)).trim()) && /^measurement$/i.test(String(v(r, 2)).trim())) H = r;
+  if (H == null) return null;
+  for (c = 1; c <= 16; c++){ var hh = String(v(H, c)).trim().toLowerCase(); if (hh && col[hh] == null) col[hh] = c; }
+  var rails = [];
+  for (r = H + 1; r <= (sd.maxR || 60); r++){ var tg = String(v(r, 1)).trim(); if (/^totals?$/i.test(tg)) break; if (tg === '' || !/^\d/.test(tg)) continue; rails.push(r); }
+  if (!rails.length) return null;
+  var get = function(r, k){ return col[k] ? v(r, col[k]) : ''; };
+  var setting = function(re){ for (var q = 1; q < H; q++) if (re.test(String(v(q, 1)).trim())) return v(q, 2); return ''; };
+  var len = function(x){ return x === '' || x == null ? '' : typeof x === 'number' ? fmt16(x) : String(x).replace(/\s+/g, ' ').trim(); };
+  var N = 9, fake = { cells: {}, hr: {}, hc: {}, w: {}, merges: [], maxR: 0, maxC: N }, R = 0, YEL = 'background:#FFF2CC;';
+  var put = function(c, val, o){ fake.cells[R + ':' + c] = Object.assign({ v: val }, o || {}); };
+  var info = function(lab, val, cls){ if (String(val).trim() === '') return; R++; var z = R % 2 ? '' : YEL; put(1, lab, { c: 1, css: z, cls: cls }); put(2, String(val), { c: 1, b: 1, css: z, cls: cls ? cls.replace('hilab', 'hival') : '' }); fake.merges.push({ r1: R, r2: R, c1: 2, c2: N }); };
+  R++; put(1, 'PRIVACY SCREENS', { b: 1 });
+  info('Job', setting(/^job$/i)); info('Colour', setting(/^colou?r$/i)); info('Mount', setting(/^mount$/i));
+  var dd = setting(/^double channel distance down/i);
+  info('Screen post height', len(setting(/^screen post ht/i)), 'hilab');
+  info('Glass channel block', len(setting(/^glass channel block ht/i)), 'hilab');
+  info('Double channel', dd !== '' ? len(dd) + '" down' : '', 'hilab');
+  info('Post profile', setting(/^post profile/i), 'hilab');
+  var np = rails.reduce(function(t, rr){ return t + (+get(rr, 'posts') || 0); }, 0);
+  info('Posts', (np ? np + ' · ' : '') + 'cut on the Custom posts tab');
+  R++;
+  R++; put(1, '1 · Cuts');
+  R++; ['Rail', 'Top rail', '✓', 'Glass channel', '✓', 'Double channel', '✓', 'Left end', 'Right end'].forEach(function(t, i){ put(i + 1, t, { c: 1, cls: 'hwrap' }); });
+  rails.forEach(function(rr, i){ R++; var z = i % 2 ? YEL : '', o = { c: 1, b: 1, css: z };
+    put(1, String(v(rr, 1)).trim(), o); put(2, len(get(rr, 'top rail')), o); put(3, '', { css: z });
+    put(4, len(get(rr, 'glass channel')), o); put(5, '', { css: z });
+    put(6, len(String(get(rr, 'double channel')).split('·')[0]), o); put(7, '', { css: z });
+    put(8, len(get(rr, 'left end')), o); put(9, len(get(rr, 'right end')), o); });
+  fake.maxR = R;
+  return { fake: fake, tags: rails.map(function(rr){ return String(v(rr, 1)).trim(); }) };
+}
 function shopSheets(book){
   var list = [];
   return Promise.all(SHOP.map(function(d){
@@ -434,7 +470,11 @@ function shopSheets(book){
     var sp = screenPosts(list); if (sp) list.push(sp);
     // any other tab that's been un-hidden for this job and has a print area
     var extra = book.sheets.filter(function(s){ return s.state === 'visible' && s.pa && !SKIP.test(s.name) && !SHOP.some(function(d){ return d.n === s.name; }); });
-    return Promise.all(extra.map(function(sh){ return parseSheet(book, sh).then(function(sd){ return { sh: sh, sd: sd, label: sh.name.charAt(0) + sh.name.slice(1).toLowerCase() }; }); })).then(function(b){ return list.concat(b); });
+    return Promise.all(extra.map(function(sh){ return parseSheet(book, sh).then(function(sd){
+      // SCREENS (privacy screens on a railing job): rebuilt as a clean cut list with tick boxes, and those rails come off the Cuts tab
+      if (sh.name === 'SCREENS'){ var rs = railScreens(sd); if (rs){ var ct = list.filter(function(x){ return x.sh.name === 'CUT SHEET'; })[0]; if (ct) ct.scrTags = rs.tags; return { sh: Object.assign({}, sh, { pa: '' }), sd: rs.fake, label: 'Screens', railScr: 1 }; } }
+      return { sh: sh, sd: sd, label: sh.name.charAt(0) + sh.name.slice(1).toLowerCase() };
+    }); })).then(function(b){ return list.concat(b); });
   });
 }
 
@@ -622,6 +662,8 @@ function layout(book, item){
   if (SCREEN_RE.test(sh.name) && hdr != null) screenify(L, sd);
   if (isFenceCut(sh, sd)) fenceify(L, sd);
   if (sh.name === 'CUT SHEET' && !L.fence && hdr != null) dblify(L, sd);
+  if (sh.name === 'CUT SHEET' && item.scrTags && hdr != null){ L.scrRow = {};
+    L.rows.forEach(function(r){ if (r > hdr && item.scrTags.indexOf(txt(r, cols[0])) >= 0){ L.scrRow[r] = 1; Object.keys(L.chk).forEach(function(k){ if (+k.split(':')[0] === r) delete L.chk[k]; }); } }); }
   return L;
 }
 // privacy screen sheets: posts are cut from the Posts tab, so they're left off here. Each screen needs a bottom channel
@@ -1089,6 +1131,8 @@ function renderSheet(book, item, done){
       var tg = L.txt(r, L.cols[0]), un = /^\S+\.\d+$/.test(tg) ? unitOf(tg) : null;
       if (un && un !== lastUnit){ h += layoutRow(un, NC); lastUnit = un; }
     }
+    if (L.scrRow && L.scrRow[r]){ h += '<tr class="scrrail">' + (wcol ? '<td></td>' : '') + '<td class="c b scrtag">' + esc(L.txt(r, L.cols[0])) + '</td><td colspan="' + (L.cols.length - 1) + '" class="scrnote"><b>SCREEN</b> · cut on the Screens tab, posts on the Custom posts tab</td></tr>'; return; }
+    if (sh.name === 'POST SHEET' && !item.fence && /^custom posts$/i.test(L.txt(r, L.cols[0]))){ var cpr = customPostRows(L.cols.length); if (cpr){ h += cpr; return; } }
     var rc = L.cols.filter(function(c){ return L.chk[r + ':' + c] && !L.chk[r + ':' + c].opt; });
     var main = L.vchk ? [] : rc.filter(function(c){ return /top rail|channel/i.test(L.chk[r + ':' + c].head); });
     var need = (main.length ? main : rc).map(function(c){ return pre + 'c' + r + ':' + c; });
@@ -1203,7 +1247,24 @@ function cutLine(tag){
   }
   return null;
 }
+// Posts tab: the custom posts listed at the bottom like the other sections (cut lengths, then blocks), ticked on the Custom posts tab
+function customPostRows(NC){
+  var it = cur && cur.items.filter(function(x){ return x.sh.name === 'CUSTOM POST CUT'; })[0]; if (!it) return null;
+  var P = []; customRails(it.sd).forEach(function(rl){ rl.posts.forEach(function(p){ P.push(Object.assign({ rail: rl.tag }, p)); }); });
+  if (!P.length) return null;
+  var group = function(keyf){ var out = []; P.forEach(function(p){ var k = keyf(p), g = out.filter(function(x){ return x.k === k; })[0]; if (!g){ g = { k: k, p: p, n: 0, rails: [] }; out.push(g); } g.n++; if (g.rails.indexOf(p.rail) < 0) g.rails.push(p.rail); }); return out; };
+  var blk = function(p){ var l = p.bl || 0, r = p.br || 0; if (l && r && Math.abs(l - r) < 1 / 64) return fmt16(l); if (l && !r) return fmt16(l) + ' (L)'; if (r && !l) return fmt16(r) + ' (R)'; return l || r ? 'L ' + fmt16(l) + ' · R ' + fmt16(r) : '—'; };
+  var last = NC - 3, tail = function(x){ return '<td class="c"' + (last > 1 ? ' colspan="' + last + '"' : '') + '>' + x + '</td>'; };
+  var head = function(t, lab){ return '<tr class="subhdr"><td class="c">' + t + '</td><td class="c">Qty</td><td class="c"></td>' + tail(lab) + '</tr>'; };
+  var row = function(g, i, val){ var z = i % 2 ? ' style="background:#FFF2CC"' : '';
+    return '<tr class="cprow"' + z + '><td class="c b cptype">' + esc(g.p.type || 'Post') + '<small>' + esc((g.rails.length > 1 ? 'Rails ' : 'Rail ') + g.rails.join(', ')) + '</small></td><td class="num c b">' + g.n + '</td><td class="c cpsee">Custom tab</td>' + tail('<b>' + measure(val) + '</b>') + '</tr>'; };
+  var h = '<tr class="sechead"><td class="c">4 · CUSTOM POSTS</td><td class="c"></td><td class="c"></td>' + tail('<span class="cpnote">See Custom posts tab</span>') + '</tr>';
+  h += head('Post type', 'Cut length') + group(function(p){ return p.type + '|' + p.cut; }).map(function(g, i){ return row(g, i, g.p.cut ? fmt16(g.p.cut) : '—'); }).join('');
+  h += head('Post type', 'Block height') + group(function(p){ return p.type + '|' + blk(p); }).map(function(g, i){ return row(g, i, blk(g.p)); }).join('');
+  return h;
+}
 function customDiagram(rail){
+  var ctI = cur && cur.items.filter(function(x){ return x.sh.name === 'CUT SHEET'; })[0], scrRail = !!(ctI && ctI.scrTags && ctI.scrTags.indexOf(String(rail.tag)) >= 0);
   var P = rail.posts, ln = cutLine(rail.tag) || { ch: [], left: '', right: '' }, ink = '#0F1E29', mut = '#5B6B78', s = 8, pw = 2 * s;
   var isFl = function(p){ return /^fl\b|float/i.test(p.type); };
   var cuts = P.filter(function(p){ return !isFl(p) && p.cut; }).map(function(p){ return p.cut; }).sort();
@@ -1233,7 +1294,8 @@ function customDiagram(rail){
     var a = xs[i] + pw, b = xs[i + 1], bl = P[i].br || P[i].bl || p.bl || p.br || 0, by = yT + bl * s, ym = (yT + by) / 2;
     // pickets to scale: 3/4" wide, as few as keep every gap under 4" (a 3" section gets none)
     var G = gaps[i] != null ? gaps[i] : (b - a) / hs, np = Math.max(0, Math.ceil((G - 4) / 4.75)), pk = .75 * (b - a) / G, sp = (b - a - np * pk) / (np + 1);
-    for (var k = 0; k < np; k++){ var px0 = a + sp * (k + 1) + pk * k; o += '<rect x="' + px0 + '" y="' + yT + '" width="' + pk + '" height="' + (by - 7 - yT) + '" fill="#9AA8B4"/>'; }
+    if (scrRail) o += '<rect x="' + (a + 3) + '" y="' + (yT + 2) + '" width="' + Math.max(0, b - a - 6) + '" height="' + Math.max(0, by - 9 - yT) + '" fill="#CFE6F2" stroke="#8DBBD3" stroke-width="2"/>';   // a screen: glass, no pickets
+    else for (var k = 0; k < np; k++){ var px0 = a + sp * (k + 1) + pk * k; o += '<rect x="' + px0 + '" y="' + yT + '" width="' + pk + '" height="' + (by - 7 - yT) + '" fill="#9AA8B4"/>'; }
     o += '<rect x="' + a + '" y="' + (by - 7) + '" width="' + (b - a) + '" height="7" fill="#E8590C"/>';
     if (b - a < 130){ var bv = [P[i].br, p.bl].filter(function(v){ return v; }).map(fmtIn).filter(function(v, k, arr){ return arr.indexOf(v) === k; });
       if (bv.length) ov += tx((a + b) / 2, by - 14, bv.join(' / '), 'middle', 12, 800, '#16445F').replace('<text ', '<text paint-order="stroke" stroke="#fff" stroke-width="4" '); }
@@ -1266,8 +1328,8 @@ function customDiagram(rail){
   });
   o += ov;   // channel bubbles and shared block labels sit over the posts in narrow sections
   var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" xmlns="http://www.w3.org/2000/svg" font-family="Lexend,sans-serif"><defs><pattern id="cphatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" stroke="#9AA8B4" stroke-width="2"/></pattern></defs>' + o + '</svg>';
-  var caps = '<b>Rail ' + esc(rail.tag) + ' · side view</b><span>Seen from the deck side, left end on the left. Drawn to scale.</span>' +
-    '<span><i class="k pst"></i>Post, cut length under it</span><span><i class="k blk"></i>Block, height from the post top</span><span><i class="k chn"></i>Bottom channel, length in the bubble</span><span><i class="k pkt"></i>Pickets, 3/4&quot; wide, gaps under 4&quot;</span>';
+  var caps = '<b>Rail ' + esc(rail.tag) + (scrRail ? ' · screen' : '') + ' · side view</b><span>Seen from the deck side, left end on the left. Drawn to scale.</span>' +
+    '<span><i class="k pst"></i>Post, cut length under it</span><span><i class="k blk"></i>Block, height from the post top</span><span><i class="k chn"></i>Bottom channel, length in the bubble</span>' + (scrRail ? '<span><i class="k gls"></i>Glass (privacy screen)</span>' : '<span><i class="k pkt"></i>Pickets, 3/4&quot; wide, gaps under 4&quot;</span>') + '';
   return '<figure class="cpfig">' + svg + '<figcaption>' + caps + '</figcaption></figure>';
 }
 // ---------- a job ----------
