@@ -458,7 +458,7 @@ function railScreens(sd){
     put(6, len(String(get(rr, 'double channel')).split('·')[0]), o); put(7, '', { css: z });
     put(8, len(get(rr, 'left end')), o); put(9, len(get(rr, 'right end')), o); });
   fake.maxR = R;
-  return { fake: fake, tags: rails.map(function(rr){ return String(v(rr, 1)).trim(); }) };
+  return { fake: fake, dd: +dd || 0, tags: rails.map(function(rr){ return String(v(rr, 1)).trim(); }) };
 }
 function shopSheets(book){
   var list = [];
@@ -472,7 +472,7 @@ function shopSheets(book){
     var extra = book.sheets.filter(function(s){ return s.state === 'visible' && s.pa && !SKIP.test(s.name) && !SHOP.some(function(d){ return d.n === s.name; }); });
     return Promise.all(extra.map(function(sh){ return parseSheet(book, sh).then(function(sd){
       // SCREENS (privacy screens on a railing job): rebuilt as a clean cut list with tick boxes, and those rails come off the Cuts tab
-      if (sh.name === 'SCREENS'){ var rs = railScreens(sd); if (rs){ var ct = list.filter(function(x){ return x.sh.name === 'CUT SHEET'; })[0]; if (ct) ct.scrTags = rs.tags; return { sh: Object.assign({}, sh, { pa: '' }), sd: rs.fake, label: 'Screens', railScr: 1 }; } }
+      if (sh.name === 'SCREENS'){ var rs = railScreens(sd); if (rs){ var ct = list.filter(function(x){ return x.sh.name === 'CUT SHEET'; })[0]; if (ct){ ct.scrTags = rs.tags; ct.scrDD = rs.dd; } return { sh: Object.assign({}, sh, { pa: '' }), sd: rs.fake, label: 'Screens', railScr: 1 }; } }
       return { sh: sh, sd: sd, label: sh.name.charAt(0) + sh.name.slice(1).toLowerCase() };
     }); })).then(function(b){ return list.concat(b); });
   });
@@ -1286,6 +1286,13 @@ function cutInfo(re){
 function customDiagram(rail){
   var ctI = cur && cur.items.filter(function(x){ return x.sh.name === 'CUT SHEET'; })[0], scrRail = !!(ctI && ctI.scrTags && ctI.scrTags.indexOf(String(rail.tag)) >= 0);
   var P = rail.posts, ln = cutLine(rail.tag) || { ch: [], left: '', right: '' }, ink = '#0F1E29', mut = '#5B6B78', s = 8, pw = 2 * s;
+  // fascia jobs are drawn from outside, facing the fascia and its brackets. L and R are always named standing on the deck,
+  // so from out here the rail is mirrored: the left end is on the right, and each post's left block is on its right side.
+  var outside = /fascia/i.test(String((cur && cur.mount) || cutInfo(/^mount$/i) || ''));
+  if (outside){
+    P = P.slice().reverse().map(function(p){ return Object.assign({}, p, { bl: p.br, br: p.bl }); });
+    ln = { ch: (ln.ch || []).slice().reverse(), top: ln.top, left: ln.right, right: ln.left };
+  }
   var isFl = function(p){ return /^fl\b|float/i.test(p.type); };
   var cuts = P.filter(function(p){ return !isFl(p) && p.cut; }).map(function(p){ return p.cut; }).sort();
   var ref = cuts.length ? cuts[Math.floor(cuts.length / 2)] : 40.5;
@@ -1323,7 +1330,13 @@ function customDiagram(rail){
     var a = xs[i] + PW[i], b = xs[i + 1], bl = P[i].br || P[i].bl || p.bl || p.br || 0, by = yT + bl * s, ym = (yT + by) / 2;
     // pickets to scale: 3/4" wide, as few as keep every gap under 4" (a 3" section gets none)
     var G = gaps[i] != null ? gaps[i] : (b - a) / hs, np = Math.max(0, Math.ceil((G - 4) / 4.75)), pk = .75 * (b - a) / G, sp = (b - a - np * pk) / (np + 1);
-    if (scrRail) o += '<rect x="' + (a + 3) + '" y="' + (yT + 2) + '" width="' + Math.max(0, b - a - 6) + '" height="' + Math.max(0, by - 9 - yT) + '" fill="#CFE6F2" stroke="#8DBBD3" stroke-width="2"/>';   // a screen: glass, no pickets
+    // a screen: glass, no pickets. The double channel runs across dd down from the post top, between the upper and lower panes
+    var dd = scrRail && ctI.scrDD && ctI.scrDD * s < by - yT - 20 ? yT + ctI.scrDD * s : null;
+    if (scrRail){ var pane = function(y0, y1){ return '<rect x="' + (a + 3) + '" y="' + y0 + '" width="' + Math.max(0, b - a - 6) + '" height="' + Math.max(0, y1 - y0) + '" fill="#CFE6F2" stroke="#8DBBD3" stroke-width="2"/>'; };
+      if (dd){ o += pane(yT + 2, dd - 5) + pane(dd + 5, by - 9) + '<rect x="' + a + '" y="' + (dd - 4) + '" width="' + (b - a) + '" height="8" fill="#7048E8"/>';
+        ov += '<rect x="' + ((a + b) / 2 - 24) + '" y="' + (dd - 30) + '" width="48" height="22" rx="11" fill="#fff" stroke="#7048E8" stroke-width="2"/>' + tx((a + b) / 2, dd - 14, gaps[i] != null ? fmtIn(gaps[i]) : '', 'middle', 13, 900, ink);
+        if (i === 0) ov += tx(a + 6, dd + 20, fmtIn(ctI.scrDD) + ' down', 'start', 12, 800, '#5A37C9').replace('<text ', '<text paint-order="stroke" stroke="#fff" stroke-width="4" '); }
+      else o += pane(yT + 2, by - 9); }
     else for (var k = 0; k < np; k++){ var px0 = a + sp * (k + 1) + pk * k; o += '<rect x="' + px0 + '" y="' + yT + '" width="' + pk + '" height="' + (by - 7 - yT) + '" fill="#9AA8B4"/>'; }
     o += '<rect x="' + a + '" y="' + (by - 7) + '" width="' + (b - a) + '" height="7" fill="#E8590C"/>';
     if (b - a < 130){ var bv = [P[i].br, p.bl].filter(function(v){ return v; }).map(fmtIn).filter(function(v, k, arr){ return arr.indexOf(v) === k; });
@@ -1367,8 +1380,8 @@ function customDiagram(rail){
   });
   o += ov;   // channel bubbles and shared block labels sit over the posts in narrow sections
   var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" xmlns="http://www.w3.org/2000/svg" font-family="Lexend,sans-serif"><defs><pattern id="cphatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" stroke="#9AA8B4" stroke-width="2"/></pattern></defs>' + o + '</svg>';
-  var caps = '<b>Rail ' + esc(rail.tag) + (scrRail ? ' · screen' : '') + ' · side view</b><span>Seen from the deck side, left end on the left. Drawn to scale.</span>' +
-    '<span><i class="k pst"></i>Post, cut length under it</span><span><i class="k blk"></i>Block, height from the post top</span><span><i class="k chn"></i>Bottom channel, length in the bubble</span>' + (fas ? '<span><i class="k brk"></i>Fascia bracket, 5&quot; tall' + (bh ? ', ' + esc(fmtIn(bh)) + ' from the post bottom to its top' : '') + '</span><span><i class="k wld"></i>Weld line (weld-on bracket)</span>' : '') + (scrRail ? '<span><i class="k gls"></i>Glass (privacy screen)</span>' : '<span><i class="k pkt"></i>Pickets, 3/4&quot; wide, gaps under 4&quot;</span>') + '';
+  var caps = '<b>Rail ' + esc(rail.tag) + (scrRail ? ' · screen' : '') + ' · side view</b>' + (outside ? '<span>Seen from outside, facing the fascia, so the left end (standing on the deck) is on the right. Drawn to scale.</span>' : '<span>Seen from the deck side, left end on the left. Drawn to scale.</span>') + '' +
+    '<span><i class="k pst"></i>Post, cut length under it</span><span><i class="k blk"></i>Block, height from the post top</span><span><i class="k chn"></i>Bottom channel, length in the bubble</span>' + (fas ? '<span><i class="k brk"></i>Fascia bracket, 5&quot; tall' + (bh ? ', ' + esc(fmtIn(bh)) + ' from the post bottom to its top' : '') + '</span><span><i class="k wld"></i>Weld line (weld-on bracket)</span>' : '') + (scrRail ? (ctI.scrDD ? '<span><i class="k dbl"></i>Double channel, ' + esc(fmtIn(ctI.scrDD)) + ' down from the post top</span>' : '') + '<span><i class="k gls"></i>Glass (privacy screen)</span>' : '<span><i class="k pkt"></i>Pickets, 3/4&quot; wide, gaps under 4&quot;</span>') + '';
   return '<figure class="cpfig">' + svg + '<figcaption>' + caps + '</figcaption></figure>';
 }
 // ---------- a job ----------
