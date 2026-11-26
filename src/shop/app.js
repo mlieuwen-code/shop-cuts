@@ -1263,7 +1263,19 @@ function customPostRows(NC){
   var h = '<tr class="sechead"><td class="c">4 · CUSTOM POSTS</td><td class="c"></td><td class="c"></td>' + tail('<span class="cpnote">See Custom posts tab</span>') + '</tr>';
   h += head('Post type', 'Cut length') + group(function(p){ return p.type + '|' + p.cut; }).map(function(g, i){ return row(g, i, g.p.cut ? fmt16(g.p.cut) : '—'); }).join('');
   h += head('Post type', 'Block height') + group(function(p){ return p.type + '|' + blk(p); }).map(function(g, i){ return row(g, i, blk(g.p)); }).join('');
+  if (/fascia/i.test(String((cur && cur.mount) || cutInfo(/^mount$/i) || ''))){
+    h += head('Post type', 'Bracket') + group(function(p){ return p.type + '|' + fasBracket(p.type).label; }).map(function(g, i){ var b = fasBracket(g.p.type);
+      return row(g, i, '').replace('<b></b>', '<b class="cpbr' + (b.weld ? ' weld' : '') + '">' + esc(b.label) + '</b>'); }).join('');
+  }
   return h;
+}
+// fascia brackets by post code (SPEC_EndTypes bracket_family, Fascia): df double flange, sf single flange, fc FC 5x3 angle flange.
+// 3x2 posts and FC angles are WELD-ON; the standard 2" bracket is screw-on.
+var FAS_BR = { E: 'df', F: 'sf', I6: 'sf', M: 'df', EC: 'df', IC: 'sf', FC: 'fc', CJ: 'df', '3X2E': 'df', '3X2FE': 'fc', '3X2IE': 'sf', '3X2M': 'df', W: 'df', T: 'df', FA: 'sf', I6A: 'sf' };
+function fasBracket(type){
+  var k = String(type || '').toUpperCase().replace(/-[LR]$/, '').replace(/\s+/g, ''), fam = FAS_BR[k] || (/M$/.test(k) ? 'df' : 'df');
+  var weld = /^3X2/.test(k) || fam === 'fc';
+  return { fam: fam, weld: weld, label: (fam === 'fc' ? 'FC 5x3 angle flange' : fam === 'sf' ? 'Single flange' : 'Double flange') + ' · ' + (weld ? 'weld-on' : 'screw-on') };
 }
 function cutInfo(re){
   var it = cur && cur.items.filter(function(x){ return x.sh.name === 'CUT SHEET'; })[0]; if (!it) return '';
@@ -1298,6 +1310,8 @@ function customDiagram(rail){
   if (isFl(P[0]) && P.length > 1) dL = xs[0] + PW[0] + Math.min(gpx[0] * .25, 36);
   if (isFl(P[P.length - 1]) && P.length > 1) dR = xs[P.length - 1] - Math.min(gpx[gpx.length - 1] * .25, 36);
   // fascia: the deck's top is just above the brackets and its edge runs down behind the posts past the brackets
+  if (fas && /FE\b|^FC/i.test(P[0].type)) dL = xs[0] + PW[0] / 2;
+  if (fas && P.length > 1 && /FE\b|^FC/i.test(P[P.length - 1].type)) dR = xs[P.length - 1] + PW[P.length - 1] / 2;
   var bhT = bh || BR;   // bracket height: the top of the bracket, measured up from the post bottom
   if (fas){ deck = yT + (ref - bhT - .5) * s; o += '<rect x="' + dL + '" y="' + deck + '" width="' + (dR - dL) + '" height="' + ((bhT + .5) * s + 3) + '" fill="url(#cphatch)" stroke="#9AA8B4"/>' + tx(dR - 6, deck + 14, 'FASCIA', 'end', 10); }
   else o += '<rect x="' + dL + '" y="' + deck + '" width="' + (dR - dL) + '" height="12" fill="#C9D3DC"/>';
@@ -1326,10 +1340,15 @@ function customDiagram(rail){
   P.forEach(function(p, i){
     var x = xs[i], cut = p.cut || ref, yb = yT + cut * s, fl = isFl(p), pw = PW[i];
     o += '<rect x="' + x + '" y="' + yT + '" width="' + pw + '" height="' + (cut * s) + '" fill="' + ink + '"/>';
-    if (fas && !fl){ // fascia bracket: a flange either side of the post with its screw holes, 5" tall, bh up from the post bottom
-      var bt = yb - bhT * s, fw = 1.41 * s, hr = .22 * s;
-      [x - fw, x + pw].forEach(function(fx){ o += '<rect x="' + fx + '" y="' + bt + '" width="' + fw + '" height="' + (BR * s) + '" rx="2" fill="#8A9BA8" stroke="#5B6B78" stroke-width="1.5"/>' + [.5, 4.5].map(function(hy){ return '<circle cx="' + (fx + fw / 2) + '" cy="' + (bt + hy * s) + '" r="' + hr + '" fill="#fff" stroke="#3B4A56"/>'; }).join(''); });
-      o += '<rect x="' + x + '" y="' + bt + '" width="' + pw + '" height="' + (BR * s) + '" fill="none" stroke="#8A9BA8" stroke-width="2"/>';
+    if (fas && !fl){ // fascia bracket, 5" tall, its top bh up from the post bottom: double flange (both sides), single flange (channel side),
+      // or an FC 5x3 angle on a fascia end (one 3" leg along the fascia toward the channel; the other leg wraps the corner). Weld-on ones show a weld line.
+      var bt = yb - bhT * s, hr = .22 * s, bk = fasBracket(p.type), inw = i === 0 ? 1 : i === P.length - 1 ? -1 : 1;
+      var flg = function(fx, fw){ return '<rect x="' + fx + '" y="' + bt + '" width="' + fw + '" height="' + (BR * s) + '" rx="2" fill="#8A9BA8" stroke="#5B6B78" stroke-width="1.5"/>' + [.5, 4.5].map(function(hy){ return '<circle cx="' + (fx + fw / 2) + '" cy="' + (bt + hy * s) + '" r="' + hr + '" fill="#fff" stroke="#3B4A56"/>'; }).join(''); };
+      var sides = bk.fam === 'df' ? [-1, 1] : [inw], fw = (bk.fam === 'fc' ? 3 : 1.41) * s;
+      sides.forEach(function(sd0){ o += flg(sd0 < 0 ? x - fw : x + pw, fw); if (bk.weld) o += '<line x1="' + (sd0 < 0 ? x : x + pw) + '" y1="' + (bt + 2) + '" x2="' + (sd0 < 0 ? x : x + pw) + '" y2="' + (bt + BR * s - 2) + '" stroke="#E8590C" stroke-width="3" stroke-dasharray="3 2"/>'; });
+      if (bk.fam === 'fc') o += '<rect x="' + (inw > 0 ? x - 3 : x + pw) + '" y="' + bt + '" width="3" height="' + (BR * s) + '" fill="#5B6B78"/>';   // the corner leg, seen edge-on
+      if (!bk.weld) o += '<rect x="' + x + '" y="' + bt + '" width="' + pw + '" height="' + (BR * s) + '" fill="none" stroke="#8A9BA8" stroke-width="2"/>';
+      if (bk.fam === 'fc') ov += tx(x + pw / 2 + inw * (pw / 2 + fw + 6), bt + BR * s / 2 + 4, 'FC weld-on', inw > 0 ? 'start' : 'end', 11, 800, '#3B4A56').replace('<text ', '<text paint-order="stroke" stroke="#fff" stroke-width="4" ');
     }
     else if (!fl){ // end offset plates always run in under the channel; a reverse offset (Rev) runs out the other way.
       // mid plates (Centered / Offset L / Offset R → M, M-Off-L, M-Off-R): the letter is the side the POST sits on, so Offset L's plate runs right
@@ -1349,7 +1368,7 @@ function customDiagram(rail){
   o += ov;   // channel bubbles and shared block labels sit over the posts in narrow sections
   var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" xmlns="http://www.w3.org/2000/svg" font-family="Lexend,sans-serif"><defs><pattern id="cphatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" stroke="#9AA8B4" stroke-width="2"/></pattern></defs>' + o + '</svg>';
   var caps = '<b>Rail ' + esc(rail.tag) + (scrRail ? ' · screen' : '') + ' · side view</b><span>Seen from the deck side, left end on the left. Drawn to scale.</span>' +
-    '<span><i class="k pst"></i>Post, cut length under it</span><span><i class="k blk"></i>Block, height from the post top</span><span><i class="k chn"></i>Bottom channel, length in the bubble</span>' + (fas ? '<span><i class="k brk"></i>Fascia bracket, 5&quot; tall' + (bh ? ', ' + esc(fmtIn(bh)) + ' from the post bottom to its top' : '') + '</span>' : '') + (scrRail ? '<span><i class="k gls"></i>Glass (privacy screen)</span>' : '<span><i class="k pkt"></i>Pickets, 3/4&quot; wide, gaps under 4&quot;</span>') + '';
+    '<span><i class="k pst"></i>Post, cut length under it</span><span><i class="k blk"></i>Block, height from the post top</span><span><i class="k chn"></i>Bottom channel, length in the bubble</span>' + (fas ? '<span><i class="k brk"></i>Fascia bracket, 5&quot; tall' + (bh ? ', ' + esc(fmtIn(bh)) + ' from the post bottom to its top' : '') + '</span><span><i class="k wld"></i>Weld line (weld-on bracket)</span>' : '') + (scrRail ? '<span><i class="k gls"></i>Glass (privacy screen)</span>' : '<span><i class="k pkt"></i>Pickets, 3/4&quot; wide, gaps under 4&quot;</span>') + '';
   return '<figure class="cpfig">' + svg + '<figcaption>' + caps + '</figcaption></figure>';
 }
 // ---------- a job ----------
