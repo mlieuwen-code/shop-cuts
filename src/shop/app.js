@@ -68,7 +68,7 @@ function api(action, extra){
 }
 
 // ---------- job list ----------
-var jobs = [], doneJobs = null, DONE_DAYS = 50, holdJobs = lsGet('shop-hold') || [];
+var jobs = [], doneJobs = null, DONE_DAYS = 50, holdJobs = lsGet('shop-hold') || [], pdfJobs = lsGet('shop-pdfs') || [];
 // priority order set from the manager screen (file ids, most urgent first); other jobs follow, newest first
 var prio = lsGet('shop-prio') || [];
 // the office's own order for the other jobs (manager screen); used inside In progress and Not started, ahead of the automatic order
@@ -137,6 +137,125 @@ function jobStatus(s){
   if (s && s.fin) return '<span class="fin-tag">✓ Cut · ' + esc(s.fin.by) + ' · ' + day(s.fin.at) + '</span>';
   return s && s.total ? s.done + ' of ' + s.total + ' ticked' : 'Not started';
 }
+// Cut lists: PDFs the office drops in Ready To Fab (rolling lists, one-off cut lists). They open full screen, page by page.
+function pdfCard(have){
+  if (WELD || !pdfJobs.length) return '';
+  return '<div class="prcard pdfcard"><div class="prhead"><span class="prflame" aria-hidden="true">' + PDF_ICON + '</span>Cut lists<span>· PDFs from the office</span></div>' +
+    pdfJobs.map(function(f, k){ var on = have.indexOf(f.id) >= 0;
+      return '<button type="button" class="job pdfjob" data-pdf="' + k + '"><span class="ring pdfring" aria-hidden="true">PDF</span><span class="t"><b>' + esc(f.name.replace(/\.pdf$/i, '')) + '</b>' +
+        '<span class="s">' + (function(){ var q = lsGet('pdfsum:' + f.id); return q && q.total ? q.done + ' of ' + q.total + ' ticked' : 'Cut list'; })() + ' · saved ' + esc(new Date(f.updated).toLocaleDateString([], { month: 'short', day: 'numeric' })) + (on ? ' · <span class="offline">✓ on tablet</span>' : '') + '</span></span></button>'; }).join('') + '</div>';
+}
+var PDF_ICON = '<svg width="24" height="24" viewBox="0 0 24 24" style="vertical-align:-4px"><path d="M6 2h8l5 5v15H6z" fill="currentColor"/><path d="M14 2v5h5" fill="none" stroke="#fff" stroke-width="1.6"/></svg>';
+var PDFJS = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
+function pdfLib(){
+  if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+  return new Promise(function(ok, no){ var sc = document.createElement('script'); sc.src = PDFJS + 'pdf.min.js';
+    sc.onload = function(){ try { window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS + 'pdf.worker.min.js'; ok(window.pdfjsLib); } catch (e) { no(e); } };
+    sc.onerror = function(){ no(new Error('the PDF viewer needs signal the first time')); }; document.head.appendChild(sc); });
+}
+function openPdf(f){
+  if (!f) return;
+  msg('Opening ' + f.name.replace(/\.pdf$/i, '') + '…', true);
+  fileGet(f.id).then(function(local){
+    if (local && local.updated >= f.updated) return showPdf(f, local.b64);
+    return apiNew('fabopen2', 'fabopen', { id: f.id }).then(function(r){ filePut({ id: f.id, name: f.name, updated: f.updated, b64: r.b64 }); return showPdf(f, r.b64); },
+      function(e){ if (local) return showPdf(f, local.b64); if (e.code === 'pin') return askPin('Enter the crew PIN once on this tablet.', function(){ openPdf(f); }); msg('Couldn’t open it (' + (e.message || 'no signal') + ').'); });
+  });
+}
+function showPdf(f, b64){
+  var v = el('pdfv'); if (!v){ v = document.createElement('div'); v.id = 'pdfv'; document.body.appendChild(v); }
+  v.innerHTML = '<div class="pdfbar"><button type="button" class="pdfback" aria-label="Back">‹</button><div class="pdft"><div class="eyebrow" id="pdfSub">Cut list</div><h2>' + esc(f.name.replace(/\.pdf$/i, '')) + '</h2></div>' +
+    '<button type="button" class="btn pdftog">Original PDF</button></div><div class="pdflist"><div class="empty">Loading…</div></div><div class="pdfpages" hidden></div>';
+  v.hidden = false; document.body.classList.add('pdfopen'); v.scrollTop = 0;
+  v.querySelector('.pdfback').onclick = function(){ v.hidden = true; v.innerHTML = ''; document.body.classList.remove('pdfopen'); pdfCur = null; renderList(false); };
+  var bin = atob(b64), bytes = new Uint8Array(bin.length); for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return pdfLib().then(function(lib){ return lib.getDocument({ data: bytes }).promise; }).then(function(doc){
+    msg('');
+    var pages = v.querySelector('.pdfpages'), drawn = false;
+    v.querySelector('.pdftog').onclick = function(){
+      var show = pages.hidden; pages.hidden = !show; v.querySelector('.pdflist').hidden = show; this.textContent = show ? 'Tick list' : 'Original PDF';
+      if (show && !drawn){ drawn = true; pdfDraw(doc, pages); }
+    };
+    return pdfLines(doc).then(function(lines){
+      var blocks = pdfBlocks(lines);
+      if (!blocks.some(function(b){ return b.rows; })){ v.querySelector('.pdftog').click(); v.querySelector('.pdftog').hidden = true; return; }   // nothing to tick: just the pages
+      pdfCur = { f: f, blocks: blocks, st: decodeProg(lsGet(progKey(f.id))) };
+      pdfRender(); pdfSync();
+    });
+  }).catch(function(e){ var box = v.querySelector('.pdflist'); if (box) box.innerHTML = '<div class="empty">Couldn’t show this PDF (' + esc(e && e.message ? e.message : String(e)) + ').</div>'; msg(''); });
+}
+function pdfDraw(doc, box){
+  var W = Math.min(box.clientWidth || window.innerWidth, 1400) - 28, dpr = window.devicePixelRatio || 1, n = 0;
+  var next = function(){ if (++n > doc.numPages) return; return doc.getPage(n).then(function(pg){
+    var vp0 = pg.getViewport({ scale: 1 }), sc = W / vp0.width, vp = pg.getViewport({ scale: sc * dpr }), cv = document.createElement('canvas');
+    cv.width = vp.width; cv.height = vp.height; cv.style.width = W + 'px'; cv.className = 'pdfpage'; box.appendChild(cv);
+    return pg.render({ canvasContext: cv.getContext('2d'), viewport: vp }).promise.then(next); }); };
+  next();
+}
+// the PDF's text, line by line (top to bottom, page by page), each line split into cells where there's a wide gap
+function pdfLines(doc){
+  var out = [], n = 0;
+  var next = function(){ if (++n > doc.numPages) return out; return doc.getPage(n).then(function(pg){ return pg.getTextContent(); }).then(function(tc){
+    var rows = {};
+    tc.items.forEach(function(it){ if (!it.str || !it.str.trim()) return; var y = Math.round(it.transform[5] / 3); (rows[y] = rows[y] || []).push({ x: it.transform[4], w: it.width || 0, t: it.str, h: Math.abs(it.transform[0]) || 10 }); });
+    Object.keys(rows).map(Number).sort(function(a, b){ return b - a; }).forEach(function(y){
+      var its = rows[y].sort(function(a, b){ return a.x - b.x; }), cells = [];
+      its.forEach(function(it){ var c = cells[cells.length - 1]; if (c && it.x - (c.x2) < Math.max(4, it.h * .6)) { c.t += (it.x - c.x2 > it.h * .15 ? ' ' : '') + it.t; c.x2 = it.x + it.w; } else cells.push({ x: it.x, x2: it.x + it.w, t: it.t }); });
+      cells.forEach(function(c){ c.t = c.t.replace(/\s+/g, ' ').trim(); });
+      out.push({ page: n, cells: cells.filter(function(c){ return c.t; }) });
+    });
+    return next(); }); };
+  return next();
+}
+// headings and notes as text; a line of 3+ word-only cells starts a table, and the lines under it with 2+ cells are its rows
+function pdfBlocks(lines){
+  var blocks = [], tb = null, seen = {};
+  var isHead = function(l){ return l.cells.length >= 3 && l.cells.every(function(c){ return !/\d/.test(c.t) && c.t.length < 40; }); };
+  lines.forEach(function(l){
+    if (isHead(l)){ tb = { head: l.cells, rows: [] }; blocks.push(tb); return; }
+    if (tb && l.cells.length >= 2){
+      var cols = tb.head.map(function(){ return []; });
+      l.cells.forEach(function(c){ var k = 0; tb.head.forEach(function(h, hi){ if (h.x <= c.x + 6) k = hi; }); cols[k].push(c.t); });
+      var tag = l.cells[0].t, key = 'R:' + tag; seen[key] = (seen[key] || 0) + 1; if (seen[key] > 1) key += '#' + seen[key];
+      tb.rows.push({ key: key, cols: cols.map(function(a){ return a.join(' '); }) }); return;
+    }
+    tb = null;
+    var txt = l.cells.map(function(c){ return c.t; }).join('  '), last = blocks[blocks.length - 1];
+    var t0 = txt.replace(/\dx\d/g, '00'), title = /^[^a-z]{6,}$/.test(t0) && /[A-Z]{3}/.test(t0) || /^OPTION \d/.test(txt);
+    if (!title && last && last.text && !last.title) last.text += ' ' + txt; else blocks.push({ text: txt, title: title });
+  });
+  return blocks;
+}
+var pdfCur = null, pdfTimer = null;
+function pdfRender(){
+  var v = el('pdfv'), box = v && v.querySelector('.pdflist'); if (!box || !pdfCur) return;
+  var st = pdfCur.st, all = 0, got = 0;
+  var h = pdfCur.blocks.map(function(b){
+    if (b.text) return b.title ? '<h3 class="pdfh">' + esc(b.text) + '</h3>' : '<p class="pdfnote">' + esc(b.text) + '</p>';
+    var head = '<tr class="hdr">' + b.head.map(function(c, i){ return '<td class="c b">' + esc(c.t) + '</td>' + (i === 0 ? '<td class="c b vhd">✓</td>' : ''); }).join('') + '</tr>';
+    return '<div class="pdftbl"><table class="sheet pdfsheet">' + head + b.rows.map(function(r, ri){ all++; var on = !!st.done[r.key]; if (on) got++;
+      return '<tr class="data' + (on ? ' rowdone' : '') + '" data-pk="' + esc(r.key) + '"' + (ri % 2 ? ' style="background:#FFF2CC"' : '') + '>' + r.cols.map(function(t, i){
+        return '<td class="c' + (i < 2 ? ' b big' : '') + (i >= 3 ? ' pdfwide' : '') + '">' + measure(t.replace(/(\d+)\s+(\d+\/\d+)/g, '$1\u00a0$2')) + '</td>' + (i === 0 ? '<td class="chk' + (on ? ' on' : '') + '"><span class="box" role="checkbox" aria-checked="' + on + '">✓</span></td>' : ''); }).join('') + '</tr>'; }).join('') + '</table></div>';
+  }).join('');
+  box.innerHTML = h + '<div class="pdfhint">Tap a row when it’s done. Tap again to undo.</div>';
+  var sub = el('pdfSub'); if (sub) sub.textContent = got + ' of ' + all + ' ticked';
+  lsSet('pdfsum:' + pdfCur.f.id, { done: got, total: all });
+  box.onclick = function(e){ var tr = e.target.closest('tr[data-pk]'); if (!tr || !pdfCur) return;
+    var k = tr.getAttribute('data-pk'), t = nowSec(), st2 = pdfCur.st; st2.un = st2.un || {};
+    if (st2.done[k]){ delete st2.done[k]; st2.un[k] = t; } else { st2.done[k] = t; delete st2.un[k]; }
+    st2.t = Date.now(); lsSet(progKey(pdfCur.f.id), encodeProg(st2)); var y = v.scrollTop; pdfRender(); v.scrollTop = y;
+    clearTimeout(pdfTimer); pdfTimer = setTimeout(pdfSync, 800); };
+}
+// ticks shared between tablets the same way as a job's: merged box by box, the latest change wins
+function pdfSync(){
+  if (!pdfCur) return; var id = pdfCur.f.id, enc = function(x){ return JSON.stringify(encodeProg(x)); };
+  api('progget', { id: id }).then(function(r){
+    if (!pdfCur || pdfCur.f.id !== id) return;
+    var remote = decodeProg(r.prog ? JSON.parse(r.prog) : null), mine = pdfCur.st, m = mergeProg(Object.assign({ tl: [], tla: [] }, mine), remote), mJ = enc(m);
+    if (mJ !== enc(mine)){ pdfCur.st = m; lsSet(progKey(id), encodeProg(m)); var v = el('pdfv'), y = v ? v.scrollTop : 0; pdfRender(); if (v) v.scrollTop = y; }
+    if (mJ !== enc(remote)) return api('progset', { id: id, prog: mJ });
+  }).catch(function(){});
+}
 // On hold: jobs the office has ready (Ready To Fab / On Hold) but doesn't want started yet. They open to look at, with no ticking.
 function holdCard(have){
   if (WELD || !holdJobs.length) return '';
@@ -161,7 +280,7 @@ function renderList(cached){
         '<span class="s"><span class="fin-tag">✓ Completed · ' + (f.by ? esc(f.by) + ' · ' : '') + esc(new Date(f.doneAt).toLocaleDateString([], { month: 'short', day: 'numeric' })) + '</span>' + (on ? ' · <span class="offline">✓ on tablet</span>' : '') + '</span></span></button>';
     }).join('') + '<div class="empty" id="doneNone" hidden>No completed jobs match.</div>');
     if (WELD){ renderWeldList(box, have, done); setTimeout(filterDone, 0); return; }
-    if (!jobs.length){ box.innerHTML = '<div class="empty">No jobs in Ready to Fab yet. When a job is ready, it’s saved there from the office and shows up here.</div>' + holdCard(have) + done; return; }
+    if (!jobs.length){ box.innerHTML = '<div class="empty">No jobs in Ready to Fab yet. When a job is ready, it’s saved there from the office and shows up here.</div>' + pdfCard(have) + holdCard(have) + done; return; }
     setTimeout(filterDone, 0);
     var pct = [], cards = jobs.map(function(f, k){
       var s = lsGet(SUM + f.id), p = s && s.total ? s.done / s.total : 0, on = have.indexOf(f.id) >= 0; if (s) s.id = f.id;
@@ -190,7 +309,7 @@ function renderList(cached){
     }).join('');
     box.innerHTML = (rmc ? '<div class="prcard rmcard"><div class="prhead"><span class="prflame" aria-hidden="true">↻</span>Remakes<span>· just these rails, cut and assemble</span></div>' + rmc + '</div>' : '') + (priHtml ? '<div class="prcard"><div class="prhead"><span class="prflame" aria-hidden="true">⚡</span>Priority<span>· rush these first, in this order</span></div>' + priHtml + '</div>' : '') +
       (prog.length ? '<div class="prcard ipcard"><div class="prhead"><span class="prflame" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" style="vertical-align:-4px"><circle cx="12" cy="12" r="9.5" fill="none" stroke="currentColor" stroke-width="3"/><path d="M12 5.5A6.5 6.5 0 0 1 18.5 12H12z" fill="currentColor"/></svg></span>In progress' + (ordered ? '' : '<span>· most done first</span>') + '</div>' + pick(prog) + '</div>' : '') +
-      (rest.length && (pri.length || prog.length) ? '<div class="prrest">Not started</div>' : '') + pick(rest) + holdCard(have) +
+      (rest.length && (pri.length || prog.length) ? '<div class="prrest">Not started</div>' : '') + pick(rest) + pdfCard(have) + holdCard(have) +
       (atw.length ? '<div class="prcard wcard"><div class="prhead"><span class="prflame" aria-hidden="true">' + SPARK + '</span>At welding<span>· cut and assembled, waiting on the welder</span></div>' + pick(atw) + '</div>' : '') + done;
   });
   el('listNote').hidden = !cached;
@@ -274,11 +393,11 @@ var listFresh = false;   // once the backend has answered, the copy saved on the
 function loadList(){
   kvGet('list').then(function(l){ kvGet('donelist').then(function(d){ if (listFresh) return; if (d && !doneJobs) doneJobs = d; if (l && !jobs.length){ jobs = l; renderList(true); } }); });
   apiNew('fablist2', 'fablist', {}).then(function(r){
-    listFresh = true; jobs = r.files || []; doneJobs = r.done || null; if (Array.isArray(r.hold)){ holdJobs = r.hold; lsSet('shop-hold', holdJobs); } if (Array.isArray(r.prio)){ prio = r.prio; lsSet('shop-prio', prio); } if (Array.isArray(r.order)){ jorder = r.order; lsSet('shop-order', jorder); } if (Array.isArray(r.remakes)){ remakes = r.remakes; lsSet('shop-remakes', remakes); } applyPrio(); kvSet('list', jobs); if (doneJobs) kvSet('donelist', doneJobs);
+    listFresh = true; jobs = r.files || []; doneJobs = r.done || null; if (Array.isArray(r.hold)){ holdJobs = r.hold; lsSet('shop-hold', holdJobs); } if (Array.isArray(r.pdfs)){ pdfJobs = r.pdfs; lsSet('shop-pdfs', pdfJobs); } if (Array.isArray(r.prio)){ prio = r.prio; lsSet('shop-prio', prio); } if (Array.isArray(r.order)){ jorder = r.order; lsSet('shop-order', jorder); } if (Array.isArray(r.remakes)){ remakes = r.remakes; lsSet('shop-remakes', remakes); } applyPrio(); kvSet('list', jobs); if (doneJobs) kvSet('donelist', doneJobs);
     renderList(false); if (!el('mgr').hidden) renderMgr(); msg(''); prefetch(); pullAll(); flushPending();
     if (refreshAsked){ refreshAsked = false; toast('✓ Up to date · version ' + VERSION); }
     // forget files that are neither in Ready to Fab nor completed in the last 50 days
-    fileKeys().then(function(ks){ var keep = {}; jobs.concat(completedList(), lateCand(), holdJobs).forEach(function(f){ keep[f.id] = 1; }); ks.forEach(function(id){ if (!keep[id]) fileDel(id); }); });
+    fileKeys().then(function(ks){ var keep = {}; jobs.concat(completedList(), lateCand(), holdJobs, pdfJobs).forEach(function(f){ keep[f.id] = 1; }); ks.forEach(function(id){ if (!keep[id]) fileDel(id); }); });
   }, function(e){
     if (refreshAsked){ refreshAsked = false; toast('No signal, so this is the list from last time.'); }
     if (e.code === 'pin') return askPin(e.message === 'wrong PIN' ? 'That PIN didn’t work. Try again.' : 'Enter the crew PIN once on this tablet.', loadList);
@@ -286,7 +405,7 @@ function loadList(){
     else renderList(true);
   });
 }
-el('jobs').addEventListener('click', function(e){ if (e.target.closest('[data-act="donetoggle"]')){ lsSet(UI + 'done-open', lsGet(UI + 'done-open') === 1 ? 0 : 1); return renderList(false); } var rb = e.target.closest('[data-rm]'); if (rb) return openJob(remakeJob(remakes[+rb.getAttribute('data-rm')])); var b = e.target.closest('[data-k]'); if (b) return openJob(jobs[+b.getAttribute('data-k')]); var wj = e.target.closest('[data-w]'); if (wj) return openJob(shownW[+wj.getAttribute('data-w')]); var h = e.target.closest('[data-h]'); if (h) return openJob(Object.assign({}, holdJobs[+h.getAttribute('data-h')], { hold: 1 })); var d = e.target.closest('[data-d]'); if (d) openJob(shownDone[+d.getAttribute('data-d')]); });
+el('jobs').addEventListener('click', function(e){ if (e.target.closest('[data-act="donetoggle"]')){ lsSet(UI + 'done-open', lsGet(UI + 'done-open') === 1 ? 0 : 1); return renderList(false); } var rb = e.target.closest('[data-rm]'); if (rb) return openJob(remakeJob(remakes[+rb.getAttribute('data-rm')])); var b = e.target.closest('[data-k]'); if (b) return openJob(jobs[+b.getAttribute('data-k')]); var wj = e.target.closest('[data-w]'); if (wj) return openJob(shownW[+wj.getAttribute('data-w')]); var pf = e.target.closest('[data-pdf]'); if (pf) return openPdf(pdfJobs[+pf.getAttribute('data-pdf')]); var h = e.target.closest('[data-h]'); if (h) return openJob(Object.assign({}, holdJobs[+h.getAttribute('data-h')], { hold: 1 })); var d = e.target.closest('[data-d]'); if (d) openJob(shownDone[+d.getAttribute('data-d')]); });
 // Refresh list: also checks for a newer version of the app (if one arrives, the app reloads and says so)
 el('reload').onclick = function(){
   refreshAsked = true; updAsked = true; loadList();
@@ -482,24 +601,30 @@ function shopSheets(book){
 // channel also gets a double channel the same length. The sheet has one Channels column, so add a Double channels column with its
 // own tick box right after it (it counts toward Cutting complete like the channel box).
 function dblify(L, sd){
-  var k = 0;
+  // "Secondary channels: 1 @ Double" / "1 @ Relief" (or both): each kind gets its own column and ✓ box after the glass channel
+  var kinds = [];
   for (var r = 1; r < L.hdr; r++) for (var c = 1; c <= 8; c++){
     if (!/^secondary channels?$/i.test(String(cellVal(sd, r, c) == null ? '' : cellVal(sd, r, c)).trim())) continue;
-    for (var c2 = c + 1; c2 <= c + 6; c2++){ var m = String(cellVal(sd, r, c2) == null ? '' : cellVal(sd, r, c2)).match(/(\d+)\s*@\s*double/i); if (m){ k = +m[1]; break; } }
+    for (var c2 = c + 1; c2 <= c + 6; c2++){ var t2 = String(cellVal(sd, r, c2) == null ? '' : cellVal(sd, r, c2)), re = /(\d+)\s*@\s*(double|relief)/ig, m;
+      while ((m = re.exec(t2))) if (!kinds.some(function(k){ return k.name === m[2].toLowerCase(); })) kinds.push({ k: +m[1], name: m[2].toLowerCase() }); }
   }
-  if (!k) return;
+  if (!kinds.length) return;
   var chC = L.cols.filter(function(c){ return /^channels?\b/i.test(L.txt(L.hdr, c)); })[0]; if (chC == null) return;
   var tick = L.cols[L.cols.indexOf(chC) + 1], hasTick = tick != null && L.chk && Object.keys(L.chk).some(function(key){ return +key.split(':')[1] === tick; });
-  var after = hasTick ? tick : chC, dv = after + 0.3, db = after + 0.6, hc = sd.cells[L.hdr + ':' + chC] || {};
+  var after = hasTick ? tick : chC, hc = sd.cells[L.hdr + ':' + chC] || {};
   sd.cells[L.hdr + ':' + chC] = Object.assign({}, hc, { v: String(hc.v == null ? L.txt(L.hdr, chC) : hc.v).replace(/^channels?/i, 'Glass channels') });
-  sd.cells[L.hdr + ':' + dv] = Object.assign({}, hc, { v: 'Double channels' });
-  L.cols.splice(L.cols.indexOf(after) + 1, 0, dv, db); L.vchk = L.vchk || {}; L.vchk[db] = 1; L.div = L.div || {}; L.div[dv] = 1;
-  L.rows.forEach(function(r){
-    if (r <= L.hdr) return;
-    var t = L.txt(r, chC), m = t.match(/^\s*(\d+)\s*@\s*(.+)$/); if (!t || !m) return;
-    var src = sd.cells[r + ':' + chC] || {};
-    sd.cells[r + ':' + dv] = Object.assign({}, src, { v: (+m[1] * k) + '@ ' + m[2].trim(), t: 's', w: undefined, f: undefined });
-    L.chk[r + ':' + db] = { left: dv, head: 'Double channels' };
+  L.vchk = L.vchk || {}; L.div = L.div || {};
+  kinds.forEach(function(kd, n){
+    var dv = after + 0.3 + n * 0.02, db = dv + 0.01, head = kd.name === 'double' ? 'Double channels' : 'Relief channels';
+    sd.cells[L.hdr + ':' + dv] = Object.assign({}, hc, { v: head });
+    L.cols.splice(L.cols.indexOf(after) + 1, 0, dv, db); after = db; L.vchk[db] = 1; L.div[dv] = 1;
+    L.rows.forEach(function(r){
+      if (r <= L.hdr) return;
+      var t = L.txt(r, chC), m = t.match(/^\s*(\d+)\s*@\s*(.+)$/); if (!t || !m) return;
+      var src = sd.cells[r + ':' + chC] || {};
+      sd.cells[r + ':' + dv] = Object.assign({}, src, { v: (+m[1] * kd.k) + '@ ' + m[2].trim(), t: 's', w: undefined, f: undefined });
+      L.chk[r + ':' + db] = { left: dv, head: head };
+    });
   });
 }
 // ---------- fence jobs (CUT SHEET — OPEN TOP FENCE) ----------

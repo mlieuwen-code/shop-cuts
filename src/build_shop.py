@@ -92,7 +92,7 @@ function api(action, extra){
     if (action === 'fablist') return mcp.callTool('Google Drive', 'search_files', { query: "parentId = '" + FAB_FOLDER + "' and trashed = false", excludeContentSnippets: true, pageSize: 100 }, { cache: false }).then(function(r){
       var fs = (r.payload && r.payload.files) || [];
       var pick = function(list){ return list.filter(function(f){ return /\.xls[xm]$/i.test(f.title || '') && !/^~\$/.test(f.title || ''); }).map(function(f){ return { id: f.id, name: f.title, updated: Date.parse(f.modifiedTime) || 0 }; }).sort(function(a, b){ return b.updated - a.updated; }); };
-      var out = { ok: true, files: pick(fs), hold: [] }, hf = fs.filter(function(f){ return /folder/.test(f.mimeType || '') && /^on hold$/i.test((f.title || '').trim()); })[0];
+      var out = { ok: true, files: pick(fs), hold: [], pdfs: fs.filter(function(f){ return /\.pdf$/i.test(f.title || ''); }).map(function(f){ return { id: f.id, name: f.title, updated: Date.parse(f.modifiedTime) || 0 }; }) }, hf = fs.filter(function(f){ return /folder/.test(f.mimeType || '') && /^on hold$/i.test((f.title || '').trim()); })[0];
       if (!hf) return out;
       return mcp.callTool('Google Drive', 'search_files', { query: "parentId = '" + hf.id + "' and trashed = false", excludeContentSnippets: true, pageSize: 100 }, { cache: false })
         .then(function(h){ out.hold = pick((h.payload && h.payload.files) || []); return out; }, function(){ return out; });
