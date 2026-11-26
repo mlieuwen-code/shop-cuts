@@ -870,7 +870,7 @@ function wId(id){ return id + '.w'; }
 var el = function(id){ return document.getElementById(id); };
 function esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 // a short notice at the bottom of the screen
-var VERSION = '11.26.914', toastT = null;
+var VERSION = '11.26.920', toastT = null;
 function toast(t){ var b = el('toast'); b.textContent = t; b.hidden = false; b.classList.remove('out'); clearTimeout(toastT); toastT = setTimeout(function(){ b.classList.add('out'); setTimeout(function(){ b.hidden = true; }, 400); }, 3200); }
 function msg(t, ok){ var m = el('msg'); m.hidden = !t; m.className = 'msg ' + (ok ? 'ok' : 'err'); m.textContent = t || ''; }
 function lsGet(k){ try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
@@ -1489,6 +1489,8 @@ function dblify(L, sd){
       L.chk[r + ':' + db] = { left: dv, head: head };
     });
   });
+  // a line after the last channel box too, so the channel group (glass, relief, double) reads apart from Left / Right
+  var lc = L.cols[L.cols.indexOf(after) + 1]; if (lc != null) L.div[lc] = 1;
 }
 // ---------- fence jobs (CUT SHEET — OPEN TOP FENCE) ----------
 // The fence Post Sheet lists every opening's left and right post, so a post shared by two openings looks like it's cut twice.

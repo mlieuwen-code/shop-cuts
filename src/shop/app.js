@@ -638,6 +638,8 @@ function dblify(L, sd){
       L.chk[r + ':' + db] = { left: dv, head: head };
     });
   });
+  // a line after the last channel box too, so the channel group (glass, relief, double) reads apart from Left / Right
+  var lc = L.cols[L.cols.indexOf(after) + 1]; if (lc != null) L.div[lc] = 1;
 }
 // ---------- fence jobs (CUT SHEET — OPEN TOP FENCE) ----------
 // The fence Post Sheet lists every opening's left and right post, so a post shared by two openings looks like it's cut twice.
