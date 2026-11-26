@@ -319,6 +319,7 @@ table.sheet tr.cprow td.cptype small{display:block;font-size:13px;font-weight:70
 table.sheet tr.cprow td.cpsee{font-size:12px;font-weight:700;color:#5B6B78}
 table.sheet .cpbr{font-size:19px}table.sheet .cpbr.weld{color:#B3400A}
 table.sheet .cpnote{display:inline-block;background:#16445F;color:#fff;border-radius:10px;padding:6px 12px;font-size:15px;font-weight:800}
+.rmtag.pdftag{background:#7048E8}
 .pdfcard{background:#F1ECFF;border-color:#7048E8;margin-top:6px}.pdfcard .prhead{color:#3F2A8C}.pdfcard .prhead span:not(.prflame){color:#5A37C9}
 .pdfring{display:flex;align-items:center;justify-content:center;width:64px;height:64px;border-radius:14px;background:#7048E8;color:#fff;font-weight:900;font-size:16px;flex:none}
 #pdfv{position:fixed;inset:0;z-index:60;background:var(--bg);overflow:auto;-webkit-overflow-scrolling:touch}
@@ -860,7 +861,7 @@ function wId(id){ return id + '.w'; }
 var el = function(id){ return document.getElementById(id); };
 function esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 // a short notice at the bottom of the screen
-var VERSION = '11.26.848', toastT = null;
+var VERSION = '11.26.853', toastT = null;
 function toast(t){ var b = el('toast'); b.textContent = t; b.hidden = false; b.classList.remove('out'); clearTimeout(toastT); toastT = setTimeout(function(){ b.classList.add('out'); setTimeout(function(){ b.hidden = true; }, 400); }, 3200); }
 function msg(t, ok){ var m = el('msg'); m.hidden = !t; m.className = 'msg ' + (ok ? 'ok' : 'err'); m.textContent = t || ''; }
 function lsGet(k){ try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
@@ -979,12 +980,16 @@ function jobStatus(s){
   return s && s.total ? s.done + ' of ' + s.total + ' ticked' : 'Not started';
 }
 // Cut lists: PDFs the office drops in Ready To Fab (rolling lists, one-off cut lists). They open full screen, page by page.
+function pdfBtn(f, k, have, pr){
+  var on = have.indexOf(f.id) >= 0, q = lsGet('pdfsum:' + f.id), p = q && q.total ? q.done / q.total : 0;
+  return '<button type="button" class="job pdfjob' + (q && q.total && q.done >= q.total ? ' done' : '') + '" data-pdf="' + k + '">' + ring(p) + '<span class="t"><b>' + (pr != null && pr < Infinity ? '<span class="pri">#' + (pr + 1) + '</span>' : '') + esc(f.name.replace(/\.pdf$/i, '')) + '</b>' +
+    '<span class="s">' + (q && q.total ? q.done + ' of ' + q.total + ' ticked' : 'Cut list') + ' · saved ' + esc(new Date(f.updated).toLocaleDateString([], { month: 'short', day: 'numeric' })) + (on ? ' · <span class="offline">✓ on tablet</span>' : '') + '</span></span></button>';
+}
 function pdfCard(have){
-  if (WELD || !pdfJobs.length) return '';
-  return '<div class="prcard pdfcard"><div class="prhead"><span class="prflame" aria-hidden="true">' + PDF_ICON + '</span>Cut lists<span>· PDFs from the office</span></div>' +
-    pdfJobs.map(function(f, k){ var on = have.indexOf(f.id) >= 0;
-      return '<button type="button" class="job pdfjob" data-pdf="' + k + '"><span class="ring pdfring" aria-hidden="true">PDF</span><span class="t"><b>' + esc(f.name.replace(/\.pdf$/i, '')) + '</b>' +
-        '<span class="s">' + (function(){ var q = lsGet('pdfsum:' + f.id); return q && q.total ? q.done + ' of ' + q.total + ' ticked' : 'Cut list'; })() + ' · saved ' + esc(new Date(f.updated).toLocaleDateString([], { month: 'short', day: 'numeric' })) + (on ? ' · <span class="offline">✓ on tablet</span>' : '') + '</span></span></button>'; }).join('') + '</div>';
+  if (WELD) return '';
+  var list = pdfJobs.map(function(f, k){ return prioRank(f.id) < Infinity ? '' : pdfBtn(f, k, have); }).join('');
+  if (!list) return '';
+  return '<div class="prcard pdfcard"><div class="prhead"><span class="prflame" aria-hidden="true">' + PDF_ICON + '</span>Cut lists</div>' + list + '</div>';
 }
 var PDF_ICON = '<svg width="24" height="24" viewBox="0 0 24 24" style="vertical-align:-4px"><path d="M6 2h8l5 5v15H6z" fill="currentColor"/><path d="M14 2v5h5" fill="none" stroke="#fff" stroke-width="1.6"/></svg>';
 var PDFJS = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
@@ -1146,6 +1151,7 @@ function renderList(cached){
     var priHtml = prio.map(function(id){
       for (var i = 0; i < remakes.length; i++) if ('rm' + remakes[i].id === id) return rmCard(remakes[i], i);
       for (var j = 0; j < pri.length; j++) if (jobs[pri[j]].id === id) return cards[pri[j]];
+      for (var q = 0; q < pdfJobs.length; q++) if (pdfJobs[q].id === id) return pdfBtn(pdfJobs[q], q, have, prioRank(id));
       return '';
     }).join('');
     box.innerHTML = (rmc ? '<div class="prcard rmcard"><div class="prhead"><span class="prflame" aria-hidden="true">↻</span>Remakes<span>· just these rails, cut and assemble</span></div>' + rmc + '</div>' : '') + (priHtml ? '<div class="prcard"><div class="prhead"><span class="prflame" aria-hidden="true">⚡</span>Priority<span>· rush these first, in this order</span></div>' + priHtml + '</div>' : '') +
@@ -2807,8 +2813,9 @@ function renderPrio(){
   if (el('rmList')) setTimeout(renderRemakes, 0);
   var ids = {}; jobs.forEach(function(f){ ids[f.id] = f; });
   var rms = remakes.map(function(rm){ var f = { id: 'rm' + rm.id, name: rm.name, updated: rm.at || 0, rm: rm }; ids[f.id] = f; return f; });
-  var on = prio.filter(function(id){ return ids[id]; }), rest = rms.concat(jobs.slice().sort(function(a, b){ return b.updated - a.updated; })).filter(function(f){ return on.indexOf(f.id) < 0; });
-  var nm = function(f){ var n = esc(f.name.replace(/\.xls[xm]$/i, '')); return f.rm ? '<span class="rmtag">↻ ' + esc(f.rm.tags.join(', ')) + '</span>' + n : n; };
+  var pdfs = pdfJobs.map(function(f){ var g = Object.assign({ pdf: 1 }, f); ids[g.id] = g; return g; });
+  var on = prio.filter(function(id){ return ids[id]; }), rest = rms.concat(pdfs, jobs.slice().sort(function(a, b){ return b.updated - a.updated; })).filter(function(f){ return on.indexOf(f.id) < 0; });
+  var nm = function(f){ var n = esc(f.name.replace(/\.(xls[xm]|pdf)$/i, '')); return f.rm ? '<span class="rmtag">↻ ' + esc(f.rm.tags.join(', ')) + '</span>' + n : f.pdf ? '<span class="rmtag pdftag">PDF</span>' + n : n; };
   el('prioOn').innerHTML = on.length ? on.map(function(id, i){
     return '<div class="prow"><span class="pnum">' + (i + 1) + '</span><span class="pname">' + nm(ids[id]) + '</span>' +
       '<button type="button" class="pbtn" data-pa="up" data-pi="' + i + '"' + (i ? '' : ' disabled') + ' aria-label="Move up">▲</button>' +
