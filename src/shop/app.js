@@ -1339,7 +1339,7 @@ function customDiagram(rail){
     var blk = function(v, side){ if (!v) return ''; var by = yT + v * s, bx = side < 0 ? x - 5 : x + pw, g = side < 0 ? gpx[i - 1] : gpx[i];
       if (g != null && g < 130) return '<rect x="' + bx + '" y="' + by + '" width="5" height="9" fill="#2289BB"/>';
       return '<rect x="' + bx + '" y="' + by + '" width="5" height="9" fill="#2289BB"/>' + tx(side < 0 ? x - 7 : x + pw + 7, by - (side < 0 ? 32 : 14), fmtIn(v), side < 0 ? 'end' : 'start', 12, 800, '#16445F').replace('<text ', '<text paint-order="stroke" stroke="#fff" stroke-width="4" '); };
-    o += blk(p.bl, -1) + blk(p.br, 1);
+    o += (i > 0 ? blk(p.bl, -1) : '') + (i < P.length - 1 ? blk(p.br, 1) : '');   // end posts: only the block facing the channel (nothing hangs off the outside)
     var lu = up[i] ? 30 : 0;
     o += tx(x + pw / 2, yT - th - 42 - lu, p.n.replace(/^post\s*/i, 'Post '), 'middle', 13, 900, ink) + tx(x + pw / 2, yT - th - 28 - lu, p.type, 'middle', 12, 800, '#2289BB');
     var ly = Math.max(yb, fas ? yb : deck + 12) + 18;

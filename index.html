@@ -838,7 +838,7 @@ function wId(id){ return id + '.w'; }
 var el = function(id){ return document.getElementById(id); };
 function esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 // a short notice at the bottom of the screen
-var VERSION = '11.26.826', toastT = null;
+var VERSION = '11.26.832', toastT = null;
 function toast(t){ var b = el('toast'); b.textContent = t; b.hidden = false; b.classList.remove('out'); clearTimeout(toastT); toastT = setTimeout(function(){ b.classList.add('out'); setTimeout(function(){ b.hidden = true; }, 400); }, 3200); }
 function msg(t, ok){ var m = el('msg'); m.hidden = !t; m.className = 'msg ' + (ok ? 'ok' : 'err'); m.textContent = t || ''; }
 function lsGet(k){ try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
@@ -2158,7 +2158,7 @@ function customDiagram(rail){
     var blk = function(v, side){ if (!v) return ''; var by = yT + v * s, bx = side < 0 ? x - 5 : x + pw, g = side < 0 ? gpx[i - 1] : gpx[i];
       if (g != null && g < 130) return '<rect x="' + bx + '" y="' + by + '" width="5" height="9" fill="#2289BB"/>';
       return '<rect x="' + bx + '" y="' + by + '" width="5" height="9" fill="#2289BB"/>' + tx(side < 0 ? x - 7 : x + pw + 7, by - (side < 0 ? 32 : 14), fmtIn(v), side < 0 ? 'end' : 'start', 12, 800, '#16445F').replace('<text ', '<text paint-order="stroke" stroke="#fff" stroke-width="4" '); };
-    o += blk(p.bl, -1) + blk(p.br, 1);
+    o += (i > 0 ? blk(p.bl, -1) : '') + (i < P.length - 1 ? blk(p.br, 1) : '');   // end posts: only the block facing the channel (nothing hangs off the outside)
     var lu = up[i] ? 30 : 0;
     o += tx(x + pw / 2, yT - th - 42 - lu, p.n.replace(/^post\s*/i, 'Post '), 'middle', 13, 900, ink) + tx(x + pw / 2, yT - th - 28 - lu, p.type, 'middle', 12, 800, '#2289BB');
     var ly = Math.max(yb, fas ? yb : deck + 12) + 18;
