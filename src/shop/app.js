@@ -68,7 +68,11 @@ function api(action, extra){
 }
 
 // ---------- job list ----------
-var jobs = [], doneJobs = null, DONE_DAYS = 50, holdJobs = lsGet('shop-hold') || [], pdfJobs = lsGet('shop-pdfs') || [];
+var jobs = [], doneJobs = null, DONE_DAYS = 50, holdJobs = lsGet('shop-hold') || [], pdfJobs = lsGet('shop-pdfs') || [], jobNotes = lsGet('shop-notes') || {};
+// the manager's note on a job: shown on its card and at the top of the job on every tab
+function noteOf(id){ var n = jobNotes[id]; return n && n.t ? n.t : ''; }
+function noteLine(id){ var t = noteOf(id); return t ? '<span class="jnote"><b>Note</b>' + esc(t) + '</span>' : ''; }
+function noteBanner(id){ var t = noteOf(id); return t ? '<div class="jobnote"><b>Note</b><span>' + esc(t) + '</span></div>' : ''; }
 // priority order set from the manager screen (file ids, most urgent first); other jobs follow, newest first
 var prio = lsGet('shop-prio') || [];
 // the office's own order for the other jobs (manager screen); used inside In progress and Not started, ahead of the automatic order
@@ -141,7 +145,7 @@ function jobStatus(s){
 function pdfBtn(f, k, have, pr){
   var on = have.indexOf(f.id) >= 0, q = lsGet('pdfsum:' + f.id), p = q && q.total ? q.done / q.total : 0;
   return '<button type="button" class="job pdfjob' + (q && q.total && q.done >= q.total ? ' done' : '') + '" data-pdf="' + k + '">' + ring(p) + '<span class="t"><b>' + (pr != null && pr < Infinity ? '<span class="pri">#' + (pr + 1) + '</span>' : '') + esc(f.name.replace(/\.pdf$/i, '')) + '</b>' +
-    '<span class="s">' + (q && q.total ? q.done + ' of ' + q.total + ' ticked' : 'Cut list') + ' · saved ' + esc(new Date(f.updated).toLocaleDateString([], { month: 'short', day: 'numeric' })) + (on ? ' · <span class="offline">✓ on tablet</span>' : '') + '</span></span></button>';
+    '<span class="s">' + (q && q.total ? q.done + ' of ' + q.total + ' ticked' : 'Cut list') + ' · saved ' + esc(new Date(f.updated).toLocaleDateString([], { month: 'short', day: 'numeric' })) + (on ? ' · <span class="offline">✓ on tablet</span>' : '') + '</span>' + noteLine(f.id) + '</span></button>';
 }
 function pdfCard(have){
   if (WELD) return '';
@@ -241,7 +245,7 @@ function pdfRender(){
       return '<tr class="data' + (on ? ' rowdone' : '') + '" data-pk="' + esc(r.key) + '"' + (ri % 2 ? ' style="background:#FFF2CC"' : '') + '>' + r.cols.map(function(t, i){
         return '<td class="c' + (i < 2 ? ' b big' : '') + (i >= 3 ? ' pdfwide' : '') + '">' + measure(t.replace(/(\d+)\s+(\d+\/\d+)/g, '$1\u00a0$2')) + '</td>' + (i === 0 ? '<td class="chk' + (on ? ' on' : '') + '"><span class="box" role="checkbox" aria-checked="' + on + '">✓</span></td>' : ''); }).join('') + '</tr>'; }).join('') + '</table></div>';
   }).join('');
-  box.innerHTML = h + '<div class="pdfhint">Tap a row when it’s done. Tap again to undo.</div>';
+  box.innerHTML = noteBanner(pdfCur.f.id) + h + '<div class="pdfhint">Tap a row when it’s done. Tap again to undo.</div>';
   var sub = el('pdfSub'); if (sub) sub.textContent = got + ' of ' + all + ' ticked';
   lsSet('pdfsum:' + pdfCur.f.id, { done: got, total: all });
   box.onclick = function(e){ var tr = e.target.closest('tr[data-pk]'); if (!tr || !pdfCur) return;
@@ -293,7 +297,7 @@ function renderList(cached){
       var pr = prioRank(f.id);
       return '<button type="button" class="job' + (p >= 1 || (s && s.fin) ? ' done' : '') + '" data-k="' + k + '">' + ring(p) + '<span class="t"><b>' + (pr < Infinity ? '<span class="pri">#' + (pr + 1) + '</span>' : '') + esc(f.name.replace(/\.xls[xm]$/i, '')) + '</b>' +
         '<span class="s">' + jobStatus(s) + ' · saved ' + esc(new Date(f.updated).toLocaleDateString([], { month: 'short', day: 'numeric' })) +
-        (on ? ' · <span class="offline">✓ on tablet</span>' : '') + '</span></span>' + (tag ? '<span class="cnt' + (/^\d/.test(tag) ? '' : ' warn') + '">' + (/^(\d+) (.+)$/.test(tag) ? '<b>' + tag.replace(/ .*/, '') + '</b>' + esc(tag.replace(/^\d+ /, '')) : esc(tag)) + '</span>' : '') + '</button>';
+        (on ? ' · <span class="offline">✓ on tablet</span>' : '') + '</span>' + noteLine(f.id) + '</span>' + (tag ? '<span class="cnt' + (/^\d/.test(tag) ? '' : ' warn') + '">' + (/^(\d+) (.+)$/.test(tag) ? '<b>' + tag.replace(/ .*/, '') + '</b>' + esc(tag.replace(/^\d+ /, '')) : esc(tag)) + '</span>' : '') + '</button>';
     });
     // Priority card (office's rush order), then In progress (most done first), then the rest, newest first
     // signed off Assembly: the shop is finished with it, so it drops to its own card at the bottom until the welder completes it
@@ -398,7 +402,7 @@ var listFresh = false;   // once the backend has answered, the copy saved on the
 function loadList(){
   kvGet('list').then(function(l){ kvGet('donelist').then(function(d){ if (listFresh) return; if (d && !doneJobs) doneJobs = d; if (l && !jobs.length){ jobs = l; renderList(true); } }); });
   apiNew('fablist2', 'fablist', {}).then(function(r){
-    listFresh = true; jobs = r.files || []; doneJobs = r.done || null; if (Array.isArray(r.hold)){ holdJobs = r.hold; lsSet('shop-hold', holdJobs); } if (Array.isArray(r.pdfs)){ pdfJobs = r.pdfs; lsSet('shop-pdfs', pdfJobs); } if (Array.isArray(r.prio)){ prio = r.prio; lsSet('shop-prio', prio); } if (Array.isArray(r.order)){ jorder = r.order; lsSet('shop-order', jorder); } if (Array.isArray(r.remakes)){ remakes = r.remakes; lsSet('shop-remakes', remakes); } applyPrio(); kvSet('list', jobs); if (doneJobs) kvSet('donelist', doneJobs);
+    listFresh = true; jobs = r.files || []; doneJobs = r.done || null; if (Array.isArray(r.hold)){ holdJobs = r.hold; lsSet('shop-hold', holdJobs); } if (Array.isArray(r.pdfs)){ pdfJobs = r.pdfs; lsSet('shop-pdfs', pdfJobs); } if (r.notes && typeof r.notes === 'object'){ jobNotes = r.notes; lsSet('shop-notes', jobNotes); } if (Array.isArray(r.prio)){ prio = r.prio; lsSet('shop-prio', prio); } if (Array.isArray(r.order)){ jorder = r.order; lsSet('shop-order', jorder); } if (Array.isArray(r.remakes)){ remakes = r.remakes; lsSet('shop-remakes', remakes); } applyPrio(); kvSet('list', jobs); if (doneJobs) kvSet('donelist', doneJobs);
     renderList(false); if (!el('mgr').hidden) renderMgr(); msg(''); prefetch(); pullAll(); flushPending();
     if (refreshAsked){ refreshAsked = false; toast('✓ Up to date · version ' + VERSION); }
     // forget files that are neither in Ready to Fab nor completed in the last 50 days
@@ -1661,7 +1665,7 @@ function renderTabs(){
 }
 function renderCur(){
   var it = cur.items[cur.tab];
-  el('sheet').innerHTML = renderSheet(cur.book, it, cur.done);
+  el('sheet').innerHTML = noteBanner(cur.f.src || cur.f.id) + renderSheet(cur.book, it, cur.done);
   fitSheet();
   var c = counts(it);
   renderFin(); if (cur.f.hold) el('fin').hidden = true;
@@ -1966,6 +1970,21 @@ function renderMgr(){
   el('mgrBody').innerHTML = rows.length ? rows.map(function(r){ return r.h; }).join('') : '<tr><td colspan="7" class="mut">No jobs in the list.</td></tr>';
 }
 // ---------- job priority (manager screen, works on a computer too) ----------
+var noteEdit = null;
+function noteBtn(id){ var has = !!noteOf(id); return '<button type="button" class="pbtn pnote' + (has ? ' has' : '') + '" data-note="' + esc(id) + '" aria-label="' + (has ? 'Edit the note' : 'Add a note') + '">✎' + (has ? ' Note' : '') + '</button>'; }
+function noteEditor(id){
+  var t = noteOf(id);
+  return (t && noteEdit !== id ? '<div class="pnoteshow">' + esc(t) + '</div>' : '') + (noteEdit !== id ? '' :
+    '<div class="pnoteed"><textarea id="noteTa" maxlength="300" rows="2" placeholder="Instruction for the shop, e.g. Cut the 10s first, glass comes Tuesday">' + esc(t) + '</textarea>' +
+    '<div class="pnoterow"><button type="button" class="rmsend" data-note="' + esc(id) + '" data-na="save">Save note</button>' + (t ? '<button type="button" class="pclear" data-note="' + esc(id) + '" data-na="clear">Remove note</button>' : '') + '</div></div>');
+}
+function saveNote(id, text){
+  text = String(text || '').trim().slice(0, 300);
+  var prev = jobNotes[id]; if (text) jobNotes[id] = { t: text, at: Date.now() }; else delete jobNotes[id];
+  lsSet('shop-notes', jobNotes); noteEdit = null; renderPrio(); renderList(false);
+  api('noteset', { id: id, note: text }).then(function(r){ if (r && r.notes){ jobNotes = r.notes; lsSet('shop-notes', jobNotes); } toast(text ? '✓ Note saved · the tablets show it within a minute' : '✓ Note removed'); renderPrio(); },
+    function(e){ if (prev) jobNotes[id] = prev; else delete jobNotes[id]; lsSet('shop-notes', jobNotes); renderPrio(); toast('Couldn’t save the note (' + (e.message || 'no signal') + ')'); });
+}
 function renderPrio(){
   if (el('ordProg')) setTimeout(renderOrder, 0);
   if (el('rmList')) setTimeout(renderRemakes, 0);
@@ -1978,11 +1997,11 @@ function renderPrio(){
     return '<div class="prow"><span class="pnum">' + (i + 1) + '</span><span class="pname">' + nm(ids[id]) + '</span>' +
       '<button type="button" class="pbtn" data-pa="up" data-pi="' + i + '"' + (i ? '' : ' disabled') + ' aria-label="Move up">▲</button>' +
       '<button type="button" class="pbtn" data-pa="down" data-pi="' + i + '"' + (i < on.length - 1 ? '' : ' disabled') + ' aria-label="Move down">▼</button>' +
-      '<button type="button" class="pbtn px" data-pa="off" data-pi="' + i + '" aria-label="Take off the priority list">✕</button></div>';
+      noteBtn(id) + '<button type="button" class="pbtn px" data-pa="off" data-pi="' + i + '" aria-label="Take off the priority list">✕</button></div>' + noteEditor(id);
   }).join('') : '<div class="pempty">No priorities set, so the tablets show the newest job first. Add jobs below.</div>';
   el('prioRest').innerHTML = rest.length ? rest.map(function(f){
     return '<div class="prow rest"><span class="pname">' + nm(f) + '</span><span class="pday">' + (f.rm ? 'remake' : 'saved ' + esc(new Date(f.updated).toLocaleDateString([], { month: 'short', day: 'numeric' }))) + '</span>' +
-      '<button type="button" class="pbtn padd" data-pa="add" data-id="' + esc(f.id) + '">+ Add</button></div>';
+      noteBtn(f.id) + '<button type="button" class="pbtn padd" data-pa="add" data-id="' + esc(f.id) + '">+ Add</button></div>' + noteEditor(f.id);
   }).join('') : '<div class="pempty">Every job and remake is on the list.</div>';
   el('prioClear').hidden = !on.length;
   return on;
@@ -2083,6 +2102,10 @@ function savePrio(next){
 }
 el('mgr').addEventListener('click', function(e){
   if (e.target.closest('#prioClear')) return savePrio([]);
+  var nb = e.target.closest('[data-note]'); if (nb){ var nid = nb.getAttribute('data-note'), na = nb.getAttribute('data-na');
+    if (!na){ noteEdit = noteEdit === nid ? null : nid; renderPrio(); var ta = el('noteTa'); if (ta) ta.focus(); return; }
+    if (na === 'save' || na === 'clear') return saveNote(nid, na === 'clear' ? '' : (el('noteTa') || {}).value || '');
+    return; }
   var b = e.target.closest('[data-pa]'); if (!b) return;
   var on = renderPrio().slice(), i = +b.getAttribute('data-pi'), a = b.getAttribute('data-pa');
   if (a === 'add') on.push(b.getAttribute('data-id'));

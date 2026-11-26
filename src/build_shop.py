@@ -85,6 +85,7 @@ function api(action, extra){
   if (action === 'progset') return Promise.resolve({ ok: true });
   if (action === 'complete' || action === 'uncomplete') return Promise.resolve({ ok: true, preview: true });
   if (action === 'prioset') return Promise.resolve({ ok: true, prio: extra.prio });
+  if (action === 'noteset') return Promise.resolve({ ok: true });   // preview keeps notes on this device only
   if (action === 'orderset') return Promise.resolve({ ok: true, order: extra.order });
   if (action === 'remakeset') return Promise.resolve({ ok: true, remakes: extra.remakes });   // preview keeps the priority on this device only
   return getMcp().then(function(mcp){
